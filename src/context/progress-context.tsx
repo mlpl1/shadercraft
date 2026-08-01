@@ -23,6 +23,7 @@ type ProgressContextValue = {
   isHydrated: boolean;
   progress: ProgressState;
   progressPercent: number;
+  uncompleteLesson: (lessonId: string) => Promise<void>;
 };
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
@@ -66,6 +67,29 @@ export function ProgressProvider({ children }: PropsWithChildren) {
     [progress],
   );
 
+  const uncompleteLesson = useCallback(
+    async (lessonId: string) => {
+      if (!hasCompletedLesson(progress, lessonId)) return;
+
+      const nextProgress: ProgressState = {
+        ...progress,
+        completedLessonIds: progress.completedLessonIds.filter(
+          (completedLessonId) => completedLessonId !== lessonId,
+        ),
+      };
+
+      setProgress(nextProgress);
+
+      try {
+        await saveProgress(nextProgress);
+      } catch (error) {
+        setProgress(progress);
+        throw error;
+      }
+    },
+    [progress],
+  );
+
   const value = useMemo<ProgressContextValue>(
     () => ({
       completeLesson,
@@ -73,8 +97,9 @@ export function ProgressProvider({ children }: PropsWithChildren) {
       isHydrated,
       progress,
       progressPercent: getProgressPercent(progress),
+      uncompleteLesson,
     }),
-    [completeLesson, isHydrated, progress],
+    [completeLesson, isHydrated, progress, uncompleteLesson],
   );
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
@@ -88,4 +113,3 @@ export function useProgress() {
 
   return progressContext;
 }
-

@@ -46,8 +46,12 @@ export default function LessonScreen() {
   const router = useRouter();
   const [coordinatePreset, setCoordinatePreset] =
     useState<CoordinateMode>("normalized");
-  const { completeLesson: persistLessonCompletion, hasCompletedLesson, isHydrated } =
-    useProgress();
+  const {
+    completeLesson: persistLessonCompletion,
+    hasCompletedLesson,
+    isHydrated,
+    uncompleteLesson,
+  } = useProgress();
   const isComplete = hasCompletedLesson(COORDINATE_SYSTEMS_LESSON_ID);
   const codeLines = codeLinesByMode[coordinatePreset];
 
@@ -64,6 +68,28 @@ export default function LessonScreen() {
         "Shadercraft could not save this lesson. Please try again.",
       );
     }
+  };
+
+  const confirmUndoCompletion = () => {
+    Alert.alert(
+      "Mark lesson incomplete?",
+      "Your progress will return to 0% and Module 02 will be locked again.",
+      [
+        { text: "Keep completed", style: "cancel" },
+        {
+          text: "Mark incomplete",
+          style: "destructive",
+          onPress: () => {
+            void uncompleteLesson(COORDINATE_SYSTEMS_LESSON_ID).catch(() => {
+              Alert.alert(
+                "Progress not saved",
+                "Shadercraft could not update this lesson. Please try again.",
+              );
+            });
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -223,9 +249,12 @@ export default function LessonScreen() {
         <View style={styles.actionBar}>
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: isComplete || !isHydrated }}
-            disabled={isComplete || !isHydrated}
-            onPress={completeLesson}
+            accessibilityLabel={
+              isComplete ? "Lesson completed. Tap to mark incomplete" : undefined
+            }
+            accessibilityState={{ disabled: !isHydrated }}
+            disabled={!isHydrated}
+            onPress={isComplete ? confirmUndoCompletion : completeLesson}
             style={({ pressed }) => [
               styles.completeButton,
               isComplete && styles.completedButton,
@@ -234,17 +263,17 @@ export default function LessonScreen() {
           >
             {isComplete && (
               <AppIcon
-                color={Colors.background}
+                color={Colors.accent}
                 fallback="✓"
                 name={{ android: "check", ios: "checkmark", web: "check" }}
                 size={20}
               />
             )}
-            <Text style={styles.completeLabel}>
+            <Text style={[styles.completeLabel, isComplete && styles.completedLabel]}>
               {!isHydrated
                 ? "Loading progress…"
                 : isComplete
-                  ? "Lesson completed"
+                  ? "Completed · Tap to undo"
                   : "Mark lesson complete"}
             </Text>
           </Pressable>
@@ -587,12 +616,17 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   completedButton: {
-    opacity: 0.72,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    backgroundColor: "rgba(199,244,100,0.08)",
   },
   completeLabel: {
     color: Colors.background,
     fontSize: 15,
     fontWeight: "800",
+  },
+  completedLabel: {
+    color: Colors.accent,
   },
   pressed: {
     opacity: 0.68,
