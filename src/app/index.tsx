@@ -13,6 +13,8 @@ import { BottomNavigation } from "../components/bottom-navigation";
 import { LessonRow } from "../components/lesson-row";
 import { ShaderPreview } from "../components/shader-preview";
 import { Colors, Radius, Spacing } from "../constants/theme";
+import { useProgress } from "../context/progress-context";
+import { COORDINATE_SYSTEMS_LESSON_ID } from "../lib/progress";
 
 function showComingSoon(destination: string) {
   Alert.alert(
@@ -23,6 +25,9 @@ function showComingSoon(destination: string) {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { hasCompletedLesson, isHydrated, progressPercent } = useProgress();
+  const hasCompletedFirstLesson = hasCompletedLesson(COORDINATE_SYSTEMS_LESSON_ID);
+  const progressWidth = `${progressPercent}%` as `${number}%`;
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
@@ -34,9 +39,11 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.progressSummary}>
-            <Text style={styles.progressLabel}>0% Complete</Text>
+            <Text style={styles.progressLabel}>
+              {isHydrated ? `${progressPercent}% Complete` : "Loading progress…"}
+            </Text>
             <View style={styles.progressTrack}>
-              <View style={styles.progressFill} />
+              <View style={[styles.progressFill, { width: progressWidth }]} />
             </View>
           </View>
         </View>
@@ -47,7 +54,7 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Pressable
-            accessibilityLabel="Start Coordinate Systems and UV Space"
+            accessibilityLabel={`${hasCompletedFirstLesson ? "Review" : "Start"} Coordinate Systems and UV Space`}
             accessibilityRole="button"
             onPress={() => router.push("/lesson")}
             style={({ pressed }) => [styles.continueCard, pressed && styles.pressedCard]}
@@ -57,11 +64,15 @@ export default function HomeScreen() {
             <View style={styles.cardBody}>
               <View style={styles.cardMetadata}>
                 <Text style={styles.cardEyebrow}>Module 01 · Lesson 01</Text>
-                <Text style={styles.currentLabel}>Start here</Text>
+                <Text style={styles.currentLabel}>
+                  {hasCompletedFirstLesson ? "Completed" : "Start here"}
+                </Text>
               </View>
               <Text style={styles.lessonTitle}>Coordinate Systems &amp; UV Space</Text>
               <View style={styles.resumeButton}>
-                <Text style={styles.resumeLabel}>Start Lesson</Text>
+                <Text style={styles.resumeLabel}>
+                  {hasCompletedFirstLesson ? "Review Lesson" : "Start Lesson"}
+                </Text>
               </View>
             </View>
           </Pressable>
@@ -71,8 +82,12 @@ export default function HomeScreen() {
             <View style={styles.lessonList}>
               <LessonRow
                 module="Module 02"
-                onPress={() => showComingSoon("Next lesson")}
-                state="active"
+                onPress={
+                  hasCompletedFirstLesson
+                    ? () => showComingSoon("Shape Synthesis")
+                    : undefined
+                }
+                state={hasCompletedFirstLesson ? "active" : "locked"}
                 title="Shape Synthesis"
               />
               <LessonRow module="Module 03" state="locked" title="Color Mixing & Luma" />
@@ -138,7 +153,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
   },
   progressFill: {
-    width: "0%",
     height: "100%",
     backgroundColor: Colors.accent,
   },

@@ -4,16 +4,18 @@ import { AppIcon } from "./app-icon";
 import { Colors, Radius, Spacing } from "../constants/theme";
 
 type CourseModuleCardProps = {
+  completedLessonCount?: number;
   description: string;
   lessonCount: number;
   moduleNumber: number;
   onPress?: () => void;
-  status: "available" | "locked";
+  status: "available" | "in-progress" | "locked";
   title: string;
   topics: string[];
 };
 
 export function CourseModuleCard({
+  completedLessonCount = 0,
   description,
   lessonCount,
   moduleNumber,
@@ -22,7 +24,8 @@ export function CourseModuleCard({
   title,
   topics,
 }: CourseModuleCardProps) {
-  const available = status === "available";
+  const available = status !== "locked";
+  const inProgress = status === "in-progress";
 
   return (
     <Pressable
@@ -47,7 +50,11 @@ export function CourseModuleCard({
 
         <View style={styles.headingCopy}>
           <Text style={[styles.status, available && styles.availableStatus]}>
-            {available ? "Ready to start" : "Locked"}
+            {inProgress
+              ? `${completedLessonCount} of ${lessonCount} complete`
+              : available
+                ? "Ready to start"
+                : "Locked"}
           </Text>
           <Text style={styles.title}>{title}</Text>
         </View>
@@ -77,7 +84,11 @@ export function CourseModuleCard({
 
       <View style={styles.footer}>
         <Text style={styles.lessonCount}>{lessonCount} lessons</Text>
-        {available && <Text style={styles.startLabel}>Start module</Text>}
+        {available && (
+          <Text style={styles.startLabel}>
+            {inProgress ? "Continue module" : "Start module"}
+          </Text>
+        )}
       </View>
     </Pressable>
   );

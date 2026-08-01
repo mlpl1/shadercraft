@@ -16,6 +16,8 @@ import {
   type CoordinateMode,
 } from "../components/live-shader-preview";
 import { Colors, Radius, Spacing } from "../constants/theme";
+import { useProgress } from "../context/progress-context";
+import { COORDINATE_SYSTEMS_LESSON_ID } from "../lib/progress";
 
 const codeLinesByMode: Record<
   CoordinateMode,
@@ -44,15 +46,24 @@ export default function LessonScreen() {
   const router = useRouter();
   const [coordinatePreset, setCoordinatePreset] =
     useState<CoordinateMode>("normalized");
-  const [isComplete, setIsComplete] = useState(false);
+  const { completeLesson: persistLessonCompletion, hasCompletedLesson, isHydrated } =
+    useProgress();
+  const isComplete = hasCompletedLesson(COORDINATE_SYSTEMS_LESSON_ID);
   const codeLines = codeLinesByMode[coordinatePreset];
 
-  const completeLesson = () => {
-    setIsComplete(true);
-    Alert.alert(
-      "Lesson complete",
-      "Nice work. Centering & Aspect Ratio is now ready for you.",
-    );
+  const completeLesson = async () => {
+    try {
+      await persistLessonCompletion(COORDINATE_SYSTEMS_LESSON_ID);
+      Alert.alert(
+        "Lesson complete",
+        "Your progress is saved and Module 02 · Shape Synthesis is now unlocked.",
+      );
+    } catch {
+      Alert.alert(
+        "Progress not saved",
+        "Shadercraft could not save this lesson. Please try again.",
+      );
+    }
   };
 
   return (
@@ -212,8 +223,8 @@ export default function LessonScreen() {
         <View style={styles.actionBar}>
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: isComplete }}
-            disabled={isComplete}
+            accessibilityState={{ disabled: isComplete || !isHydrated }}
+            disabled={isComplete || !isHydrated}
             onPress={completeLesson}
             style={({ pressed }) => [
               styles.completeButton,
@@ -230,7 +241,11 @@ export default function LessonScreen() {
               />
             )}
             <Text style={styles.completeLabel}>
-              {isComplete ? "Lesson completed" : "Mark lesson complete"}
+              {!isHydrated
+                ? "Loading progress…"
+                : isComplete
+                  ? "Lesson completed"
+                  : "Mark lesson complete"}
             </Text>
           </Pressable>
         </View>

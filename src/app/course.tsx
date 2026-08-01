@@ -1,10 +1,12 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/bottom-navigation";
 import { CourseModuleCard } from "../components/course-module-card";
 import { Colors, Radius, Spacing } from "../constants/theme";
+import { useProgress } from "../context/progress-context";
+import { COORDINATE_SYSTEMS_LESSON_ID } from "../lib/progress";
 
 const modules = [
   {
@@ -13,7 +15,6 @@ const modules = [
     description:
       "Build a reliable coordinate space for every fragment and learn how resolution shapes the image.",
     lessonCount: 6,
-    status: "available" as const,
     topics: [
       "Coordinate Systems & UV Space",
       "Centering & Aspect Ratio",
@@ -26,7 +27,6 @@ const modules = [
     description:
       "Turn distance fields into clean geometric forms with thresholds, smooth edges, and composition.",
     lessonCount: 5,
-    status: "locked" as const,
     topics: ["Step & Smoothstep", "Circles and Boxes", "Boolean Shape Operations"],
   },
   {
@@ -35,7 +35,6 @@ const modules = [
     description:
       "Mix palettes, understand luminance, and shape color with reusable procedural functions.",
     lessonCount: 4,
-    status: "locked" as const,
     topics: ["Color Mixing", "Luma & Contrast", "Procedural Palettes"],
   },
   {
@@ -44,13 +43,39 @@ const modules = [
     description:
       "Combine repetition, noise, and motion to create expressive surfaces entirely in code.",
     lessonCount: 5,
-    status: "locked" as const,
     topics: ["Tiling Space", "Value Noise", "Layered Motion"],
   },
 ];
 
 export default function CourseScreen() {
   const router = useRouter();
+  const { hasCompletedLesson, isHydrated, progressPercent } = useProgress();
+  const hasCompletedFirstLesson = hasCompletedLesson(COORDINATE_SYSTEMS_LESSON_ID);
+  const unlockedModuleCount = hasCompletedFirstLesson ? 2 : 1;
+  const progressWidth = `${progressPercent}%` as `${number}%`;
+
+  const getModuleStatus = (
+    moduleNumber: number,
+  ): "available" | "in-progress" | "locked" => {
+    if (moduleNumber === 1) {
+      return hasCompletedFirstLesson ? "in-progress" : "available";
+    }
+
+    if (moduleNumber === 2 && hasCompletedFirstLesson) return "available";
+    return "locked";
+  };
+
+  const openModule = (moduleNumber: number) => {
+    if (moduleNumber === 1) {
+      router.push("/lesson");
+      return;
+    }
+
+    Alert.alert(
+      "Module unlocked",
+      "Shape Synthesis is ready. Its first lesson will be added in the next content pass.",
+    );
+  };
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
@@ -69,7 +94,9 @@ export default function CourseScreen() {
           <View style={styles.overviewCard}>
             <View style={styles.overviewHeader}>
               <Text style={styles.overviewLabel}>Foundation track</Text>
-              <Text style={styles.overviewProgress}>0%</Text>
+              <Text style={styles.overviewProgress}>
+                {isHydrated ? `${progressPercent}%` : "—"}
+              </Text>
             </View>
             <Text style={styles.overviewTitle}>Fragment Shader Fundamentals</Text>
             <Text style={styles.overviewCopy}>
@@ -77,25 +104,37 @@ export default function CourseScreen() {
               coordinates to animated procedural texture.
             </Text>
             <View style={styles.progressTrack}>
-              <View style={styles.progressFill} />
+              <View style={[styles.progressFill, { width: progressWidth }]} />
             </View>
           </View>
 
           <View style={styles.moduleHeadingRow}>
             <Text style={styles.moduleHeading}>Modules</Text>
-            <Text style={styles.moduleCount}>01 / 04 available</Text>
+            <Text style={styles.moduleCount}>
+              {String(unlockedModuleCount).padStart(2, "0")} / 04 available
+            </Text>
           </View>
 
           <View style={styles.moduleList}>
-            {modules.map((module) => (
-              <CourseModuleCard
-                {...module}
-                key={module.moduleNumber}
-                onPress={
-                  module.status === "available" ? () => router.push("/lesson") : undefined
-                }
-              />
-            ))}
+            {modules.map((module) => {
+              const status = getModuleStatus(module.moduleNumber);
+
+              return (
+                <CourseModuleCard
+                  {...module}
+                  completedLessonCount={
+                    module.moduleNumber === 1 && hasCompletedFirstLesson ? 1 : 0
+                  }
+                  key={module.moduleNumber}
+                  onPress={
+                    status === "locked"
+                      ? undefined
+                      : () => openModule(module.moduleNumber)
+                  }
+                  status={status}
+                />
+              );
+            })}
           </View>
         </ScrollView>
 
@@ -190,7 +229,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
   },
   progressFill: {
-    width: "0%",
     height: "100%",
     backgroundColor: Colors.accent,
   },
