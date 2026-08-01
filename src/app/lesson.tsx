@@ -11,28 +11,41 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppIcon } from "../components/app-icon";
-import { ShaderPreview } from "../components/shader-preview";
+import {
+  LiveShaderPreview,
+  type CoordinateMode,
+} from "../components/live-shader-preview";
 import { Colors, Radius, Spacing } from "../constants/theme";
 
-type CoordinatePreset = "normalized" | "centered";
-
-const codeLines = [
-  { number: 1, code: "vec2 uv = fragCoord / resolution.xy;", accent: true },
-  { number: 2, code: "uv = uv * 2.0 - 1.0;", accent: true },
-  { number: 3, code: "uv.x *= resolution.x / resolution.y;" },
-  { number: 4, code: "" },
-  { number: 5, code: "vec3 color = vec3(" },
-  { number: 6, code: "  uv * 0.5 + 0.5," },
-  { number: 7, code: "  0.0" },
-  { number: 8, code: ");" },
-  { number: 9, code: "fragColor = vec4(color, 1.0);" },
-];
+const codeLinesByMode: Record<
+  CoordinateMode,
+  { number: number; code: string; accent?: boolean }[]
+> = {
+  normalized: [
+    { number: 1, code: "vec2 uv = fragCoord / resolution.xy;", accent: true },
+    { number: 2, code: "" },
+    { number: 3, code: "vec3 color = vec3(uv, 0.0);" },
+    { number: 4, code: "fragColor = vec4(color, 1.0);" },
+  ],
+  centered: [
+    { number: 1, code: "vec2 uv = fragCoord / resolution.xy;" },
+    { number: 2, code: "uv = uv * 2.0 - 1.0;", accent: true },
+    { number: 3, code: "uv.x *= resolution.x / resolution.y;", accent: true },
+    { number: 4, code: "" },
+    { number: 5, code: "vec3 color = vec3(" },
+    { number: 6, code: "  uv * 0.5 + 0.5," },
+    { number: 7, code: "  0.0" },
+    { number: 8, code: ");" },
+    { number: 9, code: "fragColor = vec4(color, 1.0);" },
+  ],
+};
 
 export default function LessonScreen() {
   const router = useRouter();
   const [coordinatePreset, setCoordinatePreset] =
-    useState<CoordinatePreset>("normalized");
+    useState<CoordinateMode>("normalized");
   const [isComplete, setIsComplete] = useState(false);
+  const codeLines = codeLinesByMode[coordinatePreset];
 
   const completeLesson = () => {
     setIsComplete(true);
@@ -87,20 +100,83 @@ export default function LessonScreen() {
             </Text>
           </View>
 
-          <View style={styles.previewCard}>
-            <ShaderPreview height={170} showFileLabel={false} />
-            <View style={styles.previewFooter}>
+          <View style={styles.workspace}>
+            <View style={styles.workspaceHeader}>
               <View>
-                <Text style={styles.previewLabel}>UV preview</Text>
-                <Text style={styles.previewValue}>
-                  {coordinatePreset === "normalized"
-                    ? "0.0 → 1.0 · screen space"
-                    : "−1.0 → 1.0 · centered"}
-                </Text>
+                <Text style={styles.workspaceEyebrow}>Live workspace</Text>
+                <Text style={styles.workspaceTitle}>Preview and source</Text>
               </View>
               <View style={styles.liveBadge}>
                 <View style={styles.liveDot} />
-                <Text style={styles.liveLabel}>Live</Text>
+                <Text style={styles.liveLabel}>Running</Text>
+              </View>
+            </View>
+
+            <View style={styles.previewCard}>
+              <LiveShaderPreview mode={coordinatePreset} />
+              <View style={styles.previewFooter}>
+                <View>
+                  <Text style={styles.previewLabel}>UV preview</Text>
+                  <Text style={styles.previewValue}>
+                    {coordinatePreset === "normalized"
+                      ? "0.0 → 1.0 · screen space"
+                      : "−1.0 → 1.0 · centered"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.tryItCard}>
+              <View style={styles.tryItHeading}>
+                <Text style={styles.tryItTitle}>Try it</Text>
+                <Text style={styles.tryItHint}>Change the coordinate range</Text>
+              </View>
+              <View accessibilityRole="radiogroup" style={styles.presetControl}>
+                {(["normalized", "centered"] as const).map((preset) => {
+                  const selected = coordinatePreset === preset;
+
+                  return (
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected }}
+                      key={preset}
+                      onPress={() => setCoordinatePreset(preset)}
+                      style={({ pressed }) => [
+                        styles.preset,
+                        selected && styles.selectedPreset,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={[styles.presetLabel, selected && styles.selectedPresetLabel]}>
+                        {preset === "normalized" ? "Normalized" : "Centered"}
+                      </Text>
+                      <Text style={[styles.presetValue, selected && styles.selectedPresetValue]}>
+                        {preset === "normalized" ? "0 → 1" : "−1 → 1"}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.codeCard}>
+              <View style={styles.codeHeader}>
+                <Text style={styles.codeFilename}>
+                  {coordinatePreset === "normalized"
+                    ? "normalized_uv.glsl"
+                    : "centered_uv.glsl"}
+                </Text>
+                <Text style={styles.codeLanguage}>LIVE GLSL</Text>
+              </View>
+              <View style={styles.codeBody}>
+                {codeLines.map((line) => (
+                  <View key={line.number} style={styles.codeLine}>
+                    <Text style={styles.lineNumber}>{line.number}</Text>
+                    <Text style={[styles.codeText, line.accent && styles.codeAccent]}>
+                      {line.code}
+                    </Text>
+                  </View>
+                ))}
               </View>
             </View>
           </View>
@@ -113,56 +189,6 @@ export default function LessonScreen() {
                 Divide the current pixel by the viewport resolution. This turns raw pixel
                 positions into a portable 0-to-1 range on every screen size.
               </Text>
-            </View>
-          </View>
-
-          <View style={styles.codeCard}>
-            <View style={styles.codeHeader}>
-              <Text style={styles.codeFilename}>circle.glsl</Text>
-              <Text style={styles.codeLanguage}>GLSL</Text>
-            </View>
-            <View style={styles.codeBody}>
-              {codeLines.map((line) => (
-                <View key={line.number} style={styles.codeLine}>
-                  <Text style={styles.lineNumber}>{line.number}</Text>
-                  <Text style={[styles.codeText, line.accent && styles.codeAccent]}>
-                    {line.code}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.tryItCard}>
-            <View style={styles.tryItHeading}>
-              <Text style={styles.tryItTitle}>Try it</Text>
-              <Text style={styles.tryItHint}>Change the coordinate range</Text>
-            </View>
-            <View accessibilityRole="radiogroup" style={styles.presetControl}>
-              {(["normalized", "centered"] as const).map((preset) => {
-                const selected = coordinatePreset === preset;
-
-                return (
-                  <Pressable
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
-                    key={preset}
-                    onPress={() => setCoordinatePreset(preset)}
-                    style={({ pressed }) => [
-                      styles.preset,
-                      selected && styles.selectedPreset,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Text style={[styles.presetLabel, selected && styles.selectedPresetLabel]}>
-                      {preset === "normalized" ? "Normalized" : "Centered"}
-                    </Text>
-                    <Text style={[styles.presetValue, selected && styles.selectedPresetValue]}>
-                      {preset === "normalized" ? "0 → 1" : "−1 → 1"}
-                    </Text>
-                  </Pressable>
-                );
-              })}
             </View>
           </View>
 
@@ -277,6 +303,27 @@ const styles = StyleSheet.create({
   intro: {
     marginBottom: Spacing.xxl,
   },
+  workspace: {
+    gap: Spacing.md,
+  },
+  workspaceHeader: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+  workspaceEyebrow: {
+    color: Colors.accent,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  workspaceTitle: {
+    marginTop: 3,
+    color: Colors.text,
+    fontSize: 18,
+    fontWeight: "700",
+  },
   eyebrow: {
     marginBottom: Spacing.sm,
     color: Colors.accent,
@@ -371,7 +418,6 @@ const styles = StyleSheet.create({
     lineHeight: 23,
   },
   codeCard: {
-    marginTop: Spacing.xl,
     overflow: "hidden",
     borderRadius: Radius.md,
     borderWidth: 1,
@@ -425,7 +471,6 @@ const styles = StyleSheet.create({
     color: Colors.accent,
   },
   tryItCard: {
-    marginTop: Spacing.xxl,
     padding: Spacing.lg,
     borderRadius: Radius.lg,
     borderWidth: 1,
