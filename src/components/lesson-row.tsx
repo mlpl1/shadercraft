@@ -31,6 +31,7 @@ export function LessonRow({ module, title, state, onPress }: LessonRowProps) {
   const isActive = state === "active";
   const isComplete = state === "complete";
   const isLocked = state === "locked";
+  const moduleNumber = module.match(/\d+/)?.[0] ?? "•";
 
   return (
     <Pressable
@@ -54,7 +55,7 @@ export function LessonRow({ module, title, state, onPress }: LessonRowProps) {
         ]}
       >
         {isActive ? (
-          <Text style={styles.moduleNumber}>03</Text>
+          <Text style={styles.moduleNumber}>{moduleNumber}</Text>
         ) : (
           <AppIcon
             color={isComplete ? Colors.accent : Colors.textSubtle}

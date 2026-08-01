@@ -1,16 +1,24 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, type ViewStyle } from "react-native";
 
 import { AppIcon } from "./app-icon";
 import { Colors, Radius, Spacing } from "../constants/theme";
 
-export function ShaderPreview() {
+type ShaderPreviewProps = {
+  height?: ViewStyle["height"];
+  showFileLabel?: boolean;
+};
+
+export function ShaderPreview({
+  height = 192,
+  showFileLabel = true,
+}: ShaderPreviewProps) {
   return (
     <LinearGradient
       colors={[Colors.cyan, Colors.violet, Colors.coral]}
       end={{ x: 1, y: 1 }}
       start={{ x: 0, y: 0 }}
-      style={styles.preview}
+      style={[styles.preview, { height }]}
     >
       <View style={[styles.orb, styles.cyanOrb]} />
       <View style={[styles.orb, styles.violetOrb]} />
@@ -23,16 +31,17 @@ export function ShaderPreview() {
           size={54}
         />
       </View>
-      <View style={styles.fileBadge}>
-        <Text style={styles.fileLabel}>live_preview.glsl</Text>
-      </View>
+      {showFileLabel && (
+        <View style={styles.fileBadge}>
+          <Text style={styles.fileLabel}>live_preview.glsl</Text>
+        </View>
+      )}
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   preview: {
-    height: 192,
     overflow: "hidden",
   },
   orb: {

@@ -6,6 +6,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/bottom-navigation";
@@ -21,6 +22,8 @@ function showComingSoon(destination: string) {
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
+
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <View style={styles.appFrame}>
@@ -31,7 +34,7 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.progressSummary}>
-            <Text style={styles.progressLabel}>42% Complete</Text>
+            <Text style={styles.progressLabel}>0% Complete</Text>
             <View style={styles.progressTrack}>
               <View style={styles.progressFill} />
             </View>
@@ -44,21 +47,21 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Pressable
-            accessibilityLabel="Resume Smoothstep and Shape Synthesis"
+            accessibilityLabel="Start Coordinate Systems and UV Space"
             accessibilityRole="button"
-            onPress={() => showComingSoon("Lesson")}
+            onPress={() => router.push("/lesson")}
             style={({ pressed }) => [styles.continueCard, pressed && styles.pressedCard]}
           >
             <ShaderPreview />
 
             <View style={styles.cardBody}>
               <View style={styles.cardMetadata}>
-                <Text style={styles.cardEyebrow}>Module 02 · Lesson 04</Text>
-                <Text style={styles.currentLabel}>Current</Text>
+                <Text style={styles.cardEyebrow}>Module 01 · Lesson 01</Text>
+                <Text style={styles.currentLabel}>Start here</Text>
               </View>
-              <Text style={styles.lessonTitle}>Smoothstep &amp; Shape Synthesis</Text>
+              <Text style={styles.lessonTitle}>Coordinate Systems &amp; UV Space</Text>
               <View style={styles.resumeButton}>
-                <Text style={styles.resumeLabel}>Resume Lesson</Text>
+                <Text style={styles.resumeLabel}>Start Lesson</Text>
               </View>
             </View>
           </Pressable>
@@ -67,17 +70,12 @@ export default function HomeScreen() {
             <Text style={styles.pathHeading}>Up next</Text>
             <View style={styles.lessonList}>
               <LessonRow
-                module="Module 01"
-                onPress={() => showComingSoon("Completed lesson review")}
-                state="complete"
-                title="Coordinate Systems"
-              />
-              <LessonRow
-                module="Module 03"
+                module="Module 02"
                 onPress={() => showComingSoon("Next lesson")}
                 state="active"
-                title="Color Mixing & Luma"
+                title="Shape Synthesis"
               />
+              <LessonRow module="Module 03" state="locked" title="Color Mixing & Luma" />
               <LessonRow module="Module 04" state="locked" title="Procedural Textures" />
             </View>
           </View>
@@ -140,7 +138,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
   },
   progressFill: {
-    width: "42%",
+    width: "0%",
     height: "100%",
     backgroundColor: Colors.accent,
   },
