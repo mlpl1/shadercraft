@@ -81,7 +81,7 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
 
-        <BottomNavigation onUnavailable={showComingSoon} />
+        <BottomNavigation activeItem="home" />
       </View>
     </SafeAreaView>
   );

@@ -1,49 +1,83 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import type { SymbolViewProps } from "expo-symbols";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppIcon } from "./app-icon";
 import { Colors, Spacing } from "../constants/theme";
 
+export type BottomTab = "home" | "course" | "editor";
+
 type BottomNavigationProps = {
-  onUnavailable: (destination: string) => void;
+  activeItem: BottomTab;
 };
 
 const items = [
   {
+    key: "home",
     label: "Home",
-    active: true,
     icon: { android: "home", ios: "house.fill", web: "home" } as const,
-    fallback: "⌂",
+    fallback: "H",
   },
   {
+    key: "course",
     label: "Course",
-    active: false,
     icon: { android: "book_2", ios: "book.fill", web: "book_2" } as const,
-    fallback: "▤",
+    fallback: "C",
   },
   {
+    key: "editor",
     label: "Editor",
-    active: false,
-    icon: { android: "code", ios: "chevron.left.forwardslash.chevron.right", web: "code" } as const,
+    icon: {
+      android: "code",
+      ios: "chevron.left.forwardslash.chevron.right",
+      web: "code",
+    } as const,
     fallback: "</>",
   },
-];
+] satisfies ReadonlyArray<{
+  key: BottomTab;
+  label: string;
+  icon: SymbolViewProps["name"];
+  fallback: string;
+}>;
 
-export function BottomNavigation({ onUnavailable }: BottomNavigationProps) {
+export function BottomNavigation({ activeItem }: BottomNavigationProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const navigate = (destination: BottomTab) => {
+    if (destination === activeItem) return;
+
+    if (destination === "home") {
+      router.push("/");
+      return;
+    }
+
+    if (destination === "course") {
+      router.push("/course");
+      return;
+    }
+
+    Alert.alert(
+      "Editor is coming next",
+      "The course and first lesson are ready. The shader editor is the next workspace to build.",
+    );
+  };
 
   return (
     <View style={[styles.shell, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-      <View style={styles.navigation}>
+      <View accessibilityRole="tablist" style={styles.navigation}>
         {items.map((item) => {
-          const color = item.active ? Colors.accent : Colors.textMuted;
+          const active = item.key === activeItem;
+          const color = active ? Colors.accent : Colors.textMuted;
 
           return (
             <Pressable
               accessibilityRole="tab"
-              accessibilityState={{ selected: item.active }}
-              key={item.label}
-              onPress={() => !item.active && onUnavailable(item.label)}
+              accessibilityState={{ selected: active }}
+              key={item.key}
+              onPress={() => navigate(item.key)}
               style={({ pressed }) => [styles.item, pressed && styles.pressedItem]}
             >
               <AppIcon
