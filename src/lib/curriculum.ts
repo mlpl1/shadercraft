@@ -34,6 +34,7 @@ export const COLORS_FRAGMENT_OUTPUT_LESSON_ID: ModuleOneLessonId =
   "colors-fragment-output";
 export const UNIFORMS_TIME_LESSON_ID: ModuleOneLessonId = "uniforms-time";
 export const TRANSFORMING_UVS_LESSON_ID: ModuleOneLessonId = "transforming-uvs";
+export const FOUNDATION_CHALLENGE_LESSON_ID: ModuleOneLessonId = "foundation-challenge";
 
 export const TOTAL_LESSON_COUNT = 19;
 

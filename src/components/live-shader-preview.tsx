@@ -22,7 +22,11 @@ export type ShaderPreviewMode =
   | "transform-translate"
   | "transform-scale"
   | "transform-rotate"
-  | "transform-repeat";
+  | "transform-repeat"
+  | "challenge-grid"
+  | "challenge-rings"
+  | "challenge-orbit"
+  | "challenge-final";
 
 type LiveShaderPreviewProps = {
   mode: ShaderPreviewMode;
@@ -126,7 +130,7 @@ void main() {
     vec3 lime = vec3(0.78, 0.96, 0.39);
     vec3 blue = vec3(0.31, 0.84, 1.0);
     color = mix(dark, mix(blue, lime, pulse), wave);
-  } else if (u_mode > 11.5) {
+  } else if (u_mode > 11.5 && u_mode < 15.5) {
     vec2 p = centered;
     if (u_mode < 12.5) {
       p -= vec2(0.35, -0.18);
@@ -147,6 +151,34 @@ void main() {
     vec3 background = vec3(0.035, 0.055, 0.085);
     color = mix(background, vec3(0.31, 0.84, 1.0), shape);
     color = mix(color, vec3(0.78, 0.96, 0.39), inner);
+  } else if (u_mode > 15.5) {
+    vec2 p = centered;
+    float gridX = gridLine(p.x + u_time * 0.035, 5.0);
+    float gridY = gridLine(p.y, 5.0);
+    float gridMask = max(gridX, gridY) * 0.22;
+    float radius = length(p);
+    float rings = 1.0 - smoothstep(0.025, 0.05, abs(fract(radius * 4.0 - u_time * 0.22) - 0.5));
+    vec2 orbiter = vec2(cos(u_time), sin(u_time)) * 0.42;
+    float orbit = 1.0 - smoothstep(0.055, 0.075, distance(p, orbiter));
+    vec3 dark = vec3(0.025, 0.04, 0.07);
+    vec3 lime = vec3(0.78, 0.96, 0.39);
+    vec3 blue = vec3(0.31, 0.84, 1.0);
+    vec3 violet = vec3(0.61, 0.48, 1.0);
+
+    if (u_mode < 16.5) {
+      color = mix(dark, blue, gridMask * 2.4);
+    } else if (u_mode < 17.5) {
+      color = mix(dark, violet, rings * 0.85);
+    } else if (u_mode < 18.5) {
+      float orbitPath = 1.0 - smoothstep(0.008, 0.018, abs(radius - 0.42));
+      color = mix(dark, blue, orbitPath * 0.35);
+      color = mix(color, lime, orbit);
+    } else {
+      color = mix(dark, blue, gridMask * 1.3);
+      color = mix(color, violet, rings * 0.58);
+      color = mix(color, lime, orbit);
+      color *= 0.82 + 0.18 * (0.5 + 0.5 * sin(u_time * 2.0));
+    }
   }
 
   gl_FragColor = vec4(color, 1.0);
@@ -254,6 +286,10 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
         "transform-scale": 13,
         "transform-rotate": 14,
         "transform-repeat": 15,
+        "challenge-grid": 16,
+        "challenge-rings": 17,
+        "challenge-orbit": 18,
+        "challenge-final": 19,
       };
       gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAtRef.current) / 1000);

@@ -21,6 +21,7 @@ import { Colors, Radius, Spacing } from "../constants/theme";
 import { useProgress } from "../context/progress-context";
 import {
   COLORS_FRAGMENT_OUTPUT_LESSON_ID,
+  FOUNDATION_CHALLENGE_LESSON_ID,
   getModuleOneLesson,
   getNextModuleOneLesson,
   MODULE_ONE_LESSONS,
@@ -239,6 +240,61 @@ const transformFilenames: Record<TransformMode, string> = {
   "transform-repeat": "repeat_uv.glsl",
 };
 
+type ChallengeMode =
+  | "challenge-grid"
+  | "challenge-rings"
+  | "challenge-orbit"
+  | "challenge-final";
+
+const challengePresetOptions: Array<{
+  label: string;
+  mode: ChallengeMode;
+  value: string;
+}> = [
+  { label: "Grid layer", mode: "challenge-grid", value: "UV + time" },
+  { label: "Pulse rings", mode: "challenge-rings", value: "length + fract" },
+  { label: "Orbit", mode: "challenge-orbit", value: "sin + cos" },
+  { label: "Composite", mode: "challenge-final", value: "all layers" },
+];
+
+const challengeCodeLines: Record<
+  ChallengeMode,
+  { number: number; code: string; accent?: boolean }[]
+> = {
+  "challenge-grid": [
+    { number: 1, code: "vec2 p = centeredAspectUv;" },
+    { number: 2, code: "p.x += u_time * 0.035;", accent: true },
+    { number: 3, code: "float grid = gridLines(p, 5.0);" },
+    { number: 4, code: "color = mix(dark, blue, grid);" },
+  ],
+  "challenge-rings": [
+    { number: 1, code: "float radius = length(p);" },
+    { number: 2, code: "float phase = radius * 4.0 - u_time * 0.22;" },
+    { number: 3, code: "float rings = ringMask(fract(phase));", accent: true },
+    { number: 4, code: "color = mix(dark, violet, rings);" },
+  ],
+  "challenge-orbit": [
+    { number: 1, code: "vec2 orbit = vec2(cos(u_time), sin(u_time));", accent: true },
+    { number: 2, code: "orbit *= 0.42;" },
+    { number: 3, code: "float dot = circle(p - orbit, 0.065);" },
+    { number: 4, code: "color = mix(color, lime, dot);" },
+  ],
+  "challenge-final": [
+    { number: 1, code: "vec3 color = gridLayer(p, u_time);" },
+    { number: 2, code: "color = mix(color, violet, pulseRings(p));" },
+    { number: 3, code: "color = mix(color, lime, orbitDot(p));", accent: true },
+    { number: 4, code: "color *= 0.9 + 0.1 * sin(u_time * 2.0);" },
+    { number: 5, code: "fragColor = vec4(color, 1.0);", accent: true },
+  ],
+};
+
+const challengeFilenames: Record<ChallengeMode, string> = {
+  "challenge-grid": "challenge_grid.glsl",
+  "challenge-rings": "challenge_rings.glsl",
+  "challenge-orbit": "challenge_orbit.glsl",
+  "challenge-final": "foundation_composite.glsl",
+};
+
 export default function LessonScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ lessonId?: string }>();
@@ -246,7 +302,7 @@ export default function LessonScreen() {
   const requestedLessonIndex = requestedLesson
     ? MODULE_ONE_LESSONS.findIndex((item) => item.id === requestedLesson.id)
     : -1;
-  const lesson = requestedLessonIndex >= 0 && requestedLessonIndex < 4
+  const lesson = requestedLessonIndex >= 0 && requestedLessonIndex < 5
     ? requestedLesson!
     : MODULE_ONE_LESSONS[0];
   const lessonId = lesson.id as ModuleOneLessonId;
@@ -254,12 +310,15 @@ export default function LessonScreen() {
   const isColorLesson = lessonId === COLORS_FRAGMENT_OUTPUT_LESSON_ID;
   const isTimeLesson = lessonId === UNIFORMS_TIME_LESSON_ID;
   const isTransformLesson = lessonId === TRANSFORMING_UVS_LESSON_ID;
+  const isChallengeLesson = lessonId === FOUNDATION_CHALLENGE_LESSON_ID;
   const [coordinatePreset, setCoordinatePreset] =
     useState<CoordinateMode>("normalized");
   const [colorPreset, setColorPreset] = useState<ColorMode>("rgb-gradient");
   const [timePreset, setTimePreset] = useState<TimeMode>("time-play");
   const [transformPreset, setTransformPreset] =
     useState<TransformMode>("transform-translate");
+  const [challengePreset, setChallengePreset] =
+    useState<ChallengeMode>("challenge-final");
   const [restartToken, setRestartToken] = useState(0);
   const [showCompletion, setShowCompletion] = useState(false);
   const {
@@ -270,7 +329,9 @@ export default function LessonScreen() {
     uncompleteLesson,
   } = useProgress();
   const isComplete = hasCompletedLesson(lessonId);
-  const activeMode: ShaderPreviewMode = isTransformLesson
+  const activeMode: ShaderPreviewMode = isChallengeLesson
+    ? challengePreset
+    : isTransformLesson
     ? transformPreset
     : isTimeLesson
     ? timePreset
@@ -282,7 +343,12 @@ export default function LessonScreen() {
   const activeTransformPreset = transformPresetOptions.find(
     (preset) => preset.mode === transformPreset,
   )!;
-  const codeLines = isTransformLesson
+  const activeChallengePreset = challengePresetOptions.find(
+    (preset) => preset.mode === challengePreset,
+  )!;
+  const codeLines = isChallengeLesson
+    ? challengeCodeLines[challengePreset]
+    : isTransformLesson
     ? transformCodeLines[transformPreset]
     : isTimeLesson
     ? timeCodeLines[timePreset]
@@ -293,10 +359,26 @@ export default function LessonScreen() {
   const nextImplementedLesson =
     nextLesson?.id === COLORS_FRAGMENT_OUTPUT_LESSON_ID ||
     nextLesson?.id === UNIFORMS_TIME_LESSON_ID ||
-    nextLesson?.id === TRANSFORMING_UVS_LESSON_ID
+    nextLesson?.id === TRANSFORMING_UVS_LESSON_ID ||
+    nextLesson?.id === FOUNDATION_CHALLENGE_LESSON_ID
       ? nextLesson
       : undefined;
-  const lessonSections = isTransformLesson
+  const lessonSections = isChallengeLesson
+    ? [
+        {
+          title: "Build from independent layers",
+          body: "Start with a moving grid, then create rings and an orbiting point as separate masks. Small, testable layers make a complex shader easier to reason about than one long expression.",
+        },
+        {
+          title: "Reuse one coordinate foundation",
+          body: "Normalize, center, and correct aspect ratio once. Every layer then agrees about the origin and distance, so circles stay round and the composition behaves consistently across screens.",
+        },
+        {
+          title: "Compose masks with intention",
+          body: "Use mix to assign each mask a palette role, then combine the layers in a deliberate order. Your checkpoint: identify the coordinate, color, time, and transform idea responsible for every visible part.",
+        },
+      ]
+    : isTransformLesson
     ? [
         {
           title: "Move the coordinate system",
@@ -436,7 +518,9 @@ export default function LessonScreen() {
             <Text style={styles.eyebrow}>Concept</Text>
             <Text style={styles.title}>{lesson.title}</Text>
             <Text style={styles.lede}>
-              {isTransformLesson
+              {isChallengeLesson
+                ? "Combine coordinates, color, time, and transforms into one layered composition. Isolate each ingredient, then study how they work together."
+                : isTransformLesson
                 ? "Transforming UVs lets you position, resize, rotate, and repeat a shape without changing the shape function itself."
                 : isTimeLesson
                 ? "Uniforms let the app send shared values into every fragment. Use elapsed time to create smooth, frame-rate-independent motion."
@@ -465,7 +549,9 @@ export default function LessonScreen() {
               <View style={styles.previewFooter}>
                 <View>
                   <Text style={styles.previewLabel}>
-                    {isTransformLesson
+                    {isChallengeLesson
+                      ? "Foundation composition"
+                      : isTransformLesson
                       ? "Transformed shape"
                       : isTimeLesson
                         ? "Time animation"
@@ -474,7 +560,9 @@ export default function LessonScreen() {
                           : "UV preview"}
                   </Text>
                   <Text style={styles.previewValue}>
-                    {isTransformLesson
+                    {isChallengeLesson
+                      ? `${activeChallengePreset.label} · ${activeChallengePreset.value}`
+                      : isTransformLesson
                       ? `${activeTransformPreset.label} · ${activeTransformPreset.value}`
                       : isTimeLesson
                       ? `${activeTimePreset.label} · ${activeTimePreset.value}`
@@ -496,7 +584,9 @@ export default function LessonScreen() {
               <View style={styles.tryItHeading}>
                 <Text style={styles.tryItTitle}>Try it</Text>
                 <Text style={styles.tryItHint}>
-                  {isTransformLesson
+                  {isChallengeLesson
+                    ? "Inspect one layer at a time"
+                    : isTransformLesson
                     ? "Transform the space before drawing"
                     : isTimeLesson
                     ? "Change how time flows"
@@ -506,7 +596,31 @@ export default function LessonScreen() {
                 </Text>
               </View>
               <View accessibilityRole="radiogroup" style={styles.presetControl}>
-                {isTransformLesson && transformPresetOptions.map((preset) => {
+                {isChallengeLesson && challengePresetOptions.map((preset) => {
+                  const selected = challengePreset === preset.mode;
+
+                  return (
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected }}
+                      key={preset.mode}
+                      onPress={() => setChallengePreset(preset.mode)}
+                      style={({ pressed }) => [
+                        styles.preset,
+                        selected && styles.selectedPreset,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={[styles.presetLabel, selected && styles.selectedPresetLabel]}>
+                        {preset.label}
+                      </Text>
+                      <Text style={[styles.presetValue, selected && styles.selectedPresetValue]}>
+                        {preset.value}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {!isChallengeLesson && isTransformLesson && transformPresetOptions.map((preset) => {
                   const selected = transformPreset === preset.mode;
 
                   return (
@@ -530,7 +644,7 @@ export default function LessonScreen() {
                     </Pressable>
                   );
                 })}
-                {!isTransformLesson && isTimeLesson && timePresetOptions.map((preset) => {
+                {!isChallengeLesson && !isTransformLesson && isTimeLesson && timePresetOptions.map((preset) => {
                   const selected = timePreset === preset.mode;
 
                   return (
@@ -554,7 +668,7 @@ export default function LessonScreen() {
                     </Pressable>
                   );
                 })}
-                {!isTransformLesson && !isTimeLesson && isColorLesson && colorPresetOptions.map((preset) => {
+                {!isChallengeLesson && !isTransformLesson && !isTimeLesson && isColorLesson && colorPresetOptions.map((preset) => {
                   const selected = colorPreset === preset.mode;
 
                   return (
@@ -578,7 +692,7 @@ export default function LessonScreen() {
                     </Pressable>
                   );
                 })}
-                {!isTransformLesson && !isTimeLesson && !isColorLesson && coordinatePresetOptions.map((preset) => {
+                {!isChallengeLesson && !isTransformLesson && !isTimeLesson && !isColorLesson && coordinatePresetOptions.map((preset) => {
                   const selected = coordinatePreset === preset.mode;
 
                   return (
@@ -624,7 +738,9 @@ export default function LessonScreen() {
             <View style={styles.codeCard}>
               <View style={styles.codeHeader}>
                 <Text style={styles.codeFilename}>
-                  {isTransformLesson
+                  {isChallengeLesson
+                    ? challengeFilenames[challengePreset]
+                    : isTransformLesson
                     ? transformFilenames[transformPreset]
                     : isTimeLesson
                     ? timeFilenames[timePreset]
@@ -656,7 +772,9 @@ export default function LessonScreen() {
           <View style={styles.conceptHeader}>
             <Text style={styles.conceptEyebrow}>Concept breakdown</Text>
             <Text style={styles.conceptTitle}>
-              {isTransformLesson
+              {isChallengeLesson
+                ? "Assemble the foundation"
+                : isTransformLesson
                 ? "Move the space, not the shape"
                 : isTimeLesson
                 ? "Uniforms in motion"
@@ -665,7 +783,9 @@ export default function LessonScreen() {
                   : "Mastering the canvas"}
             </Text>
             <Text style={styles.conceptLede}>
-              {isTransformLesson
+              {isChallengeLesson
+                ? "Deconstruct a finished shader into coordinate, mask, motion, and color layers."
+                : isTransformLesson
                 ? "Apply translation, scale, rotation, and repetition to UVs before evaluating a reusable shape."
                 : isTimeLesson
                 ? "Connect app state to GLSL and create animation from elapsed seconds."
@@ -697,7 +817,9 @@ export default function LessonScreen() {
             <View style={styles.takeawayCopy}>
               <Text style={styles.takeawayTitle}>Remember</Text>
               <Text style={styles.takeawayBody}>
-                {isTransformLesson
+                {isChallengeLesson
+                  ? "Complex shaders are compositions of simple masks. Build and inspect each layer independently, share one aspect-correct coordinate system, then combine colors in a deliberate order."
+                  : isTransformLesson
                   ? "Transform coordinates before drawing. Center them before scaling or rotation, remember that coordinate transforms feel inverse to object transforms, and use fract to fold space into repeatable cells."
                   : isTimeLesson
                   ? "Uniforms are shared inputs, not per-pixel variables. Derive motion from elapsed seconds, then multiply time to control speed without tying animation to frame rate."
