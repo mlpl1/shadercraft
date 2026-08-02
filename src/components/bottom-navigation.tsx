@@ -50,12 +50,12 @@ export function BottomNavigation({ activeItem }: BottomNavigationProps) {
     if (destination === activeItem) return;
 
     if (destination === "home") {
-      router.push("/");
+      router.replace("/");
       return;
     }
 
     if (destination === "course") {
-      router.push("/course");
+      router.replace("/course");
       return;
     }
 
