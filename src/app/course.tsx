@@ -61,6 +61,10 @@ export default function CourseScreen() {
   const hasCompletedModuleOne = isModuleOneComplete(progress.completedLessonIds);
   const unlockedModuleCount = hasCompletedModuleOne ? 2 : 1;
   const progressWidth = `${progressPercent}%` as `${number}%`;
+  const currentModuleOneLesson = getCurrentModuleOneLesson(progress.completedLessonIds);
+  const currentModuleOneLessonIndex = MODULE_ONE_LESSONS.findIndex(
+    (lesson) => lesson.id === currentModuleOneLesson.id,
+  );
 
   const getModuleStatus = (
     moduleNumber: number,
@@ -97,9 +101,9 @@ export default function CourseScreen() {
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <View style={styles.appFrame}>
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>Curriculum</Text>
-          <Text style={styles.title}>The shader path</Text>
-          <Text style={styles.subtitle}>4 modules · 19 lessons · self-paced</Text>
+          <Text style={styles.wordmark}>Shadercraft</Text>
+          <Text style={styles.eyebrow}>Learning path</Text>
+          <Text style={styles.title}>Curriculum</Text>
         </View>
 
         <ScrollView
@@ -107,25 +111,27 @@ export default function CourseScreen() {
           overScrollMode="never"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.overviewCard}>
-            <View style={styles.overviewHeader}>
-              <Text style={styles.overviewLabel}>Foundation track</Text>
-              <Text style={styles.overviewProgress}>
+          <View style={styles.progressPanel}>
+            <View style={styles.progressHeader}>
+              <View>
+                <Text style={styles.progressEyebrow}>Track progress</Text>
+                <Text style={styles.progressTitle}>Fragment shader fundamentals</Text>
+              </View>
+              <Text style={styles.progressValue}>
                 {isHydrated ? `${progressPercent}%` : "—"}
               </Text>
             </View>
-            <Text style={styles.overviewTitle}>Fragment Shader Fundamentals</Text>
-            <Text style={styles.overviewCopy}>
-              Learn the visual language of fragment shaders one concept at a time, from
-              coordinates to animated procedural texture.
-            </Text>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: progressWidth }]} />
+            </View>
+            <View style={styles.progressFooter}>
+              <Text style={styles.progressCaption}>4 modules · 19 lessons</Text>
+              <Text style={styles.progressCaption}>Self-paced</Text>
             </View>
           </View>
 
           <View style={styles.moduleHeadingRow}>
-            <Text style={styles.moduleHeading}>Modules</Text>
+            <Text style={styles.moduleHeading}>Your learning path</Text>
             <Text style={styles.moduleCount}>
               {String(unlockedModuleCount).padStart(2, "0")} / 04 available
             </Text>
@@ -140,6 +146,13 @@ export default function CourseScreen() {
                   {...module}
                   completedLessonCount={
                     module.moduleNumber === 1 ? moduleOneCompletedCount : 0
+                  }
+                  currentLessonIndex={
+                    module.moduleNumber === 1
+                      ? hasCompletedModuleOne
+                        ? -1
+                        : currentModuleOneLessonIndex
+                      : 0
                   }
                   key={module.moduleNumber}
                   onPress={
@@ -174,22 +187,30 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+  },
+  wordmark: {
+    color: Colors.accent,
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: -0.2,
   },
   eyebrow: {
-    color: Colors.accent,
-    fontSize: 11,
+    marginTop: Spacing.xxl,
+    color: Colors.textMuted,
+    fontFamily: "monospace",
+    fontSize: 9,
     fontWeight: "800",
-    letterSpacing: 0.9,
+    letterSpacing: 1,
     textTransform: "uppercase",
   },
   title: {
-    marginTop: 5,
+    marginTop: 3,
     color: Colors.text,
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: -0.7,
+    fontSize: 32,
+    fontWeight: "900",
+    letterSpacing: -1,
   },
   subtitle: {
     marginTop: 6,
@@ -199,6 +220,50 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Spacing.xl,
     paddingBottom: 40,
+  },
+  progressPanel: {
+    padding: Spacing.lg,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  progressHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  progressEyebrow: {
+    color: Colors.textSubtle,
+    fontFamily: "monospace",
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
+  progressTitle: {
+    marginTop: 4,
+    color: Colors.text,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  progressValue: {
+    color: Colors.accent,
+    fontFamily: "monospace",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  progressFooter: {
+    marginTop: Spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  progressCaption: {
+    color: Colors.textSubtle,
+    fontFamily: "monospace",
+    fontSize: 8,
+    textTransform: "uppercase",
   },
   overviewCard: {
     padding: Spacing.xl,
@@ -238,10 +303,10 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   progressTrack: {
-    height: 4,
-    marginTop: Spacing.lg,
+    height: 5,
+    marginTop: Spacing.md,
     overflow: "hidden",
-    borderRadius: Radius.round,
+    borderRadius: Radius.sm,
     backgroundColor: Colors.border,
   },
   progressFill: {
@@ -249,16 +314,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
   },
   moduleHeadingRow: {
-    marginTop: Spacing.xxxl,
-    marginBottom: Spacing.lg,
+    marginTop: Spacing.xxl,
+    marginBottom: Spacing.md,
     paddingHorizontal: Spacing.xs,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   moduleHeading: {
-    color: Colors.textSubtle,
-    fontSize: 12,
+    color: Colors.textMuted,
+    fontFamily: "monospace",
+    fontSize: 9,
     fontWeight: "800",
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -266,9 +332,9 @@ const styles = StyleSheet.create({
   moduleCount: {
     color: Colors.textSubtle,
     fontFamily: "monospace",
-    fontSize: 10,
+    fontSize: 9,
   },
   moduleList: {
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
 });
