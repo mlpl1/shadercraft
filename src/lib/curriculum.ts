@@ -32,6 +32,7 @@ export const COORDINATE_SYSTEMS_LESSON_ID: ModuleOneLessonId =
   "coordinate-systems-uv-space";
 export const COLORS_FRAGMENT_OUTPUT_LESSON_ID: ModuleOneLessonId =
   "colors-fragment-output";
+export const UNIFORMS_TIME_LESSON_ID: ModuleOneLessonId = "uniforms-time";
 
 export const TOTAL_LESSON_COUNT = 19;
 

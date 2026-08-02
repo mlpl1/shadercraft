@@ -14,10 +14,15 @@ export type ShaderPreviewMode =
   | "rgb-gradient"
   | "color-mix"
   | "luminance"
-  | "channel-split";
+  | "channel-split"
+  | "time-static"
+  | "time-play"
+  | "time-slow"
+  | "time-fast";
 
 type LiveShaderPreviewProps = {
   mode: ShaderPreviewMode;
+  restartToken?: number;
 };
 
 const vertexShaderSource = `
@@ -101,8 +106,22 @@ void main() {
   } else if (u_mode > 5.5 && u_mode < 6.5) {
     float value = smoothstep(0.0, 1.0, normalized.x);
     color = vec3(value);
-  } else if (u_mode > 6.5) {
+  } else if (u_mode > 6.5 && u_mode < 7.5) {
     color = vec3(normalized.x, 1.0 - normalized.y, normalized.y);
+  } else if (u_mode > 7.5) {
+    float speed = 1.0;
+    if (u_mode < 8.5) speed = 0.0;
+    else if (u_mode > 9.5 && u_mode < 10.5) speed = 0.5;
+    else if (u_mode > 10.5) speed = 2.0;
+
+    float t = u_time * speed;
+    vec2 p = centered;
+    float wave = 0.5 + 0.5 * sin(p.x * 8.0 - t * 3.0);
+    float pulse = 0.5 + 0.5 * sin(t * 2.0);
+    vec3 dark = vec3(0.04, 0.07, 0.11);
+    vec3 lime = vec3(0.78, 0.96, 0.39);
+    vec3 blue = vec3(0.31, 0.84, 1.0);
+    color = mix(dark, mix(blue, lime, pulse), wave);
   }
 
   gl_FragColor = vec4(color, 1.0);
@@ -129,14 +148,19 @@ function compileShader(
   return shader;
 }
 
-export function LiveShaderPreview({ mode }: LiveShaderPreviewProps) {
+export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewProps) {
   const modeRef = useRef(mode);
   const frameRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
+  const startedAtRef = useRef(globalThis.performance.now());
 
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
+
+  useEffect(() => {
+    startedAtRef.current = globalThis.performance.now();
+  }, [restartToken]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -181,7 +205,7 @@ export function LiveShaderPreview({ mode }: LiveShaderPreviewProps) {
     const resolution = gl.getUniformLocation(program, "u_resolution");
     const coordinateMode = gl.getUniformLocation(program, "u_mode");
     const time = gl.getUniformLocation(program, "u_time");
-    const startedAt = globalThis.performance.now();
+    startedAtRef.current = globalThis.performance.now();
 
     const render = () => {
       if (!mountedRef.current) return;
@@ -197,9 +221,13 @@ export function LiveShaderPreview({ mode }: LiveShaderPreviewProps) {
         "color-mix": 5,
         luminance: 6,
         "channel-split": 7,
+        "time-static": 8,
+        "time-play": 9,
+        "time-slow": 10,
+        "time-fast": 11,
       };
       gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
-      gl.uniform1f(time, (globalThis.performance.now() - startedAt) / 1000);
+      gl.uniform1f(time, (globalThis.performance.now() - startedAtRef.current) / 1000);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       gl.endFrameEXP();
 

@@ -25,6 +25,7 @@ import {
   getNextModuleOneLesson,
   MODULE_ONE_LESSONS,
   type ModuleOneLessonId,
+  UNIFORMS_TIME_LESSON_ID,
 } from "../lib/curriculum";
 
 const codeLinesByMode: Record<
@@ -131,6 +132,56 @@ const colorFilenames: Record<ColorMode, string> = {
   "channel-split": "channel_split.glsl",
 };
 
+type TimeMode = "time-static" | "time-play" | "time-slow" | "time-fast";
+
+const timePresetOptions: Array<{
+  label: string;
+  mode: TimeMode;
+  value: string;
+}> = [
+  { label: "Static", mode: "time-static", value: "u_time = 0" },
+  { label: "Play", mode: "time-play", value: "u_time" },
+  { label: "Half speed", mode: "time-slow", value: "u_time × 0.5" },
+  { label: "Double speed", mode: "time-fast", value: "u_time × 2.0" },
+];
+
+const timeCodeLines: Record<
+  TimeMode,
+  { number: number; code: string; accent?: boolean }[]
+> = {
+  "time-static": [
+    { number: 1, code: "uniform float u_time;" },
+    { number: 2, code: "float t = 0.0;", accent: true },
+    { number: 3, code: "float wave = sin(uv.x * 8.0 - t);" },
+    { number: 4, code: "fragColor = vec4(vec3(wave), 1.0);" },
+  ],
+  "time-play": [
+    { number: 1, code: "uniform float u_time;", accent: true },
+    { number: 2, code: "float t = u_time;", accent: true },
+    { number: 3, code: "float wave = sin(uv.x * 8.0 - t * 3.0);" },
+    { number: 4, code: "fragColor = vec4(vec3(wave), 1.0);" },
+  ],
+  "time-slow": [
+    { number: 1, code: "uniform float u_time;" },
+    { number: 2, code: "float t = u_time * 0.5;", accent: true },
+    { number: 3, code: "float wave = sin(uv.x * 8.0 - t * 3.0);" },
+    { number: 4, code: "fragColor = vec4(vec3(wave), 1.0);" },
+  ],
+  "time-fast": [
+    { number: 1, code: "uniform float u_time;" },
+    { number: 2, code: "float t = u_time * 2.0;", accent: true },
+    { number: 3, code: "float wave = sin(uv.x * 8.0 - t * 3.0);" },
+    { number: 4, code: "fragColor = vec4(vec3(wave), 1.0);" },
+  ],
+};
+
+const timeFilenames: Record<TimeMode, string> = {
+  "time-static": "static_uniform.glsl",
+  "time-play": "animated_time.glsl",
+  "time-slow": "slow_time.glsl",
+  "time-fast": "fast_time.glsl",
+};
+
 export default function LessonScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ lessonId?: string }>();
@@ -138,15 +189,18 @@ export default function LessonScreen() {
   const requestedLessonIndex = requestedLesson
     ? MODULE_ONE_LESSONS.findIndex((item) => item.id === requestedLesson.id)
     : -1;
-  const lesson = requestedLessonIndex >= 0 && requestedLessonIndex < 2
+  const lesson = requestedLessonIndex >= 0 && requestedLessonIndex < 3
     ? requestedLesson!
     : MODULE_ONE_LESSONS[0];
   const lessonId = lesson.id as ModuleOneLessonId;
   const lessonIndex = MODULE_ONE_LESSONS.findIndex((item) => item.id === lessonId);
   const isColorLesson = lessonId === COLORS_FRAGMENT_OUTPUT_LESSON_ID;
+  const isTimeLesson = lessonId === UNIFORMS_TIME_LESSON_ID;
   const [coordinatePreset, setCoordinatePreset] =
     useState<CoordinateMode>("normalized");
   const [colorPreset, setColorPreset] = useState<ColorMode>("rgb-gradient");
+  const [timePreset, setTimePreset] = useState<TimeMode>("time-play");
+  const [restartToken, setRestartToken] = useState(0);
   const [showCompletion, setShowCompletion] = useState(false);
   const {
     completeLesson: persistLessonCompletion,
@@ -156,15 +210,40 @@ export default function LessonScreen() {
     uncompleteLesson,
   } = useProgress();
   const isComplete = hasCompletedLesson(lessonId);
-  const activeMode: ShaderPreviewMode = isColorLesson ? colorPreset : coordinatePreset;
+  const activeMode: ShaderPreviewMode = isTimeLesson
+    ? timePreset
+    : isColorLesson
+      ? colorPreset
+      : coordinatePreset;
   const activeColorPreset = colorPresetOptions.find((preset) => preset.mode === colorPreset)!;
-  const codeLines = isColorLesson
-    ? colorCodeLines[colorPreset]
-    : codeLinesByMode[coordinatePreset];
+  const activeTimePreset = timePresetOptions.find((preset) => preset.mode === timePreset)!;
+  const codeLines = isTimeLesson
+    ? timeCodeLines[timePreset]
+    : isColorLesson
+      ? colorCodeLines[colorPreset]
+      : codeLinesByMode[coordinatePreset];
   const nextLesson = getNextModuleOneLesson(lessonId);
   const nextImplementedLesson =
-    nextLesson?.id === COLORS_FRAGMENT_OUTPUT_LESSON_ID ? nextLesson : undefined;
-  const lessonSections = isColorLesson
+    nextLesson?.id === COLORS_FRAGMENT_OUTPUT_LESSON_ID ||
+    nextLesson?.id === UNIFORMS_TIME_LESSON_ID
+      ? nextLesson
+      : undefined;
+  const lessonSections = isTimeLesson
+    ? [
+        {
+          title: "Uniforms connect host and shader",
+          body: "A uniform is a read-only value supplied by the app to every fragment invocation. Resolution, pointer position, and elapsed time are common uniforms because they describe shared frame state.",
+        },
+        {
+          title: "Animate with elapsed time",
+          body: "u_time usually stores seconds since the animation started. Feeding it into sin creates smooth repeating motion without counting frames or depending on a particular refresh rate.",
+        },
+        {
+          title: "Control speed with multiplication",
+          body: "Multiply time before using it: 0.5 runs at half speed and 2.0 runs twice as fast. The animation remains frame-rate independent because its position comes from elapsed time, not frame count.",
+        },
+      ]
+    : isColorLesson
     ? [
         {
           title: "Think in channels",
@@ -274,7 +353,9 @@ export default function LessonScreen() {
             <Text style={styles.eyebrow}>Concept</Text>
             <Text style={styles.title}>{lesson.title}</Text>
             <Text style={styles.lede}>
-              {isColorLesson
+              {isTimeLesson
+                ? "Uniforms let the app send shared values into every fragment. Use elapsed time to create smooth, frame-rate-independent motion."
+                : isColorLesson
                 ? "A fragment shader returns one color for every pixel. Learn how RGB channels, alpha, and color mixing turn numbers into an image."
                 : "Fragment shaders run once per pixel. Before drawing shapes, turn each pixel position into a predictable coordinate you can reason about."}
             </Text>
@@ -288,19 +369,23 @@ export default function LessonScreen() {
               </View>
               <View style={styles.liveBadge}>
                 <View style={styles.liveDot} />
-                <Text style={styles.liveLabel}>Running</Text>
+                <Text style={styles.liveLabel}>
+                  {isTimeLesson && timePreset === "time-static" ? "Paused" : "Running"}
+                </Text>
               </View>
             </View>
 
             <View style={styles.previewCard}>
-              <LiveShaderPreview mode={activeMode} />
+              <LiveShaderPreview mode={activeMode} restartToken={restartToken} />
               <View style={styles.previewFooter}>
                 <View>
                   <Text style={styles.previewLabel}>
-                    {isColorLesson ? "Fragment color" : "UV preview"}
+                    {isTimeLesson ? "Time animation" : isColorLesson ? "Fragment color" : "UV preview"}
                   </Text>
                   <Text style={styles.previewValue}>
-                    {isColorLesson
+                    {isTimeLesson
+                      ? `${activeTimePreset.label} · ${activeTimePreset.value}`
+                      : isColorLesson
                       ? `${activeColorPreset.label} · ${activeColorPreset.value}`
                       : coordinatePreset === "normalized"
                         ? "0.0 → 1.0 · screen space"
@@ -318,11 +403,39 @@ export default function LessonScreen() {
               <View style={styles.tryItHeading}>
                 <Text style={styles.tryItTitle}>Try it</Text>
                 <Text style={styles.tryItHint}>
-                  {isColorLesson ? "Change the color expression" : "Change the coordinate range"}
+                  {isTimeLesson
+                    ? "Change how time flows"
+                    : isColorLesson
+                      ? "Change the color expression"
+                      : "Change the coordinate range"}
                 </Text>
               </View>
               <View accessibilityRole="radiogroup" style={styles.presetControl}>
-                {isColorLesson && colorPresetOptions.map((preset) => {
+                {isTimeLesson && timePresetOptions.map((preset) => {
+                  const selected = timePreset === preset.mode;
+
+                  return (
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected }}
+                      key={preset.mode}
+                      onPress={() => setTimePreset(preset.mode)}
+                      style={({ pressed }) => [
+                        styles.preset,
+                        selected && styles.selectedPreset,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={[styles.presetLabel, selected && styles.selectedPresetLabel]}>
+                        {preset.label}
+                      </Text>
+                      <Text style={[styles.presetValue, selected && styles.selectedPresetValue]}>
+                        {preset.value}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {!isTimeLesson && isColorLesson && colorPresetOptions.map((preset) => {
                   const selected = colorPreset === preset.mode;
 
                   return (
@@ -346,7 +459,7 @@ export default function LessonScreen() {
                     </Pressable>
                   );
                 })}
-                {!isColorLesson && coordinatePresetOptions.map((preset) => {
+                {!isTimeLesson && !isColorLesson && coordinatePresetOptions.map((preset) => {
                   const selected = coordinatePreset === preset.mode;
 
                   return (
@@ -371,12 +484,30 @@ export default function LessonScreen() {
                   );
                 })}
               </View>
+              {isTimeLesson && (
+                <Pressable
+                  accessibilityLabel="Restart animation timeline"
+                  accessibilityRole="button"
+                  onPress={() => setRestartToken((token) => token + 1)}
+                  style={({ pressed }) => [styles.restartButton, pressed && styles.pressed]}
+                >
+                  <AppIcon
+                    color={Colors.accent}
+                    fallback="↻"
+                    name={{ android: "refresh", ios: "arrow.counterclockwise", web: "refresh" }}
+                    size={17}
+                  />
+                  <Text style={styles.restartLabel}>Restart timeline</Text>
+                </Pressable>
+              )}
             </View>
 
             <View style={styles.codeCard}>
               <View style={styles.codeHeader}>
                 <Text style={styles.codeFilename}>
-                  {isColorLesson
+                  {isTimeLesson
+                    ? timeFilenames[timePreset]
+                    : isColorLesson
                     ? colorFilenames[colorPreset]
                     : coordinatePreset === "normalized"
                       ? "normalized_uv.glsl"
@@ -404,10 +535,16 @@ export default function LessonScreen() {
           <View style={styles.conceptHeader}>
             <Text style={styles.conceptEyebrow}>Concept breakdown</Text>
             <Text style={styles.conceptTitle}>
-              {isColorLesson ? "From numbers to pixels" : "Mastering the canvas"}
+              {isTimeLesson
+                ? "Uniforms in motion"
+                : isColorLesson
+                  ? "From numbers to pixels"
+                  : "Mastering the canvas"}
             </Text>
             <Text style={styles.conceptLede}>
-              {isColorLesson
+              {isTimeLesson
+                ? "Connect app state to GLSL and create animation from elapsed seconds."
+                : isColorLesson
                 ? "Learn how fragment output combines channels, opacity, and interpolation into visible color."
                 : "Understand how raw pixels become stable coordinates you can reuse across every screen size."}
             </Text>
@@ -435,7 +572,9 @@ export default function LessonScreen() {
             <View style={styles.takeawayCopy}>
               <Text style={styles.takeawayTitle}>Remember</Text>
               <Text style={styles.takeawayBody}>
-                {isColorLesson
+                {isTimeLesson
+                  ? "Uniforms are shared inputs, not per-pixel variables. Derive motion from elapsed seconds, then multiply time to control speed without tying animation to frame rate."
+                  : isColorLesson
                   ? "vec3 stores red, green, and blue. vec4 adds alpha. Use coordinate-driven gradients to inspect your UVs, then mix colors to build intentional palettes."
                   : "The center of normalized UV space is always (0.5, 0.5). After centering it becomes (0.0, 0.0). Correct the x-axis before measuring distance so circles remain circular."}
               </Text>
@@ -827,6 +966,23 @@ const styles = StyleSheet.create({
   },
   selectedPresetValue: {
     color: Colors.accent,
+  },
+  restartButton: {
+    marginTop: Spacing.md,
+    minHeight: 42,
+    paddingHorizontal: Spacing.md,
+    alignSelf: "flex-start",
+    borderRadius: Radius.round,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  restartLabel: {
+    color: Colors.accent,
+    fontSize: 12,
+    fontWeight: "800",
   },
   takeaway: {
     marginTop: Spacing.xxl,
