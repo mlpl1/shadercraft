@@ -18,7 +18,11 @@ export type ShaderPreviewMode =
   | "time-static"
   | "time-play"
   | "time-slow"
-  | "time-fast";
+  | "time-fast"
+  | "transform-translate"
+  | "transform-scale"
+  | "transform-rotate"
+  | "transform-repeat";
 
 type LiveShaderPreviewProps = {
   mode: ShaderPreviewMode;
@@ -108,7 +112,7 @@ void main() {
     color = vec3(value);
   } else if (u_mode > 6.5 && u_mode < 7.5) {
     color = vec3(normalized.x, 1.0 - normalized.y, normalized.y);
-  } else if (u_mode > 7.5) {
+  } else if (u_mode > 7.5 && u_mode < 11.5) {
     float speed = 1.0;
     if (u_mode < 8.5) speed = 0.0;
     else if (u_mode > 9.5 && u_mode < 10.5) speed = 0.5;
@@ -122,6 +126,27 @@ void main() {
     vec3 lime = vec3(0.78, 0.96, 0.39);
     vec3 blue = vec3(0.31, 0.84, 1.0);
     color = mix(dark, mix(blue, lime, pulse), wave);
+  } else if (u_mode > 11.5) {
+    vec2 p = centered;
+    if (u_mode < 12.5) {
+      p -= vec2(0.35, -0.18);
+    } else if (u_mode < 13.5) {
+      p *= 1.8;
+    } else if (u_mode < 14.5) {
+      float angle = 0.65;
+      mat2 rotation = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
+      p = rotation * p;
+    } else {
+      p = fract((p * 0.5 + 0.5) * 3.0) - 0.5;
+      p.x *= u_resolution.x / u_resolution.y;
+    }
+
+    float box = max(abs(p.x), abs(p.y));
+    float shape = 1.0 - smoothstep(0.28, 0.30, box);
+    float inner = 1.0 - smoothstep(0.12, 0.14, length(p));
+    vec3 background = vec3(0.035, 0.055, 0.085);
+    color = mix(background, vec3(0.31, 0.84, 1.0), shape);
+    color = mix(color, vec3(0.78, 0.96, 0.39), inner);
   }
 
   gl_FragColor = vec4(color, 1.0);
@@ -225,6 +250,10 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
         "time-play": 9,
         "time-slow": 10,
         "time-fast": 11,
+        "transform-translate": 12,
+        "transform-scale": 13,
+        "transform-rotate": 14,
+        "transform-repeat": 15,
       };
       gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAtRef.current) / 1000);

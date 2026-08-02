@@ -24,6 +24,7 @@ import {
   getModuleOneLesson,
   getNextModuleOneLesson,
   MODULE_ONE_LESSONS,
+  TRANSFORMING_UVS_LESSON_ID,
   type ModuleOneLessonId,
   UNIFORMS_TIME_LESSON_ID,
 } from "../lib/curriculum";
@@ -182,6 +183,62 @@ const timeFilenames: Record<TimeMode, string> = {
   "time-fast": "fast_time.glsl",
 };
 
+type TransformMode =
+  | "transform-translate"
+  | "transform-scale"
+  | "transform-rotate"
+  | "transform-repeat";
+
+const transformPresetOptions: Array<{
+  label: string;
+  mode: TransformMode;
+  value: string;
+}> = [
+  { label: "Translate", mode: "transform-translate", value: "p − offset" },
+  { label: "Scale", mode: "transform-scale", value: "p × 1.8" },
+  { label: "Rotate", mode: "transform-rotate", value: "mat2(angle)" },
+  { label: "Repeat", mode: "transform-repeat", value: "fract(p × 3)" },
+];
+
+const transformCodeLines: Record<
+  TransformMode,
+  { number: number; code: string; accent?: boolean }[]
+> = {
+  "transform-translate": [
+    { number: 1, code: "vec2 p = centeredUv;" },
+    { number: 2, code: "p -= vec2(0.35, -0.18);", accent: true },
+    { number: 3, code: "float shape = box(p, vec2(0.3));" },
+    { number: 4, code: "fragColor = vec4(vec3(shape), 1.0);" },
+  ],
+  "transform-scale": [
+    { number: 1, code: "vec2 p = centeredUv;" },
+    { number: 2, code: "p *= 1.8;", accent: true },
+    { number: 3, code: "float shape = box(p, vec2(0.3));" },
+    { number: 4, code: "fragColor = vec4(vec3(shape), 1.0);" },
+  ],
+  "transform-rotate": [
+    { number: 1, code: "float a = radians(37.0);" },
+    { number: 2, code: "mat2 rot = mat2(cos(a), -sin(a),", accent: true },
+    { number: 3, code: "                sin(a),  cos(a));" },
+    { number: 4, code: "vec2 p = rot * centeredUv;", accent: true },
+    { number: 5, code: "float shape = box(p, vec2(0.3));" },
+  ],
+  "transform-repeat": [
+    { number: 1, code: "vec2 p = centeredUv * 0.5 + 0.5;" },
+    { number: 2, code: "p = fract(p * 3.0) - 0.5;", accent: true },
+    { number: 3, code: "p.x *= resolution.x / resolution.y;" },
+    { number: 4, code: "float shape = box(p, vec2(0.3));" },
+    { number: 5, code: "fragColor = vec4(vec3(shape), 1.0);" },
+  ],
+};
+
+const transformFilenames: Record<TransformMode, string> = {
+  "transform-translate": "translate_uv.glsl",
+  "transform-scale": "scale_uv.glsl",
+  "transform-rotate": "rotate_uv.glsl",
+  "transform-repeat": "repeat_uv.glsl",
+};
+
 export default function LessonScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ lessonId?: string }>();
@@ -189,17 +246,20 @@ export default function LessonScreen() {
   const requestedLessonIndex = requestedLesson
     ? MODULE_ONE_LESSONS.findIndex((item) => item.id === requestedLesson.id)
     : -1;
-  const lesson = requestedLessonIndex >= 0 && requestedLessonIndex < 3
+  const lesson = requestedLessonIndex >= 0 && requestedLessonIndex < 4
     ? requestedLesson!
     : MODULE_ONE_LESSONS[0];
   const lessonId = lesson.id as ModuleOneLessonId;
   const lessonIndex = MODULE_ONE_LESSONS.findIndex((item) => item.id === lessonId);
   const isColorLesson = lessonId === COLORS_FRAGMENT_OUTPUT_LESSON_ID;
   const isTimeLesson = lessonId === UNIFORMS_TIME_LESSON_ID;
+  const isTransformLesson = lessonId === TRANSFORMING_UVS_LESSON_ID;
   const [coordinatePreset, setCoordinatePreset] =
     useState<CoordinateMode>("normalized");
   const [colorPreset, setColorPreset] = useState<ColorMode>("rgb-gradient");
   const [timePreset, setTimePreset] = useState<TimeMode>("time-play");
+  const [transformPreset, setTransformPreset] =
+    useState<TransformMode>("transform-translate");
   const [restartToken, setRestartToken] = useState(0);
   const [showCompletion, setShowCompletion] = useState(false);
   const {
@@ -210,14 +270,21 @@ export default function LessonScreen() {
     uncompleteLesson,
   } = useProgress();
   const isComplete = hasCompletedLesson(lessonId);
-  const activeMode: ShaderPreviewMode = isTimeLesson
+  const activeMode: ShaderPreviewMode = isTransformLesson
+    ? transformPreset
+    : isTimeLesson
     ? timePreset
     : isColorLesson
       ? colorPreset
       : coordinatePreset;
   const activeColorPreset = colorPresetOptions.find((preset) => preset.mode === colorPreset)!;
   const activeTimePreset = timePresetOptions.find((preset) => preset.mode === timePreset)!;
-  const codeLines = isTimeLesson
+  const activeTransformPreset = transformPresetOptions.find(
+    (preset) => preset.mode === transformPreset,
+  )!;
+  const codeLines = isTransformLesson
+    ? transformCodeLines[transformPreset]
+    : isTimeLesson
     ? timeCodeLines[timePreset]
     : isColorLesson
       ? colorCodeLines[colorPreset]
@@ -225,10 +292,26 @@ export default function LessonScreen() {
   const nextLesson = getNextModuleOneLesson(lessonId);
   const nextImplementedLesson =
     nextLesson?.id === COLORS_FRAGMENT_OUTPUT_LESSON_ID ||
-    nextLesson?.id === UNIFORMS_TIME_LESSON_ID
+    nextLesson?.id === UNIFORMS_TIME_LESSON_ID ||
+    nextLesson?.id === TRANSFORMING_UVS_LESSON_ID
       ? nextLesson
       : undefined;
-  const lessonSections = isTimeLesson
+  const lessonSections = isTransformLesson
+    ? [
+        {
+          title: "Move the coordinate system",
+          body: "A shader has no movable object to transform. Instead, subtract an offset from the coordinates before evaluating the shape. Moving the coordinate system left makes the rendered shape appear to move right.",
+        },
+        {
+          title: "Scale and rotate around the origin",
+          body: "Multiplying coordinates changes how quickly distance grows, so larger coordinate values make a shape appear smaller. Rotation matrices turn coordinates around the origin, which is why centering UVs first matters.",
+        },
+        {
+          title: "Repeat space with fract",
+          body: "fract keeps only the fractional part of each coordinate. Scale first and fract folds the plane into repeating cells—one shape function can then draw an entire pattern.",
+        },
+      ]
+    : isTimeLesson
     ? [
         {
           title: "Uniforms connect host and shader",
@@ -353,7 +436,9 @@ export default function LessonScreen() {
             <Text style={styles.eyebrow}>Concept</Text>
             <Text style={styles.title}>{lesson.title}</Text>
             <Text style={styles.lede}>
-              {isTimeLesson
+              {isTransformLesson
+                ? "Transforming UVs lets you position, resize, rotate, and repeat a shape without changing the shape function itself."
+                : isTimeLesson
                 ? "Uniforms let the app send shared values into every fragment. Use elapsed time to create smooth, frame-rate-independent motion."
                 : isColorLesson
                 ? "A fragment shader returns one color for every pixel. Learn how RGB channels, alpha, and color mixing turn numbers into an image."
@@ -380,10 +465,18 @@ export default function LessonScreen() {
               <View style={styles.previewFooter}>
                 <View>
                   <Text style={styles.previewLabel}>
-                    {isTimeLesson ? "Time animation" : isColorLesson ? "Fragment color" : "UV preview"}
+                    {isTransformLesson
+                      ? "Transformed shape"
+                      : isTimeLesson
+                        ? "Time animation"
+                        : isColorLesson
+                          ? "Fragment color"
+                          : "UV preview"}
                   </Text>
                   <Text style={styles.previewValue}>
-                    {isTimeLesson
+                    {isTransformLesson
+                      ? `${activeTransformPreset.label} · ${activeTransformPreset.value}`
+                      : isTimeLesson
                       ? `${activeTimePreset.label} · ${activeTimePreset.value}`
                       : isColorLesson
                       ? `${activeColorPreset.label} · ${activeColorPreset.value}`
@@ -403,7 +496,9 @@ export default function LessonScreen() {
               <View style={styles.tryItHeading}>
                 <Text style={styles.tryItTitle}>Try it</Text>
                 <Text style={styles.tryItHint}>
-                  {isTimeLesson
+                  {isTransformLesson
+                    ? "Transform the space before drawing"
+                    : isTimeLesson
                     ? "Change how time flows"
                     : isColorLesson
                       ? "Change the color expression"
@@ -411,7 +506,31 @@ export default function LessonScreen() {
                 </Text>
               </View>
               <View accessibilityRole="radiogroup" style={styles.presetControl}>
-                {isTimeLesson && timePresetOptions.map((preset) => {
+                {isTransformLesson && transformPresetOptions.map((preset) => {
+                  const selected = transformPreset === preset.mode;
+
+                  return (
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected }}
+                      key={preset.mode}
+                      onPress={() => setTransformPreset(preset.mode)}
+                      style={({ pressed }) => [
+                        styles.preset,
+                        selected && styles.selectedPreset,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={[styles.presetLabel, selected && styles.selectedPresetLabel]}>
+                        {preset.label}
+                      </Text>
+                      <Text style={[styles.presetValue, selected && styles.selectedPresetValue]}>
+                        {preset.value}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {!isTransformLesson && isTimeLesson && timePresetOptions.map((preset) => {
                   const selected = timePreset === preset.mode;
 
                   return (
@@ -435,7 +554,7 @@ export default function LessonScreen() {
                     </Pressable>
                   );
                 })}
-                {!isTimeLesson && isColorLesson && colorPresetOptions.map((preset) => {
+                {!isTransformLesson && !isTimeLesson && isColorLesson && colorPresetOptions.map((preset) => {
                   const selected = colorPreset === preset.mode;
 
                   return (
@@ -459,7 +578,7 @@ export default function LessonScreen() {
                     </Pressable>
                   );
                 })}
-                {!isTimeLesson && !isColorLesson && coordinatePresetOptions.map((preset) => {
+                {!isTransformLesson && !isTimeLesson && !isColorLesson && coordinatePresetOptions.map((preset) => {
                   const selected = coordinatePreset === preset.mode;
 
                   return (
@@ -505,7 +624,9 @@ export default function LessonScreen() {
             <View style={styles.codeCard}>
               <View style={styles.codeHeader}>
                 <Text style={styles.codeFilename}>
-                  {isTimeLesson
+                  {isTransformLesson
+                    ? transformFilenames[transformPreset]
+                    : isTimeLesson
                     ? timeFilenames[timePreset]
                     : isColorLesson
                     ? colorFilenames[colorPreset]
@@ -535,14 +656,18 @@ export default function LessonScreen() {
           <View style={styles.conceptHeader}>
             <Text style={styles.conceptEyebrow}>Concept breakdown</Text>
             <Text style={styles.conceptTitle}>
-              {isTimeLesson
+              {isTransformLesson
+                ? "Move the space, not the shape"
+                : isTimeLesson
                 ? "Uniforms in motion"
                 : isColorLesson
                   ? "From numbers to pixels"
                   : "Mastering the canvas"}
             </Text>
             <Text style={styles.conceptLede}>
-              {isTimeLesson
+              {isTransformLesson
+                ? "Apply translation, scale, rotation, and repetition to UVs before evaluating a reusable shape."
+                : isTimeLesson
                 ? "Connect app state to GLSL and create animation from elapsed seconds."
                 : isColorLesson
                 ? "Learn how fragment output combines channels, opacity, and interpolation into visible color."
@@ -572,7 +697,9 @@ export default function LessonScreen() {
             <View style={styles.takeawayCopy}>
               <Text style={styles.takeawayTitle}>Remember</Text>
               <Text style={styles.takeawayBody}>
-                {isTimeLesson
+                {isTransformLesson
+                  ? "Transform coordinates before drawing. Center them before scaling or rotation, remember that coordinate transforms feel inverse to object transforms, and use fract to fold space into repeatable cells."
+                  : isTimeLesson
                   ? "Uniforms are shared inputs, not per-pixel variables. Derive motion from elapsed seconds, then multiply time to control speed without tying animation to frame rate."
                   : isColorLesson
                   ? "vec3 stores red, green, and blue. vec4 adds alpha. Use coordinate-driven gradients to inspect your UVs, then mix colors to build intentional palettes."

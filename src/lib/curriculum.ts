@@ -33,6 +33,7 @@ export const COORDINATE_SYSTEMS_LESSON_ID: ModuleOneLessonId =
 export const COLORS_FRAGMENT_OUTPUT_LESSON_ID: ModuleOneLessonId =
   "colors-fragment-output";
 export const UNIFORMS_TIME_LESSON_ID: ModuleOneLessonId = "uniforms-time";
+export const TRANSFORMING_UVS_LESSON_ID: ModuleOneLessonId = "transforming-uvs";
 
 export const TOTAL_LESSON_COUNT = 19;
 
