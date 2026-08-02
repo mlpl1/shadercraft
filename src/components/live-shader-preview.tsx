@@ -26,7 +26,11 @@ export type ShaderPreviewMode =
   | "challenge-grid"
   | "challenge-rings"
   | "challenge-orbit"
-  | "challenge-final";
+  | "challenge-final"
+  | "logo-scanlines"
+  | "logo-ribbon"
+  | "logo-cutout"
+  | "logo-final";
 
 type LiveShaderPreviewProps = {
   mode: ShaderPreviewMode;
@@ -151,7 +155,7 @@ void main() {
     vec3 background = vec3(0.035, 0.055, 0.085);
     color = mix(background, vec3(0.31, 0.84, 1.0), shape);
     color = mix(color, vec3(0.78, 0.96, 0.39), inner);
-  } else if (u_mode > 15.5) {
+  } else if (u_mode > 15.5 && u_mode < 19.5) {
     vec2 p = centered;
     float gridX = gridLine(p.x + u_time * 0.035, 5.0);
     float gridY = gridLine(p.y, 5.0);
@@ -178,6 +182,67 @@ void main() {
       color = mix(color, violet, rings * 0.58);
       color = mix(color, lime, orbit);
       color *= 0.82 + 0.18 * (0.5 + 0.5 * sin(u_time * 2.0));
+    }
+  } else if (u_mode > 19.5) {
+    vec2 p = centered;
+    float row = floor((p.y + 0.70) * 17.0);
+    float random = fract(sin(row * 91.73) * 43758.5453);
+    float randomRight = fract(sin((row + 19.0) * 73.17) * 24634.6345);
+    float leftEdge;
+    float rightEdge;
+
+    if (p.y > 0.27) {
+      float upper = smoothstep(0.27, 0.68, p.y);
+      leftEdge = mix(-0.68, -0.29, upper);
+      rightEdge = mix(0.50, 0.63, upper);
+    } else if (p.y > -0.27) {
+      float middle = clamp((0.27 - p.y) / 0.54, 0.0, 1.0);
+      leftEdge = mix(-0.68, 0.28, smoothstep(0.43, 1.0, middle));
+      rightEdge = mix(-0.28, 0.68, smoothstep(0.0, 0.57, middle));
+    } else {
+      float lower = smoothstep(-0.68, -0.27, p.y);
+      leftEdge = mix(-0.63, -0.52, lower);
+      rightEdge = mix(0.29, 0.67, lower);
+    }
+
+    leftEdge += (random - 0.5) * 0.035;
+    rightEdge += (randomRight - 0.5) * 0.04;
+    float envelope = smoothstep(leftEdge, leftEdge + 0.018, p.x);
+    envelope *= 1.0 - smoothstep(rightEdge - 0.018, rightEdge, p.x);
+    envelope *= 1.0 - smoothstep(0.67, 0.71, abs(p.y));
+
+    float stripeDistance = abs(fract((p.y + 0.70) * 17.0) - 0.5);
+    float rowCenterY = (row + 0.5) / 17.0 - 0.70;
+    float verticalPhase = (rowCenterY + 0.68) / 1.36;
+    if (u_mode > 22.5) {
+      verticalPhase -= u_time * 0.08;
+    }
+    float bowlWeight = 0.5 - 0.5 * cos(verticalPhase * 12.5663706);
+    float lineHalfWidth = mix(0.10, 0.34, bowlWeight);
+    float scanlines = 1.0 - smoothstep(
+      lineHalfWidth,
+      lineHalfWidth + 0.035,
+      stripeDistance
+    );
+    float finalMask = envelope * scanlines;
+    vec3 ink = mix(vec3(0.58, 0.92, 0.25), vec3(0.84, 1.0, 0.48), normalized.y);
+    vec3 background = vec3(0.035, 0.075, 0.075);
+
+    if (u_mode < 20.5) {
+      color = mix(background, ink, scanlines);
+    } else if (u_mode < 21.5) {
+      color = mix(background, ink, envelope);
+    } else if (u_mode < 22.5) {
+      color = mix(background, ink, finalMask);
+    } else {
+      float softLines = 1.0 - smoothstep(
+        lineHalfWidth + 0.03,
+        lineHalfWidth + 0.11,
+        stripeDistance
+      );
+      float glow = envelope * softLines;
+      color = background + ink * finalMask + ink * glow * 0.10;
+      color *= 0.94 + 0.06 * sin(u_time * 1.2 + p.y * 4.0);
     }
   }
 
@@ -290,6 +355,10 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
         "challenge-rings": 17,
         "challenge-orbit": 18,
         "challenge-final": 19,
+        "logo-scanlines": 20,
+        "logo-ribbon": 21,
+        "logo-cutout": 22,
+        "logo-final": 23,
       };
       gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAtRef.current) / 1000);
@@ -304,7 +373,7 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
 
   return (
     <View style={styles.container}>
-      <GLView onContextCreate={createContext} style={styles.glView} />
+      <GLView key="scanline-thickness-v3" onContextCreate={createContext} style={styles.glView} />
     </View>
   );
 }

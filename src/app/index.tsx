@@ -1,4 +1,5 @@
 import {
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -84,21 +85,44 @@ export default function HomeScreen() {
           </Pressable>
 
           {hasCompletedModuleOne && (
-            <Pressable
-              accessibilityLabel="Explore unlocked Module 2"
-              accessibilityRole="button"
-              onPress={() => router.push("/course")}
-              style={({ pressed }) => [styles.unlockedCard, pressed && styles.pressedCard]}
-            >
-              <View style={styles.unlockedCopy}>
-                <Text style={styles.unlockedEyebrow}>Module 02 unlocked</Text>
-                <Text style={styles.unlockedTitle}>Shape Synthesis</Text>
-                <Text style={styles.unlockedBody}>
-                  Your coordinate foundation is complete. Explore the next module in the course.
-                </Text>
-              </View>
-              <Text style={styles.unlockedArrow}>→</Text>
-            </Pressable>
+            <View style={styles.unlockedStack}>
+              <Pressable
+                accessibilityLabel="Open bonus Scanline S tutorial"
+                accessibilityRole="button"
+                onPress={() => router.push("/bonus-scanline")}
+                style={({ pressed }) => [styles.bonusCard, pressed && styles.pressedCard]}
+              >
+                <Image
+                  accessibilityIgnoresInvertColors
+                  source={require("../../assets/images/scanline-s.png")}
+                  style={styles.bonusImage}
+                />
+                <View style={styles.unlockedCopy}>
+                  <Text style={styles.unlockedEyebrow}>Bonus tutorial</Text>
+                  <Text style={styles.unlockedTitle}>Recreate the Scanline S</Text>
+                  <Text style={styles.unlockedBody}>
+                    Turn the Shadercraft logo into a procedural fragment shader.
+                  </Text>
+                </View>
+                <Text style={styles.unlockedArrow}>→</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityLabel="Explore unlocked Module 2"
+                accessibilityRole="button"
+                onPress={() => router.push("/course")}
+                style={({ pressed }) => [styles.unlockedCard, pressed && styles.pressedCard]}
+              >
+                <View style={styles.unlockedCopy}>
+                  <Text style={styles.unlockedEyebrow}>Module 02 unlocked</Text>
+                  <Text style={styles.unlockedTitle}>Shape Synthesis</Text>
+                  <Text style={styles.unlockedBody}>
+                    Your coordinate foundation is complete. Explore the next module in the course.
+                  </Text>
+                </View>
+                <Text style={styles.unlockedArrow}>→</Text>
+              </Pressable>
+            </View>
           )}
 
           <View style={styles.learningPath}>
@@ -252,7 +276,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   unlockedCard: {
-    marginTop: Spacing.lg,
     padding: Spacing.lg,
     borderRadius: Radius.lg,
     borderWidth: 1,
@@ -260,6 +283,25 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(199,244,100,0.08)",
     flexDirection: "row",
     alignItems: "center",
+  },
+  unlockedStack: {
+    marginTop: Spacing.lg,
+    gap: Spacing.md,
+  },
+  bonusCard: {
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  bonusImage: {
+    width: 68,
+    height: 68,
+    marginRight: Spacing.md,
+    borderRadius: Radius.md,
   },
   unlockedCopy: {
     flex: 1,
