@@ -876,15 +876,26 @@ export default function LessonScreen() {
       </SafeAreaView>
 
       <LessonCompletionSheet
+        completionMessage={
+          isChallengeLesson
+            ? "Module 01 is complete. Shape Synthesis is now unlocked in your learning path."
+            : undefined
+        }
         lessonTitle={lesson.title}
-        nextActionLabel={nextImplementedLesson ? "Continue to next lesson" : "View course"}
+        nextActionLabel={
+          nextImplementedLesson
+            ? "Continue to next lesson"
+            : isChallengeLesson
+              ? "Explore Module 02"
+              : "View course"
+        }
         onClose={() => setShowCompletion(false)}
         onNext={() => {
           setShowCompletion(false);
           if (nextImplementedLesson) {
             router.replace({ pathname: "/lesson", params: { lessonId: nextImplementedLesson.id } });
           } else {
-            router.push("/course");
+            router.replace("/course");
           }
         }}
         progressPercent={progressPercent}

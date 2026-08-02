@@ -68,8 +68,9 @@ export default function CourseScreen() {
 
   const getModuleStatus = (
     moduleNumber: number,
-  ): "available" | "in-progress" | "locked" => {
+  ): "available" | "in-progress" | "complete" | "locked" => {
     if (moduleNumber === 1) {
+      if (hasCompletedModuleOne) return "complete";
       return moduleOneCompletedCount > 0 ? "in-progress" : "available";
     }
 
@@ -80,14 +81,7 @@ export default function CourseScreen() {
   const openModule = (moduleNumber: number) => {
     if (moduleNumber === 1) {
       const currentLesson = getCurrentModuleOneLesson(progress.completedLessonIds);
-      const implementedLesson = MODULE_ONE_LESSONS.findIndex(
-        (lesson) => lesson.id === currentLesson.id,
-      ) < 2;
-      if (implementedLesson) {
-        router.push({ pathname: "/lesson", params: { lessonId: currentLesson.id } });
-      } else {
-        Alert.alert("Lesson coming next", `${currentLesson.title} is planned but not implemented yet.`);
-      }
+      router.push({ pathname: "/lesson", params: { lessonId: currentLesson.id } });
       return;
     }
 

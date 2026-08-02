@@ -5,6 +5,7 @@ import { AppIcon } from "./app-icon";
 import { Colors, Radius, Spacing } from "../constants/theme";
 
 type LessonCompletionSheetProps = {
+  completionMessage?: string;
   lessonTitle: string;
   nextActionLabel: string;
   onClose: () => void;
@@ -14,6 +15,7 @@ type LessonCompletionSheetProps = {
 };
 
 export function LessonCompletionSheet({
+  completionMessage,
   lessonTitle,
   nextActionLabel,
   onClose,
@@ -52,7 +54,8 @@ export function LessonCompletionSheet({
             <Text style={styles.eyebrow}>Progress saved</Text>
             <Text style={styles.title}>Lesson complete</Text>
             <Text style={styles.body}>
-              {lessonTitle} is complete. Your course progress is now {progressPercent}%.
+              {completionMessage ??
+                `${lessonTitle} is complete. Your course progress is now ${progressPercent}%.`}
             </Text>
 
             <View style={styles.progressRow}>

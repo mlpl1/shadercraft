@@ -1,5 +1,4 @@
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,25 +14,20 @@ import { ShaderPreview } from "../components/shader-preview";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { useProgress } from "../context/progress-context";
 import {
-  COORDINATE_SYSTEMS_LESSON_ID,
+  getCurrentModuleOneLesson,
   isModuleOneLessonUnlocked,
+  isModuleOneComplete,
   MODULE_ONE_LESSONS,
 } from "../lib/curriculum";
-
-function showComingSoon(destination: string) {
-  Alert.alert(
-    `${destination} is coming next`,
-    "The home experience is ready. This flow will be implemented in the next pass.",
-  );
-}
 
 export default function HomeScreen() {
   const router = useRouter();
   const { hasCompletedLesson, isHydrated, progress, progressPercent } = useProgress();
-  const hasCompletedFirstLesson = hasCompletedLesson(COORDINATE_SYSTEMS_LESSON_ID);
-  const featuredLesson = hasCompletedFirstLesson
-    ? MODULE_ONE_LESSONS[1]
-    : MODULE_ONE_LESSONS[0];
+  const featuredLesson = getCurrentModuleOneLesson(progress.completedLessonIds);
+  const featuredLessonIndex = MODULE_ONE_LESSONS.findIndex(
+    (lesson) => lesson.id === featuredLesson.id,
+  );
+  const hasCompletedModuleOne = isModuleOneComplete(progress.completedLessonIds);
   const featuredIsComplete = hasCompletedLesson(featuredLesson.id);
   const progressWidth = `${progressPercent}%` as `${number}%`;
 
@@ -74,20 +68,38 @@ export default function HomeScreen() {
             <View style={styles.cardBody}>
               <View style={styles.cardMetadata}>
                 <Text style={styles.cardEyebrow}>
-                  Module 01 · Lesson {hasCompletedFirstLesson ? "02" : "01"}
+                  Module 01 · Lesson {String(featuredLessonIndex + 1).padStart(2, "0")}
                 </Text>
                 <Text style={styles.currentLabel}>
-                  {featuredIsComplete ? "Completed" : hasCompletedFirstLesson ? "Continue" : "Start here"}
+                  {featuredIsComplete ? "Completed" : featuredLessonIndex > 0 ? "Continue" : "Start here"}
                 </Text>
               </View>
               <Text style={styles.lessonTitle}>{featuredLesson.title}</Text>
               <View style={styles.resumeButton}>
                 <Text style={styles.resumeLabel}>
-                  {featuredIsComplete ? "Review Lesson" : hasCompletedFirstLesson ? "Continue Learning" : "Start Lesson"}
+                  {featuredIsComplete ? "Review Lesson" : featuredLessonIndex > 0 ? "Continue Learning" : "Start Lesson"}
                 </Text>
               </View>
             </View>
           </Pressable>
+
+          {hasCompletedModuleOne && (
+            <Pressable
+              accessibilityLabel="Explore unlocked Module 2"
+              accessibilityRole="button"
+              onPress={() => router.push("/course")}
+              style={({ pressed }) => [styles.unlockedCard, pressed && styles.pressedCard]}
+            >
+              <View style={styles.unlockedCopy}>
+                <Text style={styles.unlockedEyebrow}>Module 02 unlocked</Text>
+                <Text style={styles.unlockedTitle}>Shape Synthesis</Text>
+                <Text style={styles.unlockedBody}>
+                  Your coordinate foundation is complete. Explore the next module in the course.
+                </Text>
+              </View>
+              <Text style={styles.unlockedArrow}>→</Text>
+            </Pressable>
+          )}
 
           <View style={styles.learningPath}>
             <Text style={styles.pathHeading}>Up next</Text>
@@ -98,7 +110,6 @@ export default function HomeScreen() {
                   lesson.id,
                   progress.completedLessonIds,
                 );
-                const implemented = index < 2;
 
                 return (
                   <LessonRow
@@ -107,13 +118,11 @@ export default function HomeScreen() {
                     onPress={
                       !unlocked
                         ? undefined
-                        : implemented
-                          ? () =>
-                              router.push({
-                                pathname: "/lesson",
-                                params: { lessonId: lesson.id },
-                              })
-                          : () => showComingSoon(lesson.title)
+                        : () =>
+                            router.push({
+                              pathname: "/lesson",
+                              params: { lessonId: lesson.id },
+                            })
                     }
                     state={complete ? "complete" : unlocked ? "active" : "locked"}
                     title={lesson.title}
@@ -241,6 +250,44 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: 16,
     fontWeight: "800",
+  },
+  unlockedCard: {
+    marginTop: Spacing.lg,
+    padding: Spacing.lg,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    backgroundColor: "rgba(199,244,100,0.08)",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  unlockedCopy: {
+    flex: 1,
+  },
+  unlockedEyebrow: {
+    color: Colors.accent,
+    fontFamily: "monospace",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  unlockedTitle: {
+    marginTop: 5,
+    color: Colors.text,
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  unlockedBody: {
+    marginTop: 4,
+    color: Colors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  unlockedArrow: {
+    marginLeft: Spacing.md,
+    color: Colors.accent,
+    fontSize: 24,
   },
   learningPath: {
     marginTop: 38,

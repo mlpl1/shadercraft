@@ -18,8 +18,8 @@ The project is currently an early working prototype built with Expo and React Na
 - Reversible completion for accidentally completed lessons
 - Guided completion summary with review and course-navigation actions
 
-Module 02 unlocks after all five Module 01 lessons are complete. The final three Module 01
-lessons and Shape Synthesis content are not implemented yet.
+Module 01 contains five interactive lessons and concludes with a layered shader challenge.
+Completing all five lessons unlocks Module 02, Shape Synthesis, in the learning path.
 
 ## Technology
 
