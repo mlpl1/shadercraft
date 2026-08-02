@@ -4,11 +4,17 @@ import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 
 import { Colors } from "../constants/theme";
 
-export type CoordinateMode = "normalized" | "centered";
+export type CoordinateMode =
+  | "normalized"
+  | "centered"
+  | "pixel-space"
+  | "aspect-aware";
 export type ShaderPreviewMode =
   | CoordinateMode
   | "rgb-gradient"
-  | "color-mix";
+  | "color-mix"
+  | "luminance"
+  | "channel-split";
 
 type LiveShaderPreviewProps = {
   mode: ShaderPreviewMode;
@@ -71,11 +77,32 @@ void main() {
   color *= 0.74 + vignette * 0.26;
 
   if (u_mode > 1.5 && u_mode < 2.5) {
+    vec2 pixelGrid = floor(normalized * vec2(16.0, 10.0));
+    vec2 pixelUv = pixelGrid / vec2(15.0, 9.0);
+    color = vec3(pixelUv, 0.28);
+    float cellX = gridLine(normalized.x, 16.0);
+    float cellY = gridLine(normalized.y, 10.0);
+    color = mix(color, vec3(0.95), max(cellX, cellY) * 0.2);
+  } else if (u_mode > 2.5 && u_mode < 3.5) {
+    float radius = length(centered);
+    float rings = 1.0 - smoothstep(0.018, 0.035, abs(fract(radius * 4.0) - 0.5));
+    color = mix(vec3(0.08, 0.12, 0.18), vec3(0.31, 0.84, 1.0), rings * 0.72);
+    float axes = max(
+      1.0 - smoothstep(0.0, 0.012, abs(centered.x)),
+      1.0 - smoothstep(0.0, 0.012, abs(centered.y))
+    );
+    color = mix(color, vec3(0.78, 0.96, 0.39), axes);
+  } else if (u_mode > 3.5 && u_mode < 4.5) {
     color = vec3(normalized.x, normalized.y, 0.2);
-  } else if (u_mode > 2.5) {
+  } else if (u_mode > 4.5 && u_mode < 5.5) {
     vec3 warm = vec3(1.0, 0.25, 0.12);
     vec3 cool = vec3(0.12, 0.45, 1.0);
     color = mix(warm, cool, smoothstep(0.0, 1.0, normalized.x));
+  } else if (u_mode > 5.5 && u_mode < 6.5) {
+    float value = smoothstep(0.0, 1.0, normalized.x);
+    color = vec3(value);
+  } else if (u_mode > 6.5) {
+    color = vec3(normalized.x, 1.0 - normalized.y, normalized.y);
   }
 
   gl_FragColor = vec4(color, 1.0);
@@ -164,8 +191,12 @@ export function LiveShaderPreview({ mode }: LiveShaderPreviewProps) {
       const modeValue: Record<ShaderPreviewMode, number> = {
         normalized: 0,
         centered: 1,
-        "rgb-gradient": 2,
-        "color-mix": 3,
+        "pixel-space": 2,
+        "aspect-aware": 3,
+        "rgb-gradient": 4,
+        "color-mix": 5,
+        luminance: 6,
+        "channel-split": 7,
       };
       gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAt) / 1000);

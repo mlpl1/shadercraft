@@ -48,9 +48,38 @@ const codeLinesByMode: Record<
     { number: 8, code: ");" },
     { number: 9, code: "fragColor = vec4(color, 1.0);" },
   ],
+  "pixel-space": [
+    { number: 1, code: "vec2 pixel = fragCoord;", accent: true },
+    { number: 2, code: "vec2 uv = pixel / resolution.xy;" },
+    { number: 3, code: "vec3 color = vec3(uv, 0.28);" },
+    { number: 4, code: "fragColor = vec4(color, 1.0);" },
+  ],
+  "aspect-aware": [
+    { number: 1, code: "vec2 uv = fragCoord / resolution.xy;" },
+    { number: 2, code: "vec2 p = uv * 2.0 - 1.0;" },
+    { number: 3, code: "p.x *= resolution.x / resolution.y;", accent: true },
+    { number: 4, code: "float radius = length(p);" },
+    { number: 5, code: "vec3 color = vec3(radius);" },
+    { number: 6, code: "fragColor = vec4(color, 1.0);" },
+  ],
 };
 
-type ColorMode = "rgb-gradient" | "color-mix";
+const coordinatePresetOptions: Array<{
+  label: string;
+  mode: CoordinateMode;
+  value: string;
+}> = [
+  { label: "Normalized", mode: "normalized", value: "0 → 1" },
+  { label: "Centered", mode: "centered", value: "−1 → 1" },
+  { label: "Pixel space", mode: "pixel-space", value: "0 → resolution" },
+  { label: "Corrected", mode: "aspect-aware", value: "Aspect aware" },
+];
+
+type ColorMode =
+  | "rgb-gradient"
+  | "color-mix"
+  | "luminance"
+  | "channel-split";
 
 const colorCodeLines: Record<
   ColorMode,
@@ -68,6 +97,38 @@ const colorCodeLines: Record<
     { number: 4, code: "vec3 color = mix(warm, cool, uv.x);", accent: true },
     { number: 5, code: "fragColor = vec4(color, 1.0);", accent: true },
   ],
+  luminance: [
+    { number: 1, code: "vec2 uv = fragCoord / resolution.xy;" },
+    { number: 2, code: "float value = smoothstep(0.0, 1.0, uv.x);", accent: true },
+    { number: 3, code: "vec3 color = vec3(value);" },
+    { number: 4, code: "fragColor = vec4(color, 1.0);" },
+  ],
+  "channel-split": [
+    { number: 1, code: "vec2 uv = fragCoord / resolution.xy;" },
+    { number: 2, code: "float red = uv.x;" },
+    { number: 3, code: "float green = 1.0 - uv.y;" },
+    { number: 4, code: "float blue = uv.y;" },
+    { number: 5, code: "vec3 color = vec3(red, green, blue);", accent: true },
+    { number: 6, code: "fragColor = vec4(color, 1.0);" },
+  ],
+};
+
+const colorPresetOptions: Array<{
+  label: string;
+  mode: ColorMode;
+  value: string;
+}> = [
+  { label: "RGB channels", mode: "rgb-gradient", value: "vec3(r, g, b)" },
+  { label: "Mix colors", mode: "color-mix", value: "mix(a, b, t)" },
+  { label: "Luminance", mode: "luminance", value: "vec3(value)" },
+  { label: "Split channels", mode: "channel-split", value: "r · g · b" },
+];
+
+const colorFilenames: Record<ColorMode, string> = {
+  "rgb-gradient": "fragment_color.glsl",
+  "color-mix": "color_mix.glsl",
+  luminance: "luminance.glsl",
+  "channel-split": "channel_split.glsl",
 };
 
 export default function LessonScreen() {
@@ -96,12 +157,42 @@ export default function LessonScreen() {
   } = useProgress();
   const isComplete = hasCompletedLesson(lessonId);
   const activeMode: ShaderPreviewMode = isColorLesson ? colorPreset : coordinatePreset;
+  const activeColorPreset = colorPresetOptions.find((preset) => preset.mode === colorPreset)!;
   const codeLines = isColorLesson
     ? colorCodeLines[colorPreset]
     : codeLinesByMode[coordinatePreset];
   const nextLesson = getNextModuleOneLesson(lessonId);
   const nextImplementedLesson =
     nextLesson?.id === COLORS_FRAGMENT_OUTPUT_LESSON_ID ? nextLesson : undefined;
+  const lessonSections = isColorLesson
+    ? [
+        {
+          title: "Think in channels",
+          body: "A color is data. Red, green, and blue are three independent values, usually between 0.0 and 1.0. Changing one channel changes one ingredient of the final pixel.",
+        },
+        {
+          title: "Turn coordinates into color",
+          body: "Feeding uv.x into red and uv.y into green makes position visible. This is a useful debugging technique: gradients reveal whether your coordinates point in the direction and range you expect.",
+        },
+        {
+          title: "Interpolate with mix",
+          body: "mix(a, b, t) blends from color a to color b. At t = 0 you get a, at t = 1 you get b, and every value between creates a smooth transition.",
+        },
+      ]
+    : [
+        {
+          title: "Start with the current fragment",
+          body: "gl_FragCoord.xy contains the current pixel position in framebuffer pixels. Its values depend on the viewport, so a 1080-pixel-wide screen produces very different numbers from a 390-pixel-wide phone.",
+        },
+        {
+          title: "Normalize once, use everywhere",
+          body: "Divide the fragment coordinate by resolution.xy to convert both axes into a portable 0-to-1 range. This normalized vector is conventionally named uv or st.",
+        },
+        {
+          title: "Choose coordinates for the job",
+          body: "Pixel space is useful for exact sizes. Centered space makes symmetry natural. Aspect-aware space keeps distance-based shapes circular instead of stretching with the screen.",
+        },
+      ];
 
   const completeLesson = async () => {
     try {
@@ -210,12 +301,14 @@ export default function LessonScreen() {
                   </Text>
                   <Text style={styles.previewValue}>
                     {isColorLesson
-                      ? colorPreset === "rgb-gradient"
-                        ? "RGB channels · direct output"
-                        : "mix() · warm to cool"
+                      ? `${activeColorPreset.label} · ${activeColorPreset.value}`
                       : coordinatePreset === "normalized"
                         ? "0.0 → 1.0 · screen space"
-                        : "−1.0 → 1.0 · centered"}
+                        : coordinatePreset === "centered"
+                          ? "−1.0 → 1.0 · centered"
+                          : coordinatePreset === "pixel-space"
+                            ? "0 → resolution · pixel coordinates"
+                            : "−aspect → aspect · corrected"}
                   </Text>
                 </View>
               </View>
@@ -229,15 +322,15 @@ export default function LessonScreen() {
                 </Text>
               </View>
               <View accessibilityRole="radiogroup" style={styles.presetControl}>
-                {isColorLesson && (["rgb-gradient", "color-mix"] as const).map((preset) => {
-                  const selected = colorPreset === preset;
+                {isColorLesson && colorPresetOptions.map((preset) => {
+                  const selected = colorPreset === preset.mode;
 
                   return (
                     <Pressable
                       accessibilityRole="radio"
                       accessibilityState={{ checked: selected }}
-                      key={preset}
-                      onPress={() => setColorPreset(preset)}
+                      key={preset.mode}
+                      onPress={() => setColorPreset(preset.mode)}
                       style={({ pressed }) => [
                         styles.preset,
                         selected && styles.selectedPreset,
@@ -245,23 +338,23 @@ export default function LessonScreen() {
                       ]}
                     >
                       <Text style={[styles.presetLabel, selected && styles.selectedPresetLabel]}>
-                        {preset === "rgb-gradient" ? "RGB channels" : "Mix colors"}
+                        {preset.label}
                       </Text>
                       <Text style={[styles.presetValue, selected && styles.selectedPresetValue]}>
-                        {preset === "rgb-gradient" ? "vec3(r, g, b)" : "mix(a, b, t)"}
+                        {preset.value}
                       </Text>
                     </Pressable>
                   );
                 })}
-                {!isColorLesson && (["normalized", "centered"] as const).map((preset) => {
-                  const selected = coordinatePreset === preset;
+                {!isColorLesson && coordinatePresetOptions.map((preset) => {
+                  const selected = coordinatePreset === preset.mode;
 
                   return (
                     <Pressable
                       accessibilityRole="radio"
                       accessibilityState={{ checked: selected }}
-                      key={preset}
-                      onPress={() => setCoordinatePreset(preset)}
+                      key={preset.mode}
+                      onPress={() => setCoordinatePreset(preset.mode)}
                       style={({ pressed }) => [
                         styles.preset,
                         selected && styles.selectedPreset,
@@ -269,10 +362,10 @@ export default function LessonScreen() {
                       ]}
                     >
                       <Text style={[styles.presetLabel, selected && styles.selectedPresetLabel]}>
-                        {preset === "normalized" ? "Normalized" : "Centered"}
+                        {preset.label}
                       </Text>
                       <Text style={[styles.presetValue, selected && styles.selectedPresetValue]}>
-                        {preset === "normalized" ? "0 → 1" : "−1 → 1"}
+                        {preset.value}
                       </Text>
                     </Pressable>
                   );
@@ -284,12 +377,14 @@ export default function LessonScreen() {
               <View style={styles.codeHeader}>
                 <Text style={styles.codeFilename}>
                   {isColorLesson
-                    ? colorPreset === "rgb-gradient"
-                      ? "fragment_color.glsl"
-                      : "color_mix.glsl"
+                    ? colorFilenames[colorPreset]
                     : coordinatePreset === "normalized"
                       ? "normalized_uv.glsl"
-                      : "centered_uv.glsl"}
+                      : coordinatePreset === "centered"
+                        ? "centered_uv.glsl"
+                        : coordinatePreset === "pixel-space"
+                          ? "pixel_space.glsl"
+                          : "aspect_aware.glsl"}
                 </Text>
                 <Text style={styles.codeLanguage}>LIVE GLSL</Text>
               </View>
@@ -306,19 +401,29 @@ export default function LessonScreen() {
             </View>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionNumber}>01</Text>
-            <View style={styles.sectionCopy}>
-              <Text style={styles.sectionTitle}>
-                {isColorLesson ? "Build a color from channels" : "Normalize the fragment coordinate"}
-              </Text>
-              <Text style={styles.bodyCopy}>
-                {isColorLesson
-                  ? "Each RGB component usually lives between 0 and 1. The final alpha component controls opacity; use 1 for a fully opaque fragment."
-                  : "Divide the current pixel by the viewport resolution. This turns raw pixel positions into a portable 0-to-1 range on every screen size."}
-              </Text>
-            </View>
+          <View style={styles.conceptHeader}>
+            <Text style={styles.conceptEyebrow}>Concept breakdown</Text>
+            <Text style={styles.conceptTitle}>
+              {isColorLesson ? "From numbers to pixels" : "Mastering the canvas"}
+            </Text>
+            <Text style={styles.conceptLede}>
+              {isColorLesson
+                ? "Learn how fragment output combines channels, opacity, and interpolation into visible color."
+                : "Understand how raw pixels become stable coordinates you can reuse across every screen size."}
+            </Text>
           </View>
+
+          {lessonSections.map((section, index) => (
+            <View key={section.title} style={styles.section}>
+              <Text style={styles.sectionNumber}>
+                {String(index + 1).padStart(2, "0")}
+              </Text>
+              <View style={styles.sectionCopy}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <Text style={styles.bodyCopy}>{section.body}</Text>
+              </View>
+            </View>
+          ))}
 
           <View style={styles.takeaway}>
             <AppIcon
@@ -331,10 +436,19 @@ export default function LessonScreen() {
               <Text style={styles.takeawayTitle}>Remember</Text>
               <Text style={styles.takeawayBody}>
                 {isColorLesson
-                  ? "vec3 stores red, green, and blue. vec4 adds alpha, which is why fragment output is commonly written as vec4(color, 1.0)."
-                  : "Centered coordinates make symmetry easy. Correct the x-axis with the aspect ratio before measuring distance, or circles will stretch on wide screens."}
+                  ? "vec3 stores red, green, and blue. vec4 adds alpha. Use coordinate-driven gradients to inspect your UVs, then mix colors to build intentional palettes."
+                  : "The center of normalized UV space is always (0.5, 0.5). After centering it becomes (0.0, 0.0). Correct the x-axis before measuring distance so circles remain circular."}
               </Text>
             </View>
+          </View>
+
+          <View style={styles.readyCard}>
+            <Text style={styles.readyEyebrow}>Checkpoint</Text>
+            <Text style={styles.readyTitle}>Ready to experiment?</Text>
+            <Text style={styles.readyBody}>
+              Switch between every preset and connect the code changes to what you see in
+              the live preview. You can review this lesson again after completing it.
+            </Text>
           </View>
         </ScrollView>
 
@@ -457,6 +571,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xxl,
   },
   workspace: {
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: "#0F0F11",
     gap: Spacing.md,
   },
   workspaceHeader: {
@@ -501,7 +620,7 @@ const styles = StyleSheet.create({
   },
   previewCard: {
     overflow: "hidden",
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
@@ -547,9 +666,36 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   section: {
-    marginTop: Spacing.xxxl,
+    marginTop: Spacing.xxl,
     flexDirection: "row",
     gap: Spacing.lg,
+  },
+  conceptHeader: {
+    marginTop: 44,
+    paddingTop: Spacing.xxl,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  conceptEyebrow: {
+    color: Colors.accent,
+    fontFamily: "monospace",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  conceptTitle: {
+    marginTop: Spacing.sm,
+    color: Colors.text,
+    fontSize: 27,
+    fontWeight: "900",
+    letterSpacing: -0.7,
+  },
+  conceptLede: {
+    marginTop: Spacing.sm,
+    color: Colors.textMuted,
+    fontSize: 15,
+    lineHeight: 22,
   },
   sectionNumber: {
     color: Colors.textSubtle,
@@ -647,10 +793,12 @@ const styles = StyleSheet.create({
   },
   presetControl: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.sm,
   },
   preset: {
     flex: 1,
+    flexBasis: "46%",
     minHeight: 64,
     paddingHorizontal: Spacing.md,
     borderRadius: Radius.md,
@@ -702,6 +850,37 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 13,
     lineHeight: 20,
+  },
+  readyCard: {
+    marginTop: Spacing.xxxl,
+    padding: Spacing.xl,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    alignItems: "center",
+  },
+  readyEyebrow: {
+    color: Colors.accent,
+    fontFamily: "monospace",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  readyTitle: {
+    marginTop: Spacing.sm,
+    color: Colors.text,
+    fontSize: 22,
+    fontWeight: "900",
+    letterSpacing: -0.4,
+  },
+  readyBody: {
+    marginTop: Spacing.sm,
+    color: Colors.textMuted,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
   },
   inlineCode: {
     color: Colors.text,
