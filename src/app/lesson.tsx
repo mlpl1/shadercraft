@@ -7,18 +7,25 @@ import {
   Text,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppIcon } from "../components/app-icon";
 import {
   LiveShaderPreview,
   type CoordinateMode,
+  type ShaderPreviewMode,
 } from "../components/live-shader-preview";
 import { LessonCompletionSheet } from "../components/lesson-completion-sheet";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { useProgress } from "../context/progress-context";
-import { COORDINATE_SYSTEMS_LESSON_ID } from "../lib/progress";
+import {
+  COLORS_FRAGMENT_OUTPUT_LESSON_ID,
+  getModuleOneLesson,
+  getNextModuleOneLesson,
+  MODULE_ONE_LESSONS,
+  type ModuleOneLessonId,
+} from "../lib/curriculum";
 
 const codeLinesByMode: Record<
   CoordinateMode,
@@ -43,10 +50,42 @@ const codeLinesByMode: Record<
   ],
 };
 
+type ColorMode = "rgb-gradient" | "color-mix";
+
+const colorCodeLines: Record<
+  ColorMode,
+  { number: number; code: string; accent?: boolean }[]
+> = {
+  "rgb-gradient": [
+    { number: 1, code: "vec2 uv = fragCoord / resolution.xy;" },
+    { number: 2, code: "vec3 color = vec3(uv.x, uv.y, 0.2);", accent: true },
+    { number: 3, code: "fragColor = vec4(color, 1.0);", accent: true },
+  ],
+  "color-mix": [
+    { number: 1, code: "vec2 uv = fragCoord / resolution.xy;" },
+    { number: 2, code: "vec3 warm = vec3(1.0, 0.25, 0.12);" },
+    { number: 3, code: "vec3 cool = vec3(0.12, 0.45, 1.0);" },
+    { number: 4, code: "vec3 color = mix(warm, cool, uv.x);", accent: true },
+    { number: 5, code: "fragColor = vec4(color, 1.0);", accent: true },
+  ],
+};
+
 export default function LessonScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ lessonId?: string }>();
+  const requestedLesson = getModuleOneLesson(params.lessonId);
+  const requestedLessonIndex = requestedLesson
+    ? MODULE_ONE_LESSONS.findIndex((item) => item.id === requestedLesson.id)
+    : -1;
+  const lesson = requestedLessonIndex >= 0 && requestedLessonIndex < 2
+    ? requestedLesson!
+    : MODULE_ONE_LESSONS[0];
+  const lessonId = lesson.id as ModuleOneLessonId;
+  const lessonIndex = MODULE_ONE_LESSONS.findIndex((item) => item.id === lessonId);
+  const isColorLesson = lessonId === COLORS_FRAGMENT_OUTPUT_LESSON_ID;
   const [coordinatePreset, setCoordinatePreset] =
     useState<CoordinateMode>("normalized");
+  const [colorPreset, setColorPreset] = useState<ColorMode>("rgb-gradient");
   const [showCompletion, setShowCompletion] = useState(false);
   const {
     completeLesson: persistLessonCompletion,
@@ -55,12 +94,18 @@ export default function LessonScreen() {
     progressPercent,
     uncompleteLesson,
   } = useProgress();
-  const isComplete = hasCompletedLesson(COORDINATE_SYSTEMS_LESSON_ID);
-  const codeLines = codeLinesByMode[coordinatePreset];
+  const isComplete = hasCompletedLesson(lessonId);
+  const activeMode: ShaderPreviewMode = isColorLesson ? colorPreset : coordinatePreset;
+  const codeLines = isColorLesson
+    ? colorCodeLines[colorPreset]
+    : codeLinesByMode[coordinatePreset];
+  const nextLesson = getNextModuleOneLesson(lessonId);
+  const nextImplementedLesson =
+    nextLesson?.id === COLORS_FRAGMENT_OUTPUT_LESSON_ID ? nextLesson : undefined;
 
   const completeLesson = async () => {
     try {
-      await persistLessonCompletion(COORDINATE_SYSTEMS_LESSON_ID);
+      await persistLessonCompletion(lessonId);
       setShowCompletion(true);
     } catch {
       Alert.alert(
@@ -73,14 +118,14 @@ export default function LessonScreen() {
   const confirmUndoCompletion = () => {
     Alert.alert(
       "Mark lesson incomplete?",
-      "Your progress will return to 0% and Module 02 will be locked again.",
+      "This lesson will be removed from your completed progress. Later lessons stay saved, but the learning path will begin here again.",
       [
         { text: "Keep completed", style: "cancel" },
         {
           text: "Mark incomplete",
           style: "destructive",
           onPress: () => {
-            void uncompleteLesson(COORDINATE_SYSTEMS_LESSON_ID).catch(() => {
+            void uncompleteLesson(lessonId).catch(() => {
               Alert.alert(
                 "Progress not saved",
                 "Shadercraft could not update this lesson. Please try again.",
@@ -114,14 +159,19 @@ export default function LessonScreen() {
 
           <View style={styles.headerCopy}>
             <Text style={styles.moduleLabel}>Module 01</Text>
-            <Text style={styles.headerTitle}>Coordinate systems</Text>
+            <Text style={styles.headerTitle}>{lesson.shortTitle}</Text>
           </View>
 
-          <Text style={styles.stepLabel}>1 of 6</Text>
+          <Text style={styles.stepLabel}>{lessonIndex + 1} of {MODULE_ONE_LESSONS.length}</Text>
         </View>
 
         <View style={styles.lessonProgressTrack}>
-          <View style={styles.lessonProgressFill} />
+          <View
+            style={[
+              styles.lessonProgressFill,
+              { width: `${((lessonIndex + 1) / MODULE_ONE_LESSONS.length) * 100}%` },
+            ]}
+          />
         </View>
 
         <ScrollView
@@ -131,10 +181,11 @@ export default function LessonScreen() {
         >
           <View style={styles.intro}>
             <Text style={styles.eyebrow}>Concept</Text>
-            <Text style={styles.title}>Coordinate Systems &amp; UV Space</Text>
+            <Text style={styles.title}>{lesson.title}</Text>
             <Text style={styles.lede}>
-              Fragment shaders run once per pixel. Before drawing shapes, turn each pixel
-              position into a predictable coordinate you can reason about.
+              {isColorLesson
+                ? "A fragment shader returns one color for every pixel. Learn how RGB channels, alpha, and color mixing turn numbers into an image."
+                : "Fragment shaders run once per pixel. Before drawing shapes, turn each pixel position into a predictable coordinate you can reason about."}
             </Text>
           </View>
 
@@ -151,14 +202,20 @@ export default function LessonScreen() {
             </View>
 
             <View style={styles.previewCard}>
-              <LiveShaderPreview mode={coordinatePreset} />
+              <LiveShaderPreview mode={activeMode} />
               <View style={styles.previewFooter}>
                 <View>
-                  <Text style={styles.previewLabel}>UV preview</Text>
+                  <Text style={styles.previewLabel}>
+                    {isColorLesson ? "Fragment color" : "UV preview"}
+                  </Text>
                   <Text style={styles.previewValue}>
-                    {coordinatePreset === "normalized"
-                      ? "0.0 → 1.0 · screen space"
-                      : "−1.0 → 1.0 · centered"}
+                    {isColorLesson
+                      ? colorPreset === "rgb-gradient"
+                        ? "RGB channels · direct output"
+                        : "mix() · warm to cool"
+                      : coordinatePreset === "normalized"
+                        ? "0.0 → 1.0 · screen space"
+                        : "−1.0 → 1.0 · centered"}
                   </Text>
                 </View>
               </View>
@@ -167,10 +224,36 @@ export default function LessonScreen() {
             <View style={styles.tryItCard}>
               <View style={styles.tryItHeading}>
                 <Text style={styles.tryItTitle}>Try it</Text>
-                <Text style={styles.tryItHint}>Change the coordinate range</Text>
+                <Text style={styles.tryItHint}>
+                  {isColorLesson ? "Change the color expression" : "Change the coordinate range"}
+                </Text>
               </View>
               <View accessibilityRole="radiogroup" style={styles.presetControl}>
-                {(["normalized", "centered"] as const).map((preset) => {
+                {isColorLesson && (["rgb-gradient", "color-mix"] as const).map((preset) => {
+                  const selected = colorPreset === preset;
+
+                  return (
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected }}
+                      key={preset}
+                      onPress={() => setColorPreset(preset)}
+                      style={({ pressed }) => [
+                        styles.preset,
+                        selected && styles.selectedPreset,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={[styles.presetLabel, selected && styles.selectedPresetLabel]}>
+                        {preset === "rgb-gradient" ? "RGB channels" : "Mix colors"}
+                      </Text>
+                      <Text style={[styles.presetValue, selected && styles.selectedPresetValue]}>
+                        {preset === "rgb-gradient" ? "vec3(r, g, b)" : "mix(a, b, t)"}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {!isColorLesson && (["normalized", "centered"] as const).map((preset) => {
                   const selected = coordinatePreset === preset;
 
                   return (
@@ -200,9 +283,13 @@ export default function LessonScreen() {
             <View style={styles.codeCard}>
               <View style={styles.codeHeader}>
                 <Text style={styles.codeFilename}>
-                  {coordinatePreset === "normalized"
-                    ? "normalized_uv.glsl"
-                    : "centered_uv.glsl"}
+                  {isColorLesson
+                    ? colorPreset === "rgb-gradient"
+                      ? "fragment_color.glsl"
+                      : "color_mix.glsl"
+                    : coordinatePreset === "normalized"
+                      ? "normalized_uv.glsl"
+                      : "centered_uv.glsl"}
                 </Text>
                 <Text style={styles.codeLanguage}>LIVE GLSL</Text>
               </View>
@@ -222,10 +309,13 @@ export default function LessonScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionNumber}>01</Text>
             <View style={styles.sectionCopy}>
-              <Text style={styles.sectionTitle}>Normalize the fragment coordinate</Text>
+              <Text style={styles.sectionTitle}>
+                {isColorLesson ? "Build a color from channels" : "Normalize the fragment coordinate"}
+              </Text>
               <Text style={styles.bodyCopy}>
-                Divide the current pixel by the viewport resolution. This turns raw pixel
-                positions into a portable 0-to-1 range on every screen size.
+                {isColorLesson
+                  ? "Each RGB component usually lives between 0 and 1. The final alpha component controls opacity; use 1 for a fully opaque fragment."
+                  : "Divide the current pixel by the viewport resolution. This turns raw pixel positions into a portable 0-to-1 range on every screen size."}
               </Text>
             </View>
           </View>
@@ -240,8 +330,9 @@ export default function LessonScreen() {
             <View style={styles.takeawayCopy}>
               <Text style={styles.takeawayTitle}>Remember</Text>
               <Text style={styles.takeawayBody}>
-                Centered coordinates make symmetry easy. Correct the x-axis with the aspect
-                ratio before measuring distance, or circles will stretch on wide screens.
+                {isColorLesson
+                  ? "vec3 stores red, green, and blue. vec4 adds alpha, which is why fragment output is commonly written as vec4(color, 1.0)."
+                  : "Centered coordinates make symmetry easy. Correct the x-axis with the aspect ratio before measuring distance, or circles will stretch on wide screens."}
               </Text>
             </View>
           </View>
@@ -283,10 +374,16 @@ export default function LessonScreen() {
       </SafeAreaView>
 
       <LessonCompletionSheet
+        lessonTitle={lesson.title}
+        nextActionLabel={nextImplementedLesson ? "Continue to next lesson" : "View course"}
         onClose={() => setShowCompletion(false)}
-        onViewCourse={() => {
+        onNext={() => {
           setShowCompletion(false);
-          router.push("/course");
+          if (nextImplementedLesson) {
+            router.replace({ pathname: "/lesson", params: { lessonId: nextImplementedLesson.id } });
+          } else {
+            router.push("/course");
+          }
         }}
         progressPercent={progressPercent}
         visible={showCompletion}

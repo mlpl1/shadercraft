@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { TOTAL_LESSON_COUNT } from "./curriculum";
 
-export const COORDINATE_SYSTEMS_LESSON_ID = "coordinate-systems-uv-space";
-export const TOTAL_LESSON_COUNT = 20;
+export { COORDINATE_SYSTEMS_LESSON_ID } from "./curriculum";
 
 const STORAGE_KEY = "@shadercraft/progress/v1";
 
@@ -50,4 +50,3 @@ export function hasCompletedLesson(progress: ProgressState, lessonId: string) {
 export function getProgressPercent(progress: ProgressState) {
   return Math.round((progress.completedLessonIds.length / TOTAL_LESSON_COUNT) * 100);
 }
-

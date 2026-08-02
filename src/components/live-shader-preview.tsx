@@ -5,9 +5,13 @@ import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 import { Colors } from "../constants/theme";
 
 export type CoordinateMode = "normalized" | "centered";
+export type ShaderPreviewMode =
+  | CoordinateMode
+  | "rgb-gradient"
+  | "color-mix";
 
 type LiveShaderPreviewProps = {
-  mode: CoordinateMode;
+  mode: ShaderPreviewMode;
 };
 
 const vertexShaderSource = `
@@ -65,6 +69,14 @@ void main() {
 
   float vignette = 1.0 - smoothstep(0.35, 0.82, distance(normalized, vec2(0.5)));
   color *= 0.74 + vignette * 0.26;
+
+  if (u_mode > 1.5 && u_mode < 2.5) {
+    color = vec3(normalized.x, normalized.y, 0.2);
+  } else if (u_mode > 2.5) {
+    vec3 warm = vec3(1.0, 0.25, 0.12);
+    vec3 cool = vec3(0.12, 0.45, 1.0);
+    color = mix(warm, cool, smoothstep(0.0, 1.0, normalized.x));
+  }
 
   gl_FragColor = vec4(color, 1.0);
 }
@@ -149,7 +161,13 @@ export function LiveShaderPreview({ mode }: LiveShaderPreviewProps) {
 
       gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
       gl.uniform2f(resolution, gl.drawingBufferWidth, gl.drawingBufferHeight);
-      gl.uniform1f(coordinateMode, modeRef.current === "centered" ? 1 : 0);
+      const modeValue: Record<ShaderPreviewMode, number> = {
+        normalized: 0,
+        centered: 1,
+        "rgb-gradient": 2,
+        "color-mix": 3,
+      };
+      gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAt) / 1000);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       gl.endFrameEXP();

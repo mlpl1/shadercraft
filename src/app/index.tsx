@@ -14,7 +14,11 @@ import { LessonRow } from "../components/lesson-row";
 import { ShaderPreview } from "../components/shader-preview";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { useProgress } from "../context/progress-context";
-import { COORDINATE_SYSTEMS_LESSON_ID } from "../lib/progress";
+import {
+  COORDINATE_SYSTEMS_LESSON_ID,
+  isModuleOneLessonUnlocked,
+  MODULE_ONE_LESSONS,
+} from "../lib/curriculum";
 
 function showComingSoon(destination: string) {
   Alert.alert(
@@ -25,8 +29,12 @@ function showComingSoon(destination: string) {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { hasCompletedLesson, isHydrated, progressPercent } = useProgress();
+  const { hasCompletedLesson, isHydrated, progress, progressPercent } = useProgress();
   const hasCompletedFirstLesson = hasCompletedLesson(COORDINATE_SYSTEMS_LESSON_ID);
+  const featuredLesson = hasCompletedFirstLesson
+    ? MODULE_ONE_LESSONS[1]
+    : MODULE_ONE_LESSONS[0];
+  const featuredIsComplete = hasCompletedLesson(featuredLesson.id);
   const progressWidth = `${progressPercent}%` as `${number}%`;
 
   return (
@@ -54,24 +62,28 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Pressable
-            accessibilityLabel={`${hasCompletedFirstLesson ? "Review" : "Start"} Coordinate Systems and UV Space`}
+            accessibilityLabel={`${featuredIsComplete ? "Review" : "Start"} ${featuredLesson.title}`}
             accessibilityRole="button"
-            onPress={() => router.push("/lesson")}
+            onPress={() =>
+              router.push({ pathname: "/lesson", params: { lessonId: featuredLesson.id } })
+            }
             style={({ pressed }) => [styles.continueCard, pressed && styles.pressedCard]}
           >
             <ShaderPreview />
 
             <View style={styles.cardBody}>
               <View style={styles.cardMetadata}>
-                <Text style={styles.cardEyebrow}>Module 01 · Lesson 01</Text>
+                <Text style={styles.cardEyebrow}>
+                  Module 01 · Lesson {hasCompletedFirstLesson ? "02" : "01"}
+                </Text>
                 <Text style={styles.currentLabel}>
-                  {hasCompletedFirstLesson ? "Completed" : "Start here"}
+                  {featuredIsComplete ? "Completed" : hasCompletedFirstLesson ? "Continue" : "Start here"}
                 </Text>
               </View>
-              <Text style={styles.lessonTitle}>Coordinate Systems &amp; UV Space</Text>
+              <Text style={styles.lessonTitle}>{featuredLesson.title}</Text>
               <View style={styles.resumeButton}>
                 <Text style={styles.resumeLabel}>
-                  {hasCompletedFirstLesson ? "Review Lesson" : "Start Lesson"}
+                  {featuredIsComplete ? "Review Lesson" : hasCompletedFirstLesson ? "Continue Learning" : "Start Lesson"}
                 </Text>
               </View>
             </View>
@@ -80,18 +92,34 @@ export default function HomeScreen() {
           <View style={styles.learningPath}>
             <Text style={styles.pathHeading}>Up next</Text>
             <View style={styles.lessonList}>
-              <LessonRow
-                module="Module 02"
-                onPress={
-                  hasCompletedFirstLesson
-                    ? () => showComingSoon("Shape Synthesis")
-                    : undefined
-                }
-                state={hasCompletedFirstLesson ? "active" : "locked"}
-                title="Shape Synthesis"
-              />
-              <LessonRow module="Module 03" state="locked" title="Color Mixing & Luma" />
-              <LessonRow module="Module 04" state="locked" title="Procedural Textures" />
+              {MODULE_ONE_LESSONS.map((lesson, index) => {
+                const complete = hasCompletedLesson(lesson.id);
+                const unlocked = isModuleOneLessonUnlocked(
+                  lesson.id,
+                  progress.completedLessonIds,
+                );
+                const implemented = index < 2;
+
+                return (
+                  <LessonRow
+                    key={lesson.id}
+                    module={`Lesson ${String(index + 1).padStart(2, "0")}`}
+                    onPress={
+                      !unlocked
+                        ? undefined
+                        : implemented
+                          ? () =>
+                              router.push({
+                                pathname: "/lesson",
+                                params: { lessonId: lesson.id },
+                              })
+                          : () => showComingSoon(lesson.title)
+                    }
+                    state={complete ? "complete" : unlocked ? "active" : "locked"}
+                    title={lesson.title}
+                  />
+                );
+              })}
             </View>
           </View>
         </ScrollView>

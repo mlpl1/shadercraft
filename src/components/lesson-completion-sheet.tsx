@@ -5,15 +5,19 @@ import { AppIcon } from "./app-icon";
 import { Colors, Radius, Spacing } from "../constants/theme";
 
 type LessonCompletionSheetProps = {
+  lessonTitle: string;
+  nextActionLabel: string;
   onClose: () => void;
-  onViewCourse: () => void;
+  onNext: () => void;
   progressPercent: number;
   visible: boolean;
 };
 
 export function LessonCompletionSheet({
+  lessonTitle,
+  nextActionLabel,
   onClose,
-  onViewCourse,
+  onNext,
   progressPercent,
   visible,
 }: LessonCompletionSheetProps) {
@@ -48,8 +52,7 @@ export function LessonCompletionSheet({
             <Text style={styles.eyebrow}>Progress saved</Text>
             <Text style={styles.title}>Lesson complete</Text>
             <Text style={styles.body}>
-              Coordinate Systems &amp; UV Space is complete. Shape Synthesis is now
-              unlocked and your course progress is {progressPercent}%.
+              {lessonTitle} is complete. Your course progress is now {progressPercent}%.
             </Text>
 
             <View style={styles.progressRow}>
@@ -61,13 +64,13 @@ export function LessonCompletionSheet({
 
             <Pressable
               accessibilityRole="button"
-              onPress={onViewCourse}
+              onPress={onNext}
               style={({ pressed }) => [
                 styles.primaryButton,
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.primaryLabel}>View Module 02</Text>
+              <Text style={styles.primaryLabel}>{nextActionLabel}</Text>
               <AppIcon
                 color={Colors.background}
                 fallback="›"

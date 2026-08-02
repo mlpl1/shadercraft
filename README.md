@@ -9,7 +9,8 @@ The project is currently an early working prototype built with Expo and React Na
 ## Current features
 
 - Home dashboard and four-module curriculum browser
-- First lesson: **Coordinate Systems & UV Space**
+- Five-lesson Module 01 learning path with sequential unlocking
+- Implemented lessons: **Coordinate Systems & UV Space** and **Colors & Fragment Output**
 - Live `expo-gl` fragment shader with animated output
 - Normalized and centered UV experiments that update both preview and GLSL source
 - Persistent lesson completion and course progress
@@ -17,8 +18,8 @@ The project is currently an early working prototype built with Expo and React Na
 - Reversible completion for accidentally completed lessons
 - Guided completion summary with review and course-navigation actions
 
-At this stage, completing the implemented lesson unlocks Module 02 as a prototype milestone.
-The Shape Synthesis lesson content is not implemented yet.
+Module 02 unlocks after all five Module 01 lessons are complete. The final three Module 01
+lessons and Shape Synthesis content are not implemented yet.
 
 ## Technology
 
@@ -88,17 +89,18 @@ The Android native project is stored in `android/`. Static images and app icons 
 
 ## Progress behavior
 
-Lesson completion is stored locally on the device. Completing the current lesson updates Home
-and Course immediately, advances total progress to 5%, and unlocks Module 02. A completed lesson
-can be marked incomplete after confirmation; doing so reverses the progress and unlock state.
+Lesson completion is stored locally on the device. Completing a lesson updates Home and Course
+immediately and unlocks the next lesson in Module 01. Module 02 becomes available only after all
+five foundation lessons are complete. A completed lesson can be marked incomplete after
+confirmation without deleting completion records for later lessons.
 
 Progress does not currently sync between devices or GitHub accounts.
 
 ## Roadmap
 
+- Finish Uniforms & Time, Transforming UVs, and the Module 01 challenge
 - Editable GLSL with debounced shader recompilation and compiler feedback
 - Module 02: Shape Synthesis
-- Complete lesson sequencing within each module
 - Automated tests and configured linting
 - Optional cloud progress synchronization
 

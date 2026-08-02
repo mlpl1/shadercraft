@@ -6,7 +6,12 @@ import { BottomNavigation } from "../components/bottom-navigation";
 import { CourseModuleCard } from "../components/course-module-card";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { useProgress } from "../context/progress-context";
-import { COORDINATE_SYSTEMS_LESSON_ID } from "../lib/progress";
+import {
+  getCurrentModuleOneLesson,
+  getModuleOneCompletedCount,
+  isModuleOneComplete,
+  MODULE_ONE_LESSONS,
+} from "../lib/curriculum";
 
 const modules = [
   {
@@ -14,11 +19,13 @@ const modules = [
     title: "Coordinate Foundations",
     description:
       "Build a reliable coordinate space for every fragment and learn how resolution shapes the image.",
-    lessonCount: 6,
+    lessonCount: 5,
     topics: [
       "Coordinate Systems & UV Space",
-      "Centering & Aspect Ratio",
-      "Drawing with Distance",
+      "Colors & Fragment Output",
+      "Uniforms & Time",
+      "Transforming UVs",
+      "Foundation Challenge",
     ],
   },
   {
@@ -49,25 +56,34 @@ const modules = [
 
 export default function CourseScreen() {
   const router = useRouter();
-  const { hasCompletedLesson, isHydrated, progressPercent } = useProgress();
-  const hasCompletedFirstLesson = hasCompletedLesson(COORDINATE_SYSTEMS_LESSON_ID);
-  const unlockedModuleCount = hasCompletedFirstLesson ? 2 : 1;
+  const { isHydrated, progress, progressPercent } = useProgress();
+  const moduleOneCompletedCount = getModuleOneCompletedCount(progress.completedLessonIds);
+  const hasCompletedModuleOne = isModuleOneComplete(progress.completedLessonIds);
+  const unlockedModuleCount = hasCompletedModuleOne ? 2 : 1;
   const progressWidth = `${progressPercent}%` as `${number}%`;
 
   const getModuleStatus = (
     moduleNumber: number,
   ): "available" | "in-progress" | "locked" => {
     if (moduleNumber === 1) {
-      return hasCompletedFirstLesson ? "in-progress" : "available";
+      return moduleOneCompletedCount > 0 ? "in-progress" : "available";
     }
 
-    if (moduleNumber === 2 && hasCompletedFirstLesson) return "available";
+    if (moduleNumber === 2 && hasCompletedModuleOne) return "available";
     return "locked";
   };
 
   const openModule = (moduleNumber: number) => {
     if (moduleNumber === 1) {
-      router.push("/lesson");
+      const currentLesson = getCurrentModuleOneLesson(progress.completedLessonIds);
+      const implementedLesson = MODULE_ONE_LESSONS.findIndex(
+        (lesson) => lesson.id === currentLesson.id,
+      ) < 2;
+      if (implementedLesson) {
+        router.push({ pathname: "/lesson", params: { lessonId: currentLesson.id } });
+      } else {
+        Alert.alert("Lesson coming next", `${currentLesson.title} is planned but not implemented yet.`);
+      }
       return;
     }
 
@@ -83,7 +99,7 @@ export default function CourseScreen() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>Curriculum</Text>
           <Text style={styles.title}>The shader path</Text>
-          <Text style={styles.subtitle}>4 modules · 20 lessons · self-paced</Text>
+          <Text style={styles.subtitle}>4 modules · 19 lessons · self-paced</Text>
         </View>
 
         <ScrollView
@@ -123,7 +139,7 @@ export default function CourseScreen() {
                 <CourseModuleCard
                   {...module}
                   completedLessonCount={
-                    module.moduleNumber === 1 && hasCompletedFirstLesson ? 1 : 0
+                    module.moduleNumber === 1 ? moduleOneCompletedCount : 0
                   }
                   key={module.moduleNumber}
                   onPress={
