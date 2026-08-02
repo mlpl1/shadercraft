@@ -15,6 +15,7 @@ import {
   LiveShaderPreview,
   type CoordinateMode,
 } from "../components/live-shader-preview";
+import { LessonCompletionSheet } from "../components/lesson-completion-sheet";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { useProgress } from "../context/progress-context";
 import { COORDINATE_SYSTEMS_LESSON_ID } from "../lib/progress";
@@ -46,10 +47,12 @@ export default function LessonScreen() {
   const router = useRouter();
   const [coordinatePreset, setCoordinatePreset] =
     useState<CoordinateMode>("normalized");
+  const [showCompletion, setShowCompletion] = useState(false);
   const {
     completeLesson: persistLessonCompletion,
     hasCompletedLesson,
     isHydrated,
+    progressPercent,
     uncompleteLesson,
   } = useProgress();
   const isComplete = hasCompletedLesson(COORDINATE_SYSTEMS_LESSON_ID);
@@ -58,10 +61,7 @@ export default function LessonScreen() {
   const completeLesson = async () => {
     try {
       await persistLessonCompletion(COORDINATE_SYSTEMS_LESSON_ID);
-      Alert.alert(
-        "Lesson complete",
-        "Your progress is saved and Module 02 · Shape Synthesis is now unlocked.",
-      );
+      setShowCompletion(true);
     } catch {
       Alert.alert(
         "Progress not saved",
@@ -93,8 +93,9 @@ export default function LessonScreen() {
   };
 
   return (
-    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      <View style={styles.appFrame}>
+    <>
+      <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+        <View style={styles.appFrame}>
         <View style={styles.header}>
           <Pressable
             accessibilityLabel="Back to home"
@@ -278,8 +279,19 @@ export default function LessonScreen() {
             </Text>
           </Pressable>
         </View>
-      </View>
-    </SafeAreaView>
+        </View>
+      </SafeAreaView>
+
+      <LessonCompletionSheet
+        onClose={() => setShowCompletion(false)}
+        onViewCourse={() => {
+          setShowCompletion(false);
+          router.push("/course");
+        }}
+        progressPercent={progressPercent}
+        visible={showCompletion}
+      />
+    </>
   );
 }
 
