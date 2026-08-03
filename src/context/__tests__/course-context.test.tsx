@@ -69,8 +69,15 @@ const activeRelease: CourseRelease = {
 
 const publishedLessonIds = ["lesson-1a", "lesson-1b", "lesson-2a", "lesson-3a"];
 
-type FakeCourseRepository = CourseRepository & { emit: () => void };
-type FakeProgressRepository = ProgressRepository & { emit: () => void };
+type FakeCourseRepository = CourseRepository & {
+  emit: () => void;
+  getActiveRelease: jest.MockedFunction<CourseRepository["getActiveRelease"]>;
+  getModules: jest.MockedFunction<CourseRepository["getModules"]>;
+};
+type FakeProgressRepository = ProgressRepository & {
+  emit: () => void;
+  setLessonCompleted: jest.MockedFunction<ProgressRepository["setLessonCompleted"]>;
+};
 
 function createFakeCourseRepository(): FakeCourseRepository {
   const listeners = new Set<() => void>();
@@ -90,6 +97,20 @@ function createFakeCourseRepository(): FakeCourseRepository {
       for (const listener of listeners) listener();
     },
   };
+}
+
+/** A promise whose settlement is controlled from outside, so no microtask is scheduled until
+ * `resolve`/`reject` is called explicitly. Used to make the pre-hydration window deterministically
+ * observable: an unresolved promise cannot settle during the initial `renderHook` mount's act()
+ * flush, unlike a `mockResolvedValue(...)`, which resolves on the microtask queue immediately. */
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 function createFakeProgressRepository(): FakeProgressRepository {
@@ -146,11 +167,24 @@ describe("course and progress providers", () => {
 
   test("hydrates modules from the course repository and refreshes after invalidation", async () => {
     // `isHydrated` starts `false` (see the `useState(false)` in course-context.tsx) and only flips
-    // once `getModules`/`getActiveRelease` resolve; this test renderer's initial `renderHook` mount
-    // already flushes that microtask chain to completion, so the pre-hydration window itself isn't
-    // observable here. What we can and do assert is the eventual hydrated state, plus the refetch
-    // that a subscription notification must trigger.
+    // once `getModules`/`getActiveRelease` resolve. Use deferred promises (rather than
+    // `mockResolvedValue`, which resolves on the microtask queue immediately and so would already
+    // be settled by the time the initial `renderHook` mount's act() flush returns) so the
+    // pre-hydration window is deterministically observable here.
+    const modulesDeferred = createDeferred<CourseModule[]>();
+    const activeReleaseDeferred = createDeferred<CourseRelease>();
+    fakeCourseRepository.getModules.mockReturnValue(modulesDeferred.promise);
+    fakeCourseRepository.getActiveRelease.mockReturnValue(activeReleaseDeferred.promise);
+
     const { result } = await renderHook(() => useCourse(), { wrapper: Wrapper });
+
+    expect(result.current.isHydrated).toBe(false);
+    expect(result.current.modules).toHaveLength(0);
+
+    await act(async () => {
+      modulesDeferred.resolve(modules);
+      activeReleaseDeferred.resolve(activeRelease);
+    });
 
     await waitFor(() => expect(result.current.modules).toHaveLength(4));
     expect(result.current.isHydrated).toBe(true);
@@ -203,6 +237,28 @@ describe("course and progress providers", () => {
 
     expect(fakeProgressRepository.setLessonCompleted).toHaveBeenCalledWith("lesson-1a", false);
     await waitFor(() => expect(result.current.hasCompletedLesson("lesson-1a")).toBe(false));
+    expect(result.current.progressPercent).toBe(0);
+  });
+
+  test("rolls back the optimistic update and rejects when the SQLite write fails", async () => {
+    const { result } = await renderHook(() => useProgress(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    expect(result.current.hasCompletedLesson("lesson-1a")).toBe(false);
+    expect(result.current.progressPercent).toBe(0);
+
+    fakeProgressRepository.setLessonCompleted.mockRejectedValueOnce(
+      new Error("write failed"),
+    );
+
+    await act(async () => {
+      // The write rejects; `setLessonCompletion` must roll back its optimistic update and
+      // rethrow rather than swallow the failure (see progress-context.tsx's `setLessonCompletion`).
+      await expect(result.current.completeLesson("lesson-1a")).rejects.toThrow("write failed");
+    });
+
+    // Rolled back: the optimistic completion never sticks, and the percentage is unchanged.
+    expect(result.current.hasCompletedLesson("lesson-1a")).toBe(false);
     expect(result.current.progressPercent).toBe(0);
   });
 
