@@ -36,7 +36,7 @@ function buildRelease() {
     (left, right) => left.position - right.position,
   );
   const releaseBody = {
-    id: "bundled-2026-08-03",
+    id: "bundled-2026-08-04",
     schemaVersion: 1 as const,
     minimumAppVersion: "1.0.0",
     modules,

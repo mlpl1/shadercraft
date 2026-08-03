@@ -248,7 +248,9 @@
           "position": 1,
           "label": "Static",
           "previewKey": "time-static",
-          "previewParameters": {},
+          "previewParameters": {
+            "restartable": true
+          },
           "value": "u_time = 0",
           "filename": "static_uniform.glsl",
           "codeLines": [
@@ -266,7 +268,9 @@
           "position": 2,
           "label": "Play",
           "previewKey": "time-play",
-          "previewParameters": {},
+          "previewParameters": {
+            "restartable": true
+          },
           "value": "u_time",
           "filename": "animated_time.glsl",
           "codeLines": [
@@ -285,7 +289,9 @@
           "position": 3,
           "label": "Half speed",
           "previewKey": "time-slow",
-          "previewParameters": {},
+          "previewParameters": {
+            "restartable": true
+          },
           "value": "u_time × 0.5",
           "filename": "slow_time.glsl",
           "codeLines": [
@@ -303,7 +309,9 @@
           "position": 4,
           "label": "Double speed",
           "previewKey": "time-fast",
-          "previewParameters": {},
+          "previewParameters": {
+            "restartable": true
+          },
           "value": "u_time × 2.0",
           "filename": "fast_time.glsl",
           "codeLines": [

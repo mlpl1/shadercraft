@@ -158,7 +158,7 @@ export default function BonusScanlineScreen() {
             </View>
 
             <View style={styles.previewCard}>
-              <LiveShaderPreview mode={mode as ShaderPreviewMode} />
+              <LiveShaderPreview previewKey={mode as ShaderPreviewMode} />
             </View>
 
             <View accessibilityRole="radiogroup" style={styles.presets}>

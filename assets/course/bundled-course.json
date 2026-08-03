@@ -1,6 +1,6 @@
 {
-  "checksum": "1797491f902d47b940756facd4dac64ea3de0c99fefaa607e8d91beaafeabafe",
-  "id": "bundled-2026-08-03",
+  "checksum": "358da86224dc9555bd558eb00d7cbd8a2b0c3ea1589523ef4a627447543a33c4",
+  "id": "bundled-2026-08-04",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -254,7 +254,9 @@
               "label": "Static",
               "position": 1,
               "previewKey": "time-static",
-              "previewParameters": {},
+              "previewParameters": {
+                "restartable": true
+              },
               "value": "u_time = 0"
             },
             {
@@ -273,7 +275,9 @@
               "label": "Play",
               "position": 2,
               "previewKey": "time-play",
-              "previewParameters": {},
+              "previewParameters": {
+                "restartable": true
+              },
               "value": "u_time"
             },
             {
@@ -291,7 +295,9 @@
               "label": "Half speed",
               "position": 3,
               "previewKey": "time-slow",
-              "previewParameters": {},
+              "previewParameters": {
+                "restartable": true
+              },
               "value": "u_time × 0.5"
             },
             {
@@ -309,7 +315,9 @@
               "label": "Double speed",
               "position": 4,
               "previewKey": "time-fast",
-              "previewParameters": {},
+              "previewParameters": {
+                "restartable": true
+              },
               "value": "u_time × 2.0"
             }
           ],

@@ -93,7 +93,7 @@ describe("SQLite course repository", () => {
   test("queries only the newly activated release", async () => {
     const nextRelease: CourseRelease = {
       ...release,
-      id: "bundled-2026-08-04",
+      id: "bundled-2026-08-05",
       checksum: "next-release-checksum",
       modules: release.modules.map((module, index) => ({
         ...module,

@@ -8,14 +8,11 @@ import {
   type ShaderPreviewKey,
 } from "../shaders/preview-registry";
 
-export type CoordinateMode = Extract<
-  ShaderPreviewKey,
-  "normalized" | "centered" | "pixel-space" | "aspect-aware"
->;
+/** Compatibility alias: preview modes are identified by their stable registry key. */
 export type ShaderPreviewMode = ShaderPreviewKey;
 
 type LiveShaderPreviewProps = {
-  mode: ShaderPreviewMode;
+  previewKey: ShaderPreviewKey;
   restartToken?: number;
 };
 
@@ -469,15 +466,15 @@ function compileShader(
   return shader;
 }
 
-export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewProps) {
-  const modeRef = useRef(mode);
+export function LiveShaderPreview({ previewKey, restartToken = 0 }: LiveShaderPreviewProps) {
+  const previewKeyRef = useRef(previewKey);
   const frameRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
   const startedAtRef = useRef(0);
 
   useEffect(() => {
-    modeRef.current = mode;
-  }, [mode]);
+    previewKeyRef.current = previewKey;
+  }, [previewKey]);
 
   useEffect(() => {
     startedAtRef.current = globalThis.performance.now();
@@ -526,7 +523,7 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
     gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
 
     const resolution = gl.getUniformLocation(program, "u_resolution");
-    const coordinateMode = gl.getUniformLocation(program, "u_mode");
+    const previewMode = gl.getUniformLocation(program, "u_mode");
     const time = gl.getUniformLocation(program, "u_time");
     startedAtRef.current = globalThis.performance.now();
 
@@ -535,7 +532,7 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
 
       gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
       gl.uniform2f(resolution, gl.drawingBufferWidth, gl.drawingBufferHeight);
-      gl.uniform1f(coordinateMode, SHADER_PREVIEW_MODE_VALUES[modeRef.current]);
+      gl.uniform1f(previewMode, SHADER_PREVIEW_MODE_VALUES[previewKeyRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAtRef.current) / 1000);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       gl.endFrameEXP();
