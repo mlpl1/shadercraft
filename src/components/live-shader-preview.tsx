@@ -3,70 +3,16 @@ import { StyleSheet, View } from "react-native";
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 
 import { Colors } from "../constants/theme";
+import {
+  SHADER_PREVIEW_MODE_VALUES,
+  type ShaderPreviewKey,
+} from "../shaders/preview-registry";
 
-export type CoordinateMode =
-  | "normalized"
-  | "centered"
-  | "pixel-space"
-  | "aspect-aware";
-export type ShaderPreviewMode =
-  | CoordinateMode
-  | "rgb-gradient"
-  | "color-mix"
-  | "luminance"
-  | "channel-split"
-  | "time-static"
-  | "time-play"
-  | "time-slow"
-  | "time-fast"
-  | "transform-translate"
-  | "transform-scale"
-  | "transform-rotate"
-  | "transform-repeat"
-  | "challenge-grid"
-  | "challenge-rings"
-  | "challenge-orbit"
-  | "challenge-final"
-  | "logo-scanlines"
-  | "logo-ribbon"
-  | "logo-cutout"
-  | "logo-final"
-  | "edge-hard"
-  | "edge-smooth"
-  | "edge-outline"
-  | "edge-animated"
-  | "primitive-circle"
-  | "primitive-box"
-  | "primitive-rounded-box"
-  | "primitive-combined"
-  | "boolean-union"
-  | "boolean-intersection"
-  | "boolean-subtraction"
-  | "boolean-xor"
-  | "repeat-grid"
-  | "repeat-rotate"
-  | "repeat-layer"
-  | "repeat-animate"
-  | "synthesis-badge"
-  | "synthesis-face"
-  | "synthesis-flower"
-  | "synthesis-final"
-  | "light-mix-linear"
-  | "light-mix-smooth"
-  | "light-mix-three"
-  | "light-mix-radial"
-  | "light-luma"
-  | "light-contrast"
-  | "light-threshold"
-  | "light-exposure"
-  | "palette-cosine"
-  | "palette-phase"
-  | "palette-spatial"
-  | "palette-animated"
-  | "lighting-albedo"
-  | "lighting-diffuse"
-  | "lighting-rim"
-  | "lighting-final";
+export type CoordinateMode = Extract<
+  ShaderPreviewKey,
+  "normalized" | "centered" | "pixel-space" | "aspect-aware"
+>;
+export type ShaderPreviewMode = ShaderPreviewKey;
 
 type LiveShaderPreviewProps = {
   mode: ShaderPreviewMode;
@@ -589,69 +535,7 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
 
       gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
       gl.uniform2f(resolution, gl.drawingBufferWidth, gl.drawingBufferHeight);
-      const modeValue: Record<ShaderPreviewMode, number> = {
-        normalized: 0,
-        centered: 1,
-        "pixel-space": 2,
-        "aspect-aware": 3,
-        "rgb-gradient": 4,
-        "color-mix": 5,
-        luminance: 6,
-        "channel-split": 7,
-        "time-static": 8,
-        "time-play": 9,
-        "time-slow": 10,
-        "time-fast": 11,
-        "transform-translate": 12,
-        "transform-scale": 13,
-        "transform-rotate": 14,
-        "transform-repeat": 15,
-        "challenge-grid": 16,
-        "challenge-rings": 17,
-        "challenge-orbit": 18,
-        "challenge-final": 19,
-        "logo-scanlines": 20,
-        "logo-ribbon": 21,
-        "logo-cutout": 22,
-        "logo-final": 23,
-        "edge-hard": 24,
-        "edge-smooth": 25,
-        "edge-outline": 26,
-        "edge-animated": 27,
-        "primitive-circle": 28,
-        "primitive-box": 29,
-        "primitive-rounded-box": 30,
-        "primitive-combined": 31,
-        "boolean-union": 32,
-        "boolean-intersection": 33,
-        "boolean-subtraction": 34,
-        "boolean-xor": 35,
-        "repeat-grid": 36,
-        "repeat-rotate": 37,
-        "repeat-layer": 38,
-        "repeat-animate": 39,
-        "synthesis-badge": 40,
-        "synthesis-face": 41,
-        "synthesis-flower": 42,
-        "synthesis-final": 43,
-        "light-mix-linear": 44,
-        "light-mix-smooth": 45,
-        "light-mix-three": 46,
-        "light-mix-radial": 47,
-        "light-luma": 48,
-        "light-contrast": 49,
-        "light-threshold": 50,
-        "light-exposure": 51,
-        "palette-cosine": 52,
-        "palette-phase": 53,
-        "palette-spatial": 54,
-        "palette-animated": 55,
-        "lighting-albedo": 56,
-        "lighting-diffuse": 57,
-        "lighting-rim": 58,
-        "lighting-final": 59,
-      };
-      gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
+      gl.uniform1f(coordinateMode, SHADER_PREVIEW_MODE_VALUES[modeRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAtRef.current) / 1000);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       gl.endFrameEXP();
