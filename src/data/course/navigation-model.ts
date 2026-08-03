@@ -1,5 +1,11 @@
-import { getModuleStatus, getProgressPercent, isLessonUnlocked } from "./domain";
-import type { CourseModule, CourseRelease } from "./types";
+import {
+  getModuleStatus,
+  getProgressPercent,
+  getPublishedLessonCount,
+  isLessonUnlocked,
+  isModuleUnlocked,
+} from "./domain";
+import type { CourseModule } from "./types";
 
 export type NavigationModuleStatus = "available" | "in-progress" | "complete" | "locked" | "planned";
 
@@ -36,6 +42,8 @@ export type FeaturedLessonViewModel = {
 export type NavigationModel = {
   isHydrated: boolean;
   progressPercent: number;
+  /** Total number of lessons across published (non-planned) modules. */
+  publishedLessonCount: number;
   modules: NavigationModuleViewModel[];
   /** The module containing the featured lesson, or null before the course has hydrated. */
   featuredModule: NavigationModuleViewModel | null;
@@ -116,10 +124,11 @@ function selectFeatured(
 
 /**
  * Builds the Home/Course presentation view model from repository-sourced modules, the set of
- * completed lesson IDs, and the course/progress hydration state. Pure: no React, no I/O. Every
- * module — published or planned — unlocks sequentially by position once the previous module is
- * complete. A planned module never becomes "complete" (it has no real lessons); once unlocked it
- * is labeled "planned" so it can preview its topic roadmap without ever opening a lesson route.
+ * completed lesson IDs, and the course/progress hydration state. Pure: no React, no I/O. Module
+ * unlock order (see `isModuleUnlocked` in `./domain`) is a domain rule; this selector only maps
+ * the resulting lock state onto a display status. A planned module never becomes "complete" (it
+ * has no real lessons); once unlocked it is labeled "planned" so it can preview its topic roadmap
+ * without ever opening a lesson route.
  */
 export function buildNavigationModel(
   modules: readonly CourseModule[],
@@ -128,22 +137,20 @@ export function buildNavigationModel(
 ): NavigationModel {
   const orderedModules = byPosition(modules);
 
-  let previousModuleComplete = true;
   const moduleViewModels = orderedModules.map((module) => {
-    const isLocked = !previousModuleComplete;
-    const viewModel = buildModuleViewModel(module, completedLessonIds, isLocked);
+    const isLocked = !isModuleUnlocked(orderedModules, module.id, completedLessonIds);
 
-    previousModuleComplete = viewModel.status === "complete";
-
-    return viewModel;
+    return buildModuleViewModel(module, completedLessonIds, isLocked);
   });
 
   const featured = selectFeatured(moduleViewModels);
-  const progressPercent = getProgressPercent({ modules } as CourseRelease, completedLessonIds);
+  const progressPercent = getProgressPercent({ modules }, completedLessonIds);
+  const publishedLessonCount = getPublishedLessonCount({ modules });
 
   return {
     isHydrated,
     progressPercent,
+    publishedLessonCount,
     modules: moduleViewModels,
     featuredModule: featured?.module ?? null,
     featuredLesson: featured

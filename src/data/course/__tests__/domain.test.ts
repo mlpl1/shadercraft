@@ -5,6 +5,7 @@ import {
   getProgressPercent,
   getPublishedLessonCount,
   isLessonUnlocked,
+  isModuleUnlocked,
 } from "../domain";
 import { parseCourseRelease } from "../schema";
 
@@ -42,5 +43,29 @@ describe("course progression selectors", () => {
       .flatMap((module) => module.lessons.map(({ id }) => id));
 
     expect(getProgressPercent(release, allPublishedLessonIds)).toBe(100);
+  });
+
+  test("always unlocks the first module by position, regardless of progress", () => {
+    expect(isModuleUnlocked(release.modules, module1.id, [])).toBe(true);
+  });
+
+  test("keeps a module locked while its predecessor is only partially complete", () => {
+    const partialModule1Ids = [module1.lessons[0].id];
+
+    expect(isModuleUnlocked(release.modules, module2.id, partialModule1Ids)).toBe(false);
+  });
+
+  test("unlocks a module once every module ahead of it is complete", () => {
+    const completedModule1Ids = module1.lessons.map(({ id }) => id);
+
+    expect(isModuleUnlocked(release.modules, module2.id, completedModule1Ids)).toBe(true);
+  });
+
+  test("unlocks a planned module once every module ahead of it is complete", () => {
+    const completedModule3Ids = [module1, module2, module3].flatMap((module) =>
+      module.lessons.map(({ id }) => id),
+    );
+
+    expect(isModuleUnlocked(release.modules, plannedModule4.id, completedModule3Ids)).toBe(true);
   });
 });

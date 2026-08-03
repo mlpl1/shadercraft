@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { AppIcon } from "./app-icon";
 import { Colors, Radius, Spacing } from "../constants/theme";
+import type { NavigationModuleStatus } from "../data/course/navigation-model";
 
 type CourseModuleCardProps = {
   completedLessonCount?: number;
@@ -10,7 +11,7 @@ type CourseModuleCardProps = {
   lessonCount: number;
   moduleNumber: number;
   onPress?: () => void;
-  status: "available" | "in-progress" | "complete" | "locked" | "planned";
+  status: NavigationModuleStatus;
   title: string;
   topics: string[];
 };

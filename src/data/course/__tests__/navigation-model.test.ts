@@ -64,4 +64,11 @@ describe("navigation presentation model", () => {
   test("passes the hydration flag through unchanged", () => {
     expect(buildNavigationModel(release.modules, [], false).isHydrated).toBe(false);
   });
+
+  test("reports no featured module or lesson before the course has hydrated any modules", () => {
+    const preHydrationModel = buildNavigationModel([], [], false);
+
+    expect(preHydrationModel.featuredModule).toBeNull();
+    expect(preHydrationModel.featuredLesson).toBeNull();
+  });
 });

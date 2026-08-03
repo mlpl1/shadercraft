@@ -34,9 +34,6 @@ export default function CourseScreen() {
     );
   }
 
-  const publishedLessonCount = model.modules
-    .filter((module) => module.status !== "planned")
-    .reduce((total, module) => total + module.lessonCount, 0);
   const unlockedModuleCount = model.modules.filter((module) => module.status !== "locked").length;
   const progressWidth = `${progressPercent}%` as `${number}%`;
 
@@ -89,7 +86,7 @@ export default function CourseScreen() {
             </View>
             <View style={styles.progressFooter}>
               <Text style={styles.progressCaption}>
-                {model.modules.length} modules · {publishedLessonCount} lessons
+                {model.modules.length} modules · {model.publishedLessonCount} lessons
               </Text>
               <Text style={styles.progressCaption}>Self-paced</Text>
             </View>
