@@ -13,46 +13,48 @@ import { BottomNavigation } from "../components/bottom-navigation";
 import { LessonRow } from "../components/lesson-row";
 import { ShaderPreview } from "../components/shader-preview";
 import { Colors, Radius, Spacing } from "../constants/theme";
+import { useCourse } from "../context/course-context";
 import { useProgress } from "../context/progress-context";
-import {
-  getCurrentModuleOneLesson,
-  getCurrentModuleThreeLesson,
-  getCurrentModuleTwoLesson,
-  isModuleOneComplete,
-  isModuleThreeComplete,
-  isModuleTwoComplete,
-  MODULE_ONE_LESSONS,
-  MODULE_THREE_LESSONS,
-  MODULE_TWO_LESSONS,
-} from "../lib/curriculum";
+import { buildNavigationModel } from "../data/course/navigation-model";
+
+function padTwo(value: number): string {
+  return String(value).padStart(2, "0");
+}
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { hasCompletedLesson, isHydrated, progress, progressPercent } = useProgress();
-  const hasCompletedModuleOne = isModuleOneComplete(progress.completedLessonIds);
-  const hasCompletedModuleTwo = isModuleTwoComplete(progress.completedLessonIds);
-  const hasCompletedModuleThree = isModuleThreeComplete(progress.completedLessonIds);
-  const featuredLessons = hasCompletedModuleTwo
-    ? MODULE_THREE_LESSONS
-    : hasCompletedModuleOne
-      ? MODULE_TWO_LESSONS
-      : MODULE_ONE_LESSONS;
-  const featuredLesson = hasCompletedModuleTwo
-    ? getCurrentModuleThreeLesson(progress.completedLessonIds)
-    : hasCompletedModuleOne
-      ? getCurrentModuleTwoLesson(progress.completedLessonIds)
-      : getCurrentModuleOneLesson(progress.completedLessonIds);
-  const featuredLessonIndex = featuredLessons.findIndex(
-    (lesson) => lesson.id === featuredLesson.id,
-  );
-  const featuredModuleNumber = hasCompletedModuleTwo ? 3 : hasCompletedModuleOne ? 2 : 1;
-  const featuredPathname = hasCompletedModuleTwo
-    ? "/module-three-lesson"
-    : hasCompletedModuleOne
-      ? "/module-two-lesson"
-      : "/lesson";
-  const featuredIsComplete = hasCompletedLesson(featuredLesson.id);
+  const { isHydrated: isCourseHydrated, modules } = useCourse();
+  const { isHydrated: isProgressHydrated, progress, progressPercent } = useProgress();
+
+  const model = buildNavigationModel(modules, progress.completedLessonIds, isCourseHydrated);
   const progressWidth = `${progressPercent}%` as `${number}%`;
+
+  if (!isCourseHydrated || !model.featuredModule || !model.featuredLesson) {
+    return (
+      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+        <View style={styles.appFrame}>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.sectionLabel}>Curriculum</Text>
+              <Text style={styles.wordmark}>Shadercraft</Text>
+            </View>
+          </View>
+          <View style={styles.loadingState}>
+            <Text style={styles.progressLabel}>Loading curriculum…</Text>
+          </View>
+          <BottomNavigation activeItem="home" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const { featuredLesson, featuredModule } = model;
+  const openLesson = (lessonId: string) =>
+    router.push({ pathname: "/lesson", params: { lessonId } });
+
+  const isAllPublishedComplete = featuredModule.status === "complete";
+  const nextPlannedModule = model.modules.find((module) => module.status === "planned");
+  const featuredIsComplete = featuredLesson.isComplete;
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
@@ -65,7 +67,7 @@ export default function HomeScreen() {
 
           <View style={styles.progressSummary}>
             <Text style={styles.progressLabel}>
-              {isHydrated ? `${progressPercent}% Complete` : "Loading progress…"}
+              {isProgressHydrated ? `${progressPercent}% Complete` : "Loading progress…"}
             </Text>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: progressWidth }]} />
@@ -81,12 +83,7 @@ export default function HomeScreen() {
           <Pressable
             accessibilityLabel={`${featuredIsComplete ? "Review" : "Start"} ${featuredLesson.title}`}
             accessibilityRole="button"
-            onPress={() =>
-              router.push({
-                pathname: featuredPathname,
-                params: { lessonId: featuredLesson.id },
-              })
-            }
+            onPress={() => openLesson(featuredLesson.id)}
             style={({ pressed }) => [styles.continueCard, pressed && styles.pressedCard]}
           >
             <ShaderPreview />
@@ -94,22 +91,31 @@ export default function HomeScreen() {
             <View style={styles.cardBody}>
               <View style={styles.cardMetadata}>
                 <Text style={styles.cardEyebrow}>
-                  Module {String(featuredModuleNumber).padStart(2, "0")} · Lesson {String(featuredLessonIndex + 1).padStart(2, "0")}
+                  Module {padTwo(featuredLesson.modulePosition)} · Lesson{" "}
+                  {padTwo(featuredLesson.lessonPosition)}
                 </Text>
                 <Text style={styles.currentLabel}>
-                  {featuredIsComplete ? "Completed" : featuredLessonIndex > 0 ? "Continue" : "Start here"}
+                  {featuredIsComplete
+                    ? "Completed"
+                    : featuredLesson.lessonPosition > 1
+                      ? "Continue"
+                      : "Start here"}
                 </Text>
               </View>
               <Text style={styles.lessonTitle}>{featuredLesson.title}</Text>
               <View style={styles.resumeButton}>
                 <Text style={styles.resumeLabel}>
-                  {featuredIsComplete ? "Review Lesson" : featuredLessonIndex > 0 ? "Continue Learning" : "Start Lesson"}
+                  {featuredIsComplete
+                    ? "Review Lesson"
+                    : featuredLesson.lessonPosition > 1
+                      ? "Continue Learning"
+                      : "Start Lesson"}
                 </Text>
               </View>
             </View>
           </Pressable>
 
-          {hasCompletedModuleOne && (
+          {model.isFirstModuleComplete && (
             <View style={styles.unlockedStack}>
               <Pressable
                 accessibilityLabel="Open bonus Scanline S tutorial"
@@ -132,85 +138,56 @@ export default function HomeScreen() {
                 <Text style={styles.unlockedArrow}>→</Text>
               </Pressable>
 
-              <Pressable
-                accessibilityLabel={
-                  hasCompletedModuleThree
-                    ? "Explore unlocked Module 4"
-                    : hasCompletedModuleTwo
-                      ? "Continue Module 3"
-                      : "Continue Module 2"
-                }
-                accessibilityRole="button"
-                onPress={() =>
-                  hasCompletedModuleThree
-                    ? router.push("/course")
-                    : hasCompletedModuleTwo
-                      ? router.push({
-                          pathname: "/module-three-lesson",
-                          params: { lessonId: getCurrentModuleThreeLesson(progress.completedLessonIds).id },
-                        })
-                      : router.push({
-                          pathname: "/module-two-lesson",
-                          params: { lessonId: getCurrentModuleTwoLesson(progress.completedLessonIds).id },
-                        })
-                }
-                style={({ pressed }) => [styles.unlockedCard, pressed && styles.pressedCard]}
-              >
-                <View style={styles.unlockedCopy}>
-                  <Text style={styles.unlockedEyebrow}>
-                    {hasCompletedModuleThree
-                      ? "Module 04 unlocked"
-                      : hasCompletedModuleTwo
-                        ? "Module 03 in progress"
-                        : "Module 02 in progress"}
-                  </Text>
-                  <Text style={styles.unlockedTitle}>
-                    {hasCompletedModuleThree
-                      ? "Procedural Textures"
-                      : hasCompletedModuleTwo
-                        ? "Color & Light"
-                        : "Shape Synthesis"}
-                  </Text>
-                  <Text style={styles.unlockedBody}>
-                    {hasCompletedModuleThree
-                      ? "Color & Light is complete. Explore the next module in the course."
-                      : hasCompletedModuleTwo
-                        ? "Turn scalar fields into expressive palettes, contrast, and light."
-                        : "Continue building procedural geometry from reusable distance fields."}
-                  </Text>
-                </View>
-                <Text style={styles.unlockedArrow}>→</Text>
-              </Pressable>
+              {isAllPublishedComplete && nextPlannedModule ? (
+                <Pressable
+                  accessibilityLabel={`Explore unlocked module ${padTwo(nextPlannedModule.position)}`}
+                  accessibilityRole="button"
+                  onPress={() => router.push("/course")}
+                  style={({ pressed }) => [styles.unlockedCard, pressed && styles.pressedCard]}
+                >
+                  <View style={styles.unlockedCopy}>
+                    <Text style={styles.unlockedEyebrow}>
+                      Module {padTwo(nextPlannedModule.position)} unlocked
+                    </Text>
+                    <Text style={styles.unlockedTitle}>{nextPlannedModule.title}</Text>
+                    <Text style={styles.unlockedBody}>
+                      {featuredModule.title} is complete. Explore the next module in the course.
+                    </Text>
+                  </View>
+                  <Text style={styles.unlockedArrow}>→</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  accessibilityLabel={`Continue module ${padTwo(featuredModule.position)}`}
+                  accessibilityRole="button"
+                  onPress={() => openLesson(featuredLesson.id)}
+                  style={({ pressed }) => [styles.unlockedCard, pressed && styles.pressedCard]}
+                >
+                  <View style={styles.unlockedCopy}>
+                    <Text style={styles.unlockedEyebrow}>
+                      Module {padTwo(featuredModule.position)} in progress
+                    </Text>
+                    <Text style={styles.unlockedTitle}>{featuredModule.title}</Text>
+                    <Text style={styles.unlockedBody}>{featuredModule.description}</Text>
+                  </View>
+                  <Text style={styles.unlockedArrow}>→</Text>
+                </Pressable>
+              )}
             </View>
           )}
 
           <View style={styles.learningPath}>
             <Text style={styles.pathHeading}>Up next</Text>
             <View style={styles.lessonList}>
-              {featuredLessons.map((lesson, index) => {
-                const complete = hasCompletedLesson(lesson.id);
-                const unlocked =
-                  index === 0 ||
-                  progress.completedLessonIds.includes(featuredLessons[index - 1].id);
-
-                return (
-                  <LessonRow
-                    key={lesson.id}
-                    module={`Lesson ${String(index + 1).padStart(2, "0")}`}
-                    onPress={
-                      !unlocked
-                        ? undefined
-                        : () =>
-                            router.push({
-                              pathname: featuredPathname,
-                              params: { lessonId: lesson.id },
-                            })
-                    }
-                    state={complete ? "complete" : unlocked ? "active" : "locked"}
-                    title={lesson.title}
-                  />
-                );
-              })}
+              {featuredModule.lessons.map((lesson) => (
+                <LessonRow
+                  key={lesson.id}
+                  module={`Lesson ${padTwo(lesson.position)}`}
+                  onPress={lesson.isUnlocked ? () => openLesson(lesson.id) : undefined}
+                  state={lesson.isComplete ? "complete" : lesson.isUnlocked ? "active" : "locked"}
+                  title={lesson.title}
+                />
+              ))}
             </View>
           </View>
         </ScrollView>
@@ -258,6 +235,11 @@ const styles = StyleSheet.create({
   progressSummary: {
     alignItems: "flex-end",
     gap: 6,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   progressLabel: {
     color: Colors.textMuted,

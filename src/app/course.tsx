@@ -5,142 +5,59 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomNavigation } from "../components/bottom-navigation";
 import { CourseModuleCard } from "../components/course-module-card";
 import { Colors, Radius, Spacing } from "../constants/theme";
+import { useCourse } from "../context/course-context";
 import { useProgress } from "../context/progress-context";
-import {
-  getCurrentModuleOneLesson,
-  getCurrentModuleThreeLesson,
-  getCurrentModuleTwoLesson,
-  getModuleOneCompletedCount,
-  getModuleThreeCompletedCount,
-  getModuleTwoCompletedCount,
-  isModuleOneComplete,
-  isModuleThreeComplete,
-  isModuleTwoComplete,
-  MODULE_ONE_LESSONS,
-  MODULE_THREE_LESSONS,
-  MODULE_TWO_LESSONS,
-} from "../lib/curriculum";
-
-const modules = [
-  {
-    moduleNumber: 1,
-    title: "Coordinate Foundations",
-    description:
-      "Build a reliable coordinate space for every fragment and learn how resolution shapes the image.",
-    lessonCount: 5,
-    topics: [
-      "Coordinate Systems & UV Space",
-      "Colors & Fragment Output",
-      "Uniforms & Time",
-      "Transforming UVs",
-      "Foundation Challenge",
-    ],
-  },
-  {
-    moduleNumber: 2,
-    title: "Shape Synthesis",
-    description:
-      "Turn distance fields into clean geometric forms with thresholds, smooth edges, and composition.",
-    lessonCount: 5,
-    topics: [
-      "Step & Smoothstep",
-      "Circles & Boxes",
-      "Boolean Shape Operations",
-      "Repetition & Composition",
-      "Shape Synthesis Challenge",
-    ],
-  },
-  {
-    moduleNumber: 3,
-    title: "Color & Light",
-    description:
-      "Mix palettes, understand luminance, and shape color with reusable procedural functions.",
-    lessonCount: 4,
-    topics: ["Color Mixing", "Luma & Contrast", "Procedural Palettes", "Color & Light Challenge"],
-  },
-  {
-    moduleNumber: 4,
-    title: "Procedural Textures",
-    description:
-      "Combine repetition, noise, and motion to create expressive surfaces entirely in code.",
-    lessonCount: 5,
-    topics: ["Tiling Space", "Value Noise", "Layered Motion"],
-  },
-];
+import { buildNavigationModel } from "../data/course/navigation-model";
 
 export default function CourseScreen() {
   const router = useRouter();
-  const { isHydrated, progress, progressPercent } = useProgress();
-  const moduleOneCompletedCount = getModuleOneCompletedCount(progress.completedLessonIds);
-  const hasCompletedModuleOne = isModuleOneComplete(progress.completedLessonIds);
-  const moduleTwoCompletedCount = getModuleTwoCompletedCount(progress.completedLessonIds);
-  const hasCompletedModuleTwo = isModuleTwoComplete(progress.completedLessonIds);
-  const moduleThreeCompletedCount = getModuleThreeCompletedCount(progress.completedLessonIds);
-  const hasCompletedModuleThree = isModuleThreeComplete(progress.completedLessonIds);
-  const unlockedModuleCount = hasCompletedModuleThree
-    ? 4
-    : hasCompletedModuleTwo
-      ? 3
-      : hasCompletedModuleOne
-        ? 2
-        : 1;
-  const progressWidth = `${progressPercent}%` as `${number}%`;
-  const currentModuleOneLesson = getCurrentModuleOneLesson(progress.completedLessonIds);
-  const currentModuleOneLessonIndex = MODULE_ONE_LESSONS.findIndex(
-    (lesson) => lesson.id === currentModuleOneLesson.id,
-  );
-  const currentModuleTwoLesson = getCurrentModuleTwoLesson(progress.completedLessonIds);
-  const currentModuleTwoLessonIndex = MODULE_TWO_LESSONS.findIndex(
-    (lesson) => lesson.id === currentModuleTwoLesson.id,
-  );
-  const currentModuleThreeLesson = getCurrentModuleThreeLesson(progress.completedLessonIds);
-  const currentModuleThreeLessonIndex = MODULE_THREE_LESSONS.findIndex(
-    (lesson) => lesson.id === currentModuleThreeLesson.id,
-  );
+  const { isHydrated: isCourseHydrated, modules } = useCourse();
+  const { isHydrated: isProgressHydrated, progress, progressPercent } = useProgress();
 
-  const getModuleStatus = (
-    moduleNumber: number,
-  ): "available" | "in-progress" | "complete" | "locked" => {
-    if (moduleNumber === 1) {
-      if (hasCompletedModuleOne) return "complete";
-      return moduleOneCompletedCount > 0 ? "in-progress" : "available";
-    }
+  const model = buildNavigationModel(modules, progress.completedLessonIds, isCourseHydrated);
 
-    if (moduleNumber === 2 && hasCompletedModuleOne) {
-      if (hasCompletedModuleTwo) return "complete";
-      return moduleTwoCompletedCount > 0 ? "in-progress" : "available";
-    }
-    if (moduleNumber === 3 && hasCompletedModuleTwo) {
-      if (hasCompletedModuleThree) return "complete";
-      return moduleThreeCompletedCount > 0 ? "in-progress" : "available";
-    }
-    if (moduleNumber === 4 && hasCompletedModuleThree) return "available";
-    return "locked";
-  };
-
-  const openModule = (moduleNumber: number) => {
-    if (moduleNumber === 1) {
-      const currentLesson = getCurrentModuleOneLesson(progress.completedLessonIds);
-      router.push({ pathname: "/lesson", params: { lessonId: currentLesson.id } });
-      return;
-    }
-
-    if (moduleNumber === 2) {
-      const currentLesson = getCurrentModuleTwoLesson(progress.completedLessonIds);
-      router.push({ pathname: "/module-two-lesson", params: { lessonId: currentLesson.id } });
-      return;
-    }
-
-    if (moduleNumber === 3) {
-      const currentLesson = getCurrentModuleThreeLesson(progress.completedLessonIds);
-      router.push({ pathname: "/module-three-lesson", params: { lessonId: currentLesson.id } });
-      return;
-    }
-
-    Alert.alert(
-      "Coming next",
-      "Procedural Textures is unlocked. Its lessons are the next part of the course to build.",
+  if (!isCourseHydrated) {
+    return (
+      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+        <View style={styles.appFrame}>
+          <View style={styles.header}>
+            <Text style={styles.wordmark}>Shadercraft</Text>
+            <Text style={styles.eyebrow}>Learning path</Text>
+            <Text style={styles.title}>Curriculum</Text>
+          </View>
+          <View style={styles.loadingState}>
+            <Text style={styles.progressCaption}>Loading curriculum…</Text>
+          </View>
+          <BottomNavigation activeItem="course" />
+        </View>
+      </SafeAreaView>
     );
+  }
+
+  const publishedLessonCount = model.modules
+    .filter((module) => module.status !== "planned")
+    .reduce((total, module) => total + module.lessonCount, 0);
+  const unlockedModuleCount = model.modules.filter((module) => module.status !== "locked").length;
+  const progressWidth = `${progressPercent}%` as `${number}%`;
+
+  const openModule = (moduleId: string) => {
+    const targetModule = model.modules.find((module) => module.id === moduleId);
+    if (!targetModule) return;
+
+    if (targetModule.status === "planned") {
+      Alert.alert(
+        "Coming next",
+        `${targetModule.title} is unlocked. Its lessons are the next part of the course to build.`,
+      );
+      return;
+    }
+
+    const currentLesson =
+      targetModule.lessons[targetModule.currentLessonIndex] ??
+      targetModule.lessons[targetModule.lessons.length - 1];
+    if (!currentLesson) return;
+
+    router.push({ pathname: "/lesson", params: { lessonId: currentLesson.id } });
   };
 
   return (
@@ -164,14 +81,16 @@ export default function CourseScreen() {
                 <Text style={styles.progressTitle}>Fragment shader fundamentals</Text>
               </View>
               <Text style={styles.progressValue}>
-                {isHydrated ? `${progressPercent}%` : "—"}
+                {isProgressHydrated ? `${progressPercent}%` : "—"}
               </Text>
             </View>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: progressWidth }]} />
             </View>
             <View style={styles.progressFooter}>
-              <Text style={styles.progressCaption}>4 modules · 19 lessons</Text>
+              <Text style={styles.progressCaption}>
+                {model.modules.length} modules · {publishedLessonCount} lessons
+              </Text>
               <Text style={styles.progressCaption}>Self-paced</Text>
             </View>
           </View>
@@ -179,51 +98,25 @@ export default function CourseScreen() {
           <View style={styles.moduleHeadingRow}>
             <Text style={styles.moduleHeading}>Your learning path</Text>
             <Text style={styles.moduleCount}>
-              {String(unlockedModuleCount).padStart(2, "0")} / 04 available
+              {String(unlockedModuleCount).padStart(2, "0")} / {String(model.modules.length).padStart(2, "0")} available
             </Text>
           </View>
 
           <View style={styles.moduleList}>
-            {modules.map((module) => {
-              const status = getModuleStatus(module.moduleNumber);
-
-              return (
-                <CourseModuleCard
-                  {...module}
-                  completedLessonCount={
-                    module.moduleNumber === 1
-                      ? moduleOneCompletedCount
-                      : module.moduleNumber === 2
-                        ? moduleTwoCompletedCount
-                        : module.moduleNumber === 3
-                          ? moduleThreeCompletedCount
-                        : 0
-                  }
-                  currentLessonIndex={
-                    module.moduleNumber === 1
-                      ? hasCompletedModuleOne
-                        ? -1
-                        : currentModuleOneLessonIndex
-                      : module.moduleNumber === 2
-                        ? hasCompletedModuleTwo
-                          ? -1
-                          : currentModuleTwoLessonIndex
-                        : module.moduleNumber === 3
-                          ? hasCompletedModuleThree
-                            ? -1
-                            : currentModuleThreeLessonIndex
-                          : 0
-                  }
-                  key={module.moduleNumber}
-                  onPress={
-                    status === "locked"
-                      ? undefined
-                      : () => openModule(module.moduleNumber)
-                  }
-                  status={status}
-                />
-              );
-            })}
+            {model.modules.map((module) => (
+              <CourseModuleCard
+                completedLessonCount={module.completedLessonCount}
+                currentLessonIndex={module.currentLessonIndex}
+                description={module.description}
+                key={module.id}
+                lessonCount={module.lessonCount}
+                moduleNumber={module.position}
+                onPress={module.status === "locked" ? undefined : () => openModule(module.id)}
+                status={module.status}
+                title={module.title}
+                topics={module.topics}
+              />
+            ))}
           </View>
         </ScrollView>
 
@@ -276,6 +169,11 @@ const styles = StyleSheet.create({
     marginTop: 6,
     color: Colors.textMuted,
     fontSize: 13,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   content: {
     paddingHorizontal: Spacing.xl,

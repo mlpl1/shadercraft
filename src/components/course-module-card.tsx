@@ -10,7 +10,7 @@ type CourseModuleCardProps = {
   lessonCount: number;
   moduleNumber: number;
   onPress?: () => void;
-  status: "available" | "in-progress" | "complete" | "locked";
+  status: "available" | "in-progress" | "complete" | "locked" | "planned";
   title: string;
   topics: string[];
 };
@@ -62,9 +62,11 @@ export function CourseModuleCard({
               <Text style={styles.statusPillText}>
                 {status === "complete"
                   ? "Complete"
-                  : completedLessonCount > 0
-                    ? `${completedLessonCount}/${lessonCount}`
-                    : "Start"}
+                  : status === "planned"
+                    ? "Planned"
+                    : completedLessonCount > 0
+                      ? `${completedLessonCount}/${lessonCount}`
+                      : "Start"}
               </Text>
             </View>
           </View>
