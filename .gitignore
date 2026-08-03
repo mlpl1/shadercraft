@@ -37,6 +37,7 @@ yarn-error.*
 *.tsbuildinfo
 
 example
+.worktrees/
 
 # generated native folders
 /ios
