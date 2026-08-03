@@ -40,8 +40,8 @@ const courseLessonSchema = z
     conceptLede: z.string(),
     tryHint: z.string(),
     takeaway: z.string(),
-    presets: z.array(lessonPresetSchema),
-    sections: z.array(lessonSectionSchema),
+    presets: z.array(lessonPresetSchema).min(1),
+    sections: z.array(lessonSectionSchema).min(1),
   })
   .strict();
 

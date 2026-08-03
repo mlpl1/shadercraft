@@ -98,6 +98,14 @@ describe("curriculum authoring schema", () => {
     expect(() => parseAuthoredModules(publishedModuleWithoutLessons)).toThrow(/published module/i);
   });
 
+  it("rejects published modules whose lesson has no required child content", () => {
+    const publishedModuleWithHollowLesson = copyModules();
+    publishedModuleWithHollowLesson[0].lessons[0].presets = [];
+    publishedModuleWithHollowLesson[0].lessons[0].sections = [];
+
+    expect(() => parseAuthoredModules(publishedModuleWithHollowLesson)).toThrow();
+  });
+
   it("rejects planned modules with lessons", () => {
     const plannedModuleWithLessons = copyModules();
     plannedModuleWithLessons[1].lessons = [copyModules()[0].lessons[0]];
