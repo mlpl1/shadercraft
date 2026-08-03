@@ -49,6 +49,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "content:build": "tsx scripts/content/build-course.ts",
+    "content:check": "tsx scripts/content/build-course.ts --check",
     "lint": "expo lint",
     "test": "jest",
     "test:watch": "jest --watch"

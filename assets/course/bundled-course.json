@@ -1,0 +1,1573 @@
+{
+  "checksum": "1797491f902d47b940756facd4dac64ea3de0c99fefaa607e8d91beaafeabafe",
+  "id": "bundled-2026-08-03",
+  "minimumAppVersion": "1.0.0",
+  "modules": [
+    {
+      "description": "Build a reliable coordinate space for every fragment and learn how resolution shapes the image.",
+      "id": "coordinate-foundations",
+      "lessons": [
+        {
+          "conceptLede": "Understand how raw pixels become stable coordinates you can reuse across every screen size.",
+          "conceptTitle": "Mastering the canvas",
+          "id": "coordinate-systems-uv-space",
+          "intro": "Fragment shaders run once per pixel. Before drawing shapes, turn each pixel position into a predictable coordinate you can reason about.",
+          "moduleId": "coordinate-foundations",
+          "position": 1,
+          "presets": [
+            {
+              "codeLines": [
+                "vec2 uv = fragCoord / resolution.xy;",
+                "",
+                "vec3 color = vec3(uv, 0.0);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "normalized_uv.glsl",
+              "highlightedLines": [
+                1
+              ],
+              "id": "normalized",
+              "label": "Normalized",
+              "position": 1,
+              "previewKey": "normalized",
+              "previewParameters": {},
+              "value": "0 → 1"
+            },
+            {
+              "codeLines": [
+                "vec2 uv = fragCoord / resolution.xy;",
+                "uv = uv * 2.0 - 1.0;",
+                "uv.x *= resolution.x / resolution.y;",
+                "",
+                "vec3 color = vec3(",
+                "  uv * 0.5 + 0.5,",
+                "  0.0",
+                ");",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "centered_uv.glsl",
+              "highlightedLines": [
+                2,
+                3
+              ],
+              "id": "centered",
+              "label": "Centered",
+              "position": 2,
+              "previewKey": "centered",
+              "previewParameters": {},
+              "value": "−1 → 1"
+            },
+            {
+              "codeLines": [
+                "vec2 pixel = fragCoord;",
+                "vec2 uv = pixel / resolution.xy;",
+                "vec3 color = vec3(uv, 0.28);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "pixel_space.glsl",
+              "highlightedLines": [
+                1
+              ],
+              "id": "pixel-space",
+              "label": "Pixel space",
+              "position": 3,
+              "previewKey": "pixel-space",
+              "previewParameters": {},
+              "value": "0 → resolution"
+            },
+            {
+              "codeLines": [
+                "vec2 uv = fragCoord / resolution.xy;",
+                "vec2 p = uv * 2.0 - 1.0;",
+                "p.x *= resolution.x / resolution.y;",
+                "float radius = length(p);",
+                "vec3 color = vec3(radius);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "aspect_aware.glsl",
+              "highlightedLines": [
+                3
+              ],
+              "id": "aspect-aware",
+              "label": "Corrected",
+              "position": 4,
+              "previewKey": "aspect-aware",
+              "previewParameters": {},
+              "value": "Aspect aware"
+            }
+          ],
+          "sections": [
+            {
+              "body": "gl_FragCoord.xy contains the current pixel position in framebuffer pixels. Its values depend on the viewport, so a 1080-pixel-wide screen produces very different numbers from a 390-pixel-wide phone.",
+              "id": "coordinate-systems-uv-space-section-1",
+              "position": 1,
+              "title": "Start with the current fragment"
+            },
+            {
+              "body": "Divide the fragment coordinate by resolution.xy to convert both axes into a portable 0-to-1 range. This normalized vector is conventionally named uv or st.",
+              "id": "coordinate-systems-uv-space-section-2",
+              "position": 2,
+              "title": "Normalize once, use everywhere"
+            },
+            {
+              "body": "Pixel space is useful for exact sizes. Centered space makes symmetry natural. Aspect-aware space keeps distance-based shapes circular instead of stretching with the screen.",
+              "id": "coordinate-systems-uv-space-section-3",
+              "position": 3,
+              "title": "Choose coordinates for the job"
+            }
+          ],
+          "shortTitle": "Coordinate systems",
+          "takeaway": "The center of normalized UV space is always (0.5, 0.5). After centering it becomes (0.0, 0.0). Correct the x-axis before measuring distance so circles remain circular.",
+          "title": "Coordinate Systems & UV Space",
+          "tryHint": "Change the coordinate range"
+        },
+        {
+          "conceptLede": "Learn how fragment output combines channels, opacity, and interpolation into visible color.",
+          "conceptTitle": "From numbers to pixels",
+          "id": "colors-fragment-output",
+          "intro": "A fragment shader returns one color for every pixel. Learn how RGB channels, alpha, and color mixing turn numbers into an image.",
+          "moduleId": "coordinate-foundations",
+          "position": 2,
+          "presets": [
+            {
+              "codeLines": [
+                "vec2 uv = fragCoord / resolution.xy;",
+                "vec3 color = vec3(uv.x, uv.y, 0.2);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "fragment_color.glsl",
+              "highlightedLines": [
+                2,
+                3
+              ],
+              "id": "rgb-gradient",
+              "label": "RGB channels",
+              "position": 1,
+              "previewKey": "rgb-gradient",
+              "previewParameters": {},
+              "value": "vec3(r, g, b)"
+            },
+            {
+              "codeLines": [
+                "vec2 uv = fragCoord / resolution.xy;",
+                "vec3 warm = vec3(1.0, 0.25, 0.12);",
+                "vec3 cool = vec3(0.12, 0.45, 1.0);",
+                "vec3 color = mix(warm, cool, uv.x);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "color_mix.glsl",
+              "highlightedLines": [
+                4,
+                5
+              ],
+              "id": "color-mix",
+              "label": "Mix colors",
+              "position": 2,
+              "previewKey": "color-mix",
+              "previewParameters": {},
+              "value": "mix(a, b, t)"
+            },
+            {
+              "codeLines": [
+                "vec2 uv = fragCoord / resolution.xy;",
+                "float value = smoothstep(0.0, 1.0, uv.x);",
+                "vec3 color = vec3(value);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "luminance.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "luminance",
+              "label": "Luminance",
+              "position": 3,
+              "previewKey": "luminance",
+              "previewParameters": {},
+              "value": "vec3(value)"
+            },
+            {
+              "codeLines": [
+                "vec2 uv = fragCoord / resolution.xy;",
+                "float red = uv.x;",
+                "float green = 1.0 - uv.y;",
+                "float blue = uv.y;",
+                "vec3 color = vec3(red, green, blue);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "channel_split.glsl",
+              "highlightedLines": [
+                5
+              ],
+              "id": "channel-split",
+              "label": "Split channels",
+              "position": 4,
+              "previewKey": "channel-split",
+              "previewParameters": {},
+              "value": "r · g · b"
+            }
+          ],
+          "sections": [
+            {
+              "body": "A color is data. Red, green, and blue are three independent values, usually between 0.0 and 1.0. Changing one channel changes one ingredient of the final pixel.",
+              "id": "colors-fragment-output-section-1",
+              "position": 1,
+              "title": "Think in channels"
+            },
+            {
+              "body": "Feeding uv.x into red and uv.y into green makes position visible. This is a useful debugging technique: gradients reveal whether your coordinates point in the direction and range you expect.",
+              "id": "colors-fragment-output-section-2",
+              "position": 2,
+              "title": "Turn coordinates into color"
+            },
+            {
+              "body": "mix(a, b, t) blends from color a to color b. At t = 0 you get a, at t = 1 you get b, and every value between creates a smooth transition.",
+              "id": "colors-fragment-output-section-3",
+              "position": 3,
+              "title": "Interpolate with mix"
+            }
+          ],
+          "shortTitle": "Colors and output",
+          "takeaway": "vec3 stores red, green, and blue. vec4 adds alpha. Use coordinate-driven gradients to inspect your UVs, then mix colors to build intentional palettes.",
+          "title": "Colors & Fragment Output",
+          "tryHint": "Change the color expression"
+        },
+        {
+          "conceptLede": "Connect app state to GLSL and create animation from elapsed seconds.",
+          "conceptTitle": "Uniforms in motion",
+          "id": "uniforms-time",
+          "intro": "Uniforms let the app send shared values into every fragment. Use elapsed time to create smooth, frame-rate-independent motion.",
+          "moduleId": "coordinate-foundations",
+          "position": 3,
+          "presets": [
+            {
+              "codeLines": [
+                "uniform float u_time;",
+                "float t = 0.0;",
+                "float wave = sin(uv.x * 8.0 - t);",
+                "fragColor = vec4(vec3(wave), 1.0);"
+              ],
+              "filename": "static_uniform.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "time-static",
+              "label": "Static",
+              "position": 1,
+              "previewKey": "time-static",
+              "previewParameters": {},
+              "value": "u_time = 0"
+            },
+            {
+              "codeLines": [
+                "uniform float u_time;",
+                "float t = u_time;",
+                "float wave = sin(uv.x * 8.0 - t * 3.0);",
+                "fragColor = vec4(vec3(wave), 1.0);"
+              ],
+              "filename": "animated_time.glsl",
+              "highlightedLines": [
+                1,
+                2
+              ],
+              "id": "time-play",
+              "label": "Play",
+              "position": 2,
+              "previewKey": "time-play",
+              "previewParameters": {},
+              "value": "u_time"
+            },
+            {
+              "codeLines": [
+                "uniform float u_time;",
+                "float t = u_time * 0.5;",
+                "float wave = sin(uv.x * 8.0 - t * 3.0);",
+                "fragColor = vec4(vec3(wave), 1.0);"
+              ],
+              "filename": "slow_time.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "time-slow",
+              "label": "Half speed",
+              "position": 3,
+              "previewKey": "time-slow",
+              "previewParameters": {},
+              "value": "u_time × 0.5"
+            },
+            {
+              "codeLines": [
+                "uniform float u_time;",
+                "float t = u_time * 2.0;",
+                "float wave = sin(uv.x * 8.0 - t * 3.0);",
+                "fragColor = vec4(vec3(wave), 1.0);"
+              ],
+              "filename": "fast_time.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "time-fast",
+              "label": "Double speed",
+              "position": 4,
+              "previewKey": "time-fast",
+              "previewParameters": {},
+              "value": "u_time × 2.0"
+            }
+          ],
+          "sections": [
+            {
+              "body": "A uniform is a read-only value supplied by the app to every fragment invocation. Resolution, pointer position, and elapsed time are common uniforms because they describe shared frame state.",
+              "id": "uniforms-time-section-1",
+              "position": 1,
+              "title": "Uniforms connect host and shader"
+            },
+            {
+              "body": "u_time usually stores seconds since the animation started. Feeding it into sin creates smooth repeating motion without counting frames or depending on a particular refresh rate.",
+              "id": "uniforms-time-section-2",
+              "position": 2,
+              "title": "Animate with elapsed time"
+            },
+            {
+              "body": "Multiply time before using it: 0.5 runs at half speed and 2.0 runs twice as fast. The animation remains frame-rate independent because its position comes from elapsed time, not frame count.",
+              "id": "uniforms-time-section-3",
+              "position": 3,
+              "title": "Control speed with multiplication"
+            }
+          ],
+          "shortTitle": "Uniforms and time",
+          "takeaway": "Uniforms are shared inputs, not per-pixel variables. Derive motion from elapsed seconds, then multiply time to control speed without tying animation to frame rate.",
+          "title": "Uniforms & Time",
+          "tryHint": "Change how time flows"
+        },
+        {
+          "conceptLede": "Apply translation, scale, rotation, and repetition to UVs before evaluating a reusable shape.",
+          "conceptTitle": "Move the space, not the shape",
+          "id": "transforming-uvs",
+          "intro": "Transforming UVs lets you position, resize, rotate, and repeat a shape without changing the shape function itself.",
+          "moduleId": "coordinate-foundations",
+          "position": 4,
+          "presets": [
+            {
+              "codeLines": [
+                "vec2 p = centeredUv;",
+                "p -= vec2(0.35, -0.18);",
+                "float shape = box(p, vec2(0.3));",
+                "fragColor = vec4(vec3(shape), 1.0);"
+              ],
+              "filename": "translate_uv.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "transform-translate",
+              "label": "Translate",
+              "position": 1,
+              "previewKey": "transform-translate",
+              "previewParameters": {},
+              "value": "p − offset"
+            },
+            {
+              "codeLines": [
+                "vec2 p = centeredUv;",
+                "p *= 1.8;",
+                "float shape = box(p, vec2(0.3));",
+                "fragColor = vec4(vec3(shape), 1.0);"
+              ],
+              "filename": "scale_uv.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "transform-scale",
+              "label": "Scale",
+              "position": 2,
+              "previewKey": "transform-scale",
+              "previewParameters": {},
+              "value": "p × 1.8"
+            },
+            {
+              "codeLines": [
+                "float a = radians(37.0);",
+                "mat2 rot = mat2(cos(a), -sin(a),",
+                "                sin(a),  cos(a));",
+                "vec2 p = rot * centeredUv;",
+                "float shape = box(p, vec2(0.3));"
+              ],
+              "filename": "rotate_uv.glsl",
+              "highlightedLines": [
+                2,
+                4
+              ],
+              "id": "transform-rotate",
+              "label": "Rotate",
+              "position": 3,
+              "previewKey": "transform-rotate",
+              "previewParameters": {},
+              "value": "mat2(angle)"
+            },
+            {
+              "codeLines": [
+                "vec2 p = centeredUv * 0.5 + 0.5;",
+                "p = fract(p * 3.0) - 0.5;",
+                "p.x *= resolution.x / resolution.y;",
+                "float shape = box(p, vec2(0.3));",
+                "fragColor = vec4(vec3(shape), 1.0);"
+              ],
+              "filename": "repeat_uv.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "transform-repeat",
+              "label": "Repeat",
+              "position": 4,
+              "previewKey": "transform-repeat",
+              "previewParameters": {},
+              "value": "fract(p × 3)"
+            }
+          ],
+          "sections": [
+            {
+              "body": "A shader has no movable object to transform. Instead, subtract an offset from the coordinates before evaluating the shape. Moving the coordinate system left makes the rendered shape appear to move right.",
+              "id": "transforming-uvs-section-1",
+              "position": 1,
+              "title": "Move the coordinate system"
+            },
+            {
+              "body": "Multiplying coordinates changes how quickly distance grows, so larger coordinate values make a shape appear smaller. Rotation matrices turn coordinates around the origin, which is why centering UVs first matters.",
+              "id": "transforming-uvs-section-2",
+              "position": 2,
+              "title": "Scale and rotate around the origin"
+            },
+            {
+              "body": "fract keeps only the fractional part of each coordinate. Scale first and fract folds the plane into repeating cells—one shape function can then draw an entire pattern.",
+              "id": "transforming-uvs-section-3",
+              "position": 3,
+              "title": "Repeat space with fract"
+            }
+          ],
+          "shortTitle": "Transforming UVs",
+          "takeaway": "Transform coordinates before drawing. Center them before scaling or rotation, remember that coordinate transforms feel inverse to object transforms, and use fract to fold space into repeatable cells.",
+          "title": "Transforming UVs",
+          "tryHint": "Transform the space before drawing"
+        },
+        {
+          "conceptLede": "Deconstruct a finished shader into coordinate, mask, motion, and color layers.",
+          "conceptTitle": "Assemble the foundation",
+          "id": "foundation-challenge",
+          "intro": "Combine coordinates, color, time, and transforms into one layered composition. Isolate each ingredient, then study how they work together.",
+          "moduleId": "coordinate-foundations",
+          "position": 5,
+          "presets": [
+            {
+              "codeLines": [
+                "vec2 p = centeredAspectUv;",
+                "p.x += u_time * 0.035;",
+                "float grid = gridLines(p, 5.0);",
+                "color = mix(dark, blue, grid);"
+              ],
+              "filename": "challenge_grid.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "challenge-grid",
+              "label": "Grid layer",
+              "position": 1,
+              "previewKey": "challenge-grid",
+              "previewParameters": {},
+              "value": "UV + time"
+            },
+            {
+              "codeLines": [
+                "float radius = length(p);",
+                "float phase = radius * 4.0 - u_time * 0.22;",
+                "float rings = ringMask(fract(phase));",
+                "color = mix(dark, violet, rings);"
+              ],
+              "filename": "challenge_rings.glsl",
+              "highlightedLines": [
+                3
+              ],
+              "id": "challenge-rings",
+              "label": "Pulse rings",
+              "position": 2,
+              "previewKey": "challenge-rings",
+              "previewParameters": {},
+              "value": "length + fract"
+            },
+            {
+              "codeLines": [
+                "vec2 orbit = vec2(cos(u_time), sin(u_time));",
+                "orbit *= 0.42;",
+                "float dot = circle(p - orbit, 0.065);",
+                "color = mix(color, lime, dot);"
+              ],
+              "filename": "challenge_orbit.glsl",
+              "highlightedLines": [
+                1
+              ],
+              "id": "challenge-orbit",
+              "label": "Orbit",
+              "position": 3,
+              "previewKey": "challenge-orbit",
+              "previewParameters": {},
+              "value": "sin + cos"
+            },
+            {
+              "codeLines": [
+                "vec3 color = gridLayer(p, u_time);",
+                "color = mix(color, violet, pulseRings(p));",
+                "color = mix(color, lime, orbitDot(p));",
+                "color *= 0.9 + 0.1 * sin(u_time * 2.0);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "foundation_composite.glsl",
+              "highlightedLines": [
+                3,
+                5
+              ],
+              "id": "challenge-final",
+              "label": "Composite",
+              "position": 4,
+              "previewKey": "challenge-final",
+              "previewParameters": {},
+              "value": "all layers"
+            }
+          ],
+          "sections": [
+            {
+              "body": "Start with a moving grid, then create rings and an orbiting point as separate masks. Small, testable layers make a complex shader easier to reason about than one long expression.",
+              "id": "foundation-challenge-section-1",
+              "position": 1,
+              "title": "Build from independent layers"
+            },
+            {
+              "body": "Normalize, center, and correct aspect ratio once. Every layer then agrees about the origin and distance, so circles stay round and the composition behaves consistently across screens.",
+              "id": "foundation-challenge-section-2",
+              "position": 2,
+              "title": "Reuse one coordinate foundation"
+            },
+            {
+              "body": "Use mix to assign each mask a palette role, then combine the layers in a deliberate order. Your checkpoint: identify the coordinate, color, time, and transform idea responsible for every visible part.",
+              "id": "foundation-challenge-section-3",
+              "position": 3,
+              "title": "Compose masks with intention"
+            }
+          ],
+          "shortTitle": "Module challenge",
+          "takeaway": "Complex shaders are compositions of simple masks. Build and inspect each layer independently, share one aspect-correct coordinate system, then combine colors in a deliberate order.",
+          "title": "Foundation Challenge",
+          "tryHint": "Inspect one layer at a time"
+        }
+      ],
+      "plannedLessonCount": 0,
+      "plannedTopics": [],
+      "position": 1,
+      "status": "published",
+      "title": "Coordinate Foundations"
+    },
+    {
+      "description": "Turn distance fields into clean geometric forms with thresholds, smooth edges, and composition.",
+      "id": "shape-synthesis",
+      "lessons": [
+        {
+          "conceptLede": "A shape appears when a distance field crosses a threshold.",
+          "conceptTitle": "Turn distance into an edge",
+          "id": "step-and-smoothstep",
+          "intro": "Threshold functions turn continuous measurements into visible boundaries. Compare a hard decision with a controllable, anti-aliased transition.",
+          "moduleId": "shape-synthesis",
+          "position": 1,
+          "presets": [
+            {
+              "codeLines": [
+                "float d = length(p) - 0.42;",
+                "float mask = 1.0 - step(0.0, d);",
+                "fragColor = vec4(vec3(mask), 1.0);"
+              ],
+              "filename": "hard_threshold.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "edge-hard",
+              "label": "Hard step",
+              "position": 1,
+              "previewKey": "edge-hard",
+              "previewParameters": {},
+              "value": "step(edge, x)"
+            },
+            {
+              "codeLines": [
+                "float d = length(p) - 0.42;",
+                "float mask = 1.0 - smoothstep(-0.025, 0.025, d);",
+                "fragColor = vec4(cyan * mask, 1.0);"
+              ],
+              "filename": "smooth_edge.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "edge-smooth",
+              "label": "Smooth edge",
+              "position": 2,
+              "previewKey": "edge-smooth",
+              "previewParameters": {},
+              "value": "smoothstep(a, b, x)"
+            },
+            {
+              "codeLines": [
+                "float d = abs(length(p) - 0.42);",
+                "float line = 1.0 - smoothstep(0.018, 0.035, d);",
+                "fragColor = vec4(lime * line, 1.0);"
+              ],
+              "filename": "distance_outline.glsl",
+              "highlightedLines": [
+                1
+              ],
+              "id": "edge-outline",
+              "label": "Outline",
+              "position": 3,
+              "previewKey": "edge-outline",
+              "previewParameters": {},
+              "value": "abs(distance)"
+            },
+            {
+              "codeLines": [
+                "float radius = 0.34 + 0.08 * sin(u_time * 2.0);",
+                "float d = length(p) - radius;",
+                "float mask = 1.0 - smoothstep(-0.02, 0.02, d);"
+              ],
+              "filename": "animated_threshold.glsl",
+              "highlightedLines": [
+                1
+              ],
+              "id": "edge-animated",
+              "label": "Animated",
+              "position": 4,
+              "previewKey": "edge-animated",
+              "previewParameters": {},
+              "value": "radius + sin(time)"
+            }
+          ],
+          "sections": [
+            {
+              "body": "A distance field stores how far each fragment is from a boundary. Negative values are inside, zero is exactly on the edge, and positive values are outside. Keeping this measurement continuous makes the same field reusable.",
+              "id": "step-and-smoothstep-section-1",
+              "position": 1,
+              "title": "Measure before deciding"
+            },
+            {
+              "body": "step(edge, value) returns 0 below the threshold and 1 at or above it. It is ideal for logical masks, but a one-pixel transition can shimmer or look jagged when the shape moves.",
+              "id": "step-and-smoothstep-section-2",
+              "position": 2,
+              "title": "step makes a binary choice"
+            },
+            {
+              "body": "smoothstep blends between two thresholds with a smooth curve. Place those thresholds on either side of zero to create a controlled anti-aliased boundary without changing the underlying shape.",
+              "id": "step-and-smoothstep-section-3",
+              "position": 3,
+              "title": "smoothstep gives the edge width"
+            }
+          ],
+          "shortTitle": "Edges and thresholds",
+          "takeaway": "Keep distance and visibility separate: first calculate d, then convert d into a fill, outline, or soft edge. One distance field can support many visual treatments.",
+          "title": "Step & Smoothstep",
+          "tryHint": "Compare four ways to reveal a distance"
+        },
+        {
+          "conceptLede": "Small functions turn coordinates into scalable, composable geometry.",
+          "conceptTitle": "Primitive shapes from distance",
+          "id": "circles-and-boxes",
+          "intro": "Signed distance functions describe reusable geometric primitives. Build circles, boxes, and rounded rectangles from compact mathematical measurements.",
+          "moduleId": "shape-synthesis",
+          "position": 2,
+          "presets": [
+            {
+              "codeLines": [
+                "float circleSdf(vec2 p, float r) {",
+                "  return length(p) - r;",
+                "}",
+                "float mask = 1.0 - smoothstep(-0.018, 0.018, circleSdf(p, 0.4));"
+              ],
+              "filename": "circle_sdf.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "primitive-circle",
+              "label": "Circle",
+              "position": 1,
+              "previewKey": "primitive-circle",
+              "previewParameters": {},
+              "value": "length(p) - r"
+            },
+            {
+              "codeLines": [
+                "vec2 q = abs(p) - vec2(0.38, 0.28);",
+                "float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);",
+                "float mask = 1.0 - smoothstep(-0.018, 0.018, d);"
+              ],
+              "filename": "box_sdf.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "primitive-box",
+              "label": "Box",
+              "position": 2,
+              "previewKey": "primitive-box",
+              "previewParameters": {},
+              "value": "sdBox(p, size)"
+            },
+            {
+              "codeLines": [
+                "float radius = 0.10;",
+                "float d = sdBox(p, vec2(0.42, 0.30) - radius);",
+                "d -= radius;",
+                "float mask = 1.0 - smoothstep(-0.018, 0.018, d);"
+              ],
+              "filename": "rounded_box.glsl",
+              "highlightedLines": [
+                2,
+                3
+              ],
+              "id": "primitive-rounded-box",
+              "label": "Rounded box",
+              "position": 3,
+              "previewKey": "primitive-rounded-box",
+              "previewParameters": {},
+              "value": "sdBox - radius"
+            },
+            {
+              "codeLines": [
+                "float circle = fill(circleSdf(p + vec2(0.2, 0.0), 0.3));",
+                "float box = fill(boxSdf(p - vec2(0.2, 0.0), vec2(0.28)));",
+                "vec3 color = cyan * circle + lime * box;"
+              ],
+              "filename": "primitive_layers.glsl",
+              "highlightedLines": [
+                1,
+                2
+              ],
+              "id": "primitive-combined",
+              "label": "Combined",
+              "position": 4,
+              "previewKey": "primitive-combined",
+              "previewParameters": {},
+              "value": "two independent masks"
+            }
+          ],
+          "sections": [
+            {
+              "body": "length(p) measures radial distance from the origin. Subtracting a radius moves the zero boundary outward, producing a signed field that is negative inside the circle.",
+              "id": "circles-and-boxes-section-1",
+              "position": 1,
+              "title": "Circles come from length"
+            },
+            {
+              "body": "A box begins with abs(p), which mirrors all quadrants into one. Subtract the half-size, measure positive overflow outside the corners, and preserve the largest negative component inside.",
+              "id": "circles-and-boxes-section-2",
+              "position": 2,
+              "title": "Boxes measure each axis"
+            },
+            {
+              "body": "Evaluate a slightly smaller box and subtract a radius from its distance. The zero boundary expands evenly around the corners, turning the sharp box into a rounded rectangle.",
+              "id": "circles-and-boxes-section-3",
+              "position": 3,
+              "title": "Radius modifies the field"
+            }
+          ],
+          "shortTitle": "Primitive shapes",
+          "takeaway": "Write primitives as functions that return signed distance, not color. That keeps size, position, edge treatment, and later boolean operations independent.",
+          "title": "Circles & Boxes",
+          "tryHint": "Swap the primitive while keeping the edge code"
+        },
+        {
+          "conceptLede": "Boolean-looking operations emerge directly from distance fields.",
+          "conceptTitle": "Sculpt with min and max",
+          "id": "boolean-shape-operations",
+          "intro": "Signed distances can be combined like solid geometry. Use min and max to unite, intersect, subtract, and compare shapes without branches.",
+          "moduleId": "shape-synthesis",
+          "position": 3,
+          "presets": [
+            {
+              "codeLines": [
+                "float a = circleSdf(p + offset, 0.34);",
+                "float b = boxSdf(p - offset, size);",
+                "float d = min(a, b);",
+                "color = lime * fill(d);"
+              ],
+              "filename": "shape_union.glsl",
+              "highlightedLines": [
+                3
+              ],
+              "id": "boolean-union",
+              "label": "Union",
+              "position": 1,
+              "previewKey": "boolean-union",
+              "previewParameters": {},
+              "value": "min(a, b)"
+            },
+            {
+              "codeLines": [
+                "float a = circleSdf(p + offset, 0.34);",
+                "float b = boxSdf(p - offset, size);",
+                "float d = max(a, b);",
+                "color = lime * fill(d);"
+              ],
+              "filename": "shape_intersection.glsl",
+              "highlightedLines": [
+                3
+              ],
+              "id": "boolean-intersection",
+              "label": "Intersection",
+              "position": 2,
+              "previewKey": "boolean-intersection",
+              "previewParameters": {},
+              "value": "max(a, b)"
+            },
+            {
+              "codeLines": [
+                "float a = circleSdf(p + offset, 0.34);",
+                "float b = boxSdf(p - offset, size);",
+                "float d = max(a, -b);",
+                "color = lime * fill(d);"
+              ],
+              "filename": "shape_subtraction.glsl",
+              "highlightedLines": [
+                3
+              ],
+              "id": "boolean-subtraction",
+              "label": "Subtract",
+              "position": 3,
+              "previewKey": "boolean-subtraction",
+              "previewParameters": {},
+              "value": "max(a, -b)"
+            },
+            {
+              "codeLines": [
+                "float insideOne = min(a, b);",
+                "float insideBoth = max(a, b);",
+                "float d = max(insideOne, -insideBoth);",
+                "color = violet * fill(d);"
+              ],
+              "filename": "shape_xor.glsl",
+              "highlightedLines": [
+                3
+              ],
+              "id": "boolean-xor",
+              "label": "Exclusive",
+              "position": 4,
+              "previewKey": "boolean-xor",
+              "previewParameters": {},
+              "value": "inside one only"
+            }
+          ],
+          "sections": [
+            {
+              "body": "At every fragment, min(a, b) selects whichever shape has the smaller signed distance. If either field is negative, the union is inside, so both silhouettes become one field.",
+              "id": "boolean-shape-operations-section-1",
+              "position": 1,
+              "title": "Union keeps the nearer field"
+            },
+            {
+              "body": "max(a, b) is negative only when both inputs are negative. It therefore preserves the overlap and discards areas belonging to just one shape.",
+              "id": "boolean-shape-operations-section-2",
+              "position": 2,
+              "title": "Intersection keeps shared interior"
+            },
+            {
+              "body": "Negating b turns its interior positive. max(a, -b) retains shape a except where b cuts into it. More elaborate expressions produce exclusive regions and reusable cutouts.",
+              "id": "boolean-shape-operations-section-3",
+              "position": 3,
+              "title": "Negation flips inside and outside"
+            }
+          ],
+          "shortTitle": "Shape operations",
+          "takeaway": "For signed fields: min unites, max intersects, and negating a field swaps inside with outside. Combine distances first and apply smoothstep only once at the final boundary.",
+          "title": "Boolean Shape Operations",
+          "tryHint": "Apply four operations to the same two fields"
+        },
+        {
+          "conceptLede": "Coordinate folding replaces duplicated drawing code.",
+          "conceptTitle": "One shape, many instances",
+          "id": "shape-repetition-composition",
+          "intro": "Repeat coordinate space before evaluating a primitive, then layer multiple masks and transformations into patterns that remain compact and controllable.",
+          "moduleId": "shape-synthesis",
+          "position": 4,
+          "presets": [
+            {
+              "codeLines": [
+                "vec2 cell = fract((p * 0.5 + 0.5) * 4.0) - 0.5;",
+                "cell.x *= resolution.x / resolution.y;",
+                "float d = length(cell) - 0.16;",
+                "color = lime * fill(d);"
+              ],
+              "filename": "repeat_grid.glsl",
+              "highlightedLines": [
+                1
+              ],
+              "id": "repeat-grid",
+              "label": "Grid",
+              "position": 1,
+              "previewKey": "repeat-grid",
+              "previewParameters": {},
+              "value": "fract(p × 4)"
+            },
+            {
+              "codeLines": [
+                "vec2 cell = repeat(p, 4.0);",
+                "float angle = (cellId.x + cellId.y) * 0.35;",
+                "cell = rotate(angle) * cell;",
+                "color = lime * fill(boxSdf(cell, vec2(0.13)));"
+              ],
+              "filename": "rotated_cells.glsl",
+              "highlightedLines": [
+                3
+              ],
+              "id": "repeat-rotate",
+              "label": "Rotate cells",
+              "position": 2,
+              "previewKey": "repeat-rotate",
+              "previewParameters": {},
+              "value": "rotation × cell"
+            },
+            {
+              "codeLines": [
+                "float circles = fill(circleSdf(cell, 0.16));",
+                "float boxes = fill(boxSdf(rotate(angle) * cell, vec2(0.13)));",
+                "color = cyan * circles * 0.7 + violet * boxes * 0.5;"
+              ],
+              "filename": "layered_pattern.glsl",
+              "highlightedLines": [
+                3
+              ],
+              "id": "repeat-layer",
+              "label": "Layer masks",
+              "position": 3,
+              "previewKey": "repeat-layer",
+              "previewParameters": {},
+              "value": "circles + boxes"
+            },
+            {
+              "codeLines": [
+                "vec2 cell = repeat(p, 4.0);",
+                "cell = rotate(cellAngle + u_time) * cell;",
+                "float shape = fill(boxSdf(cell, vec2(0.13)));",
+                "color = lime * shape;"
+              ],
+              "filename": "animated_pattern.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "repeat-animate",
+              "label": "Animate",
+              "position": 4,
+              "previewKey": "repeat-animate",
+              "previewParameters": {},
+              "value": "angle + u_time"
+            }
+          ],
+          "sections": [
+            {
+              "body": "Scale normalized coordinates, apply fract, and subtract 0.5. Every fragment is now expressed relative to the center of a repeating cell, so one primitive appears many times.",
+              "id": "shape-repetition-composition-section-1",
+              "position": 1,
+              "title": "Fold space into cells"
+            },
+            {
+              "body": "floor before fract gives each cell an integer ID. Use that ID to alternate color, rotation, scale, or timing while still evaluating one shared shape function.",
+              "id": "shape-repetition-composition-section-2",
+              "position": 2,
+              "title": "Preserve the cell identity"
+            },
+            {
+              "body": "Keep repeated circles and boxes as separate masks until color composition. Independent layers are easier to tune and can later become inputs to boolean distance operations.",
+              "id": "shape-repetition-composition-section-3",
+              "position": 3,
+              "title": "Layer masks intentionally"
+            }
+          ],
+          "shortTitle": "Repeat and layer",
+          "takeaway": "Repeat coordinates, not drawing calls. Keep local cell coordinates and integer cell IDs so geometry stays reusable while variation remains deterministic.",
+          "title": "Repetition & Composition",
+          "tryHint": "Build complexity from a single repeated cell"
+        },
+        {
+          "conceptLede": "Complex icons are deliberate compositions of simple fields.",
+          "conceptTitle": "Synthesize a visual system",
+          "id": "shape-synthesis-challenge",
+          "intro": "Combine edges, primitives, boolean operations, repetition, and motion into recognizable procedural marks built entirely from distance fields.",
+          "moduleId": "shape-synthesis",
+          "position": 5,
+          "presets": [
+            {
+              "codeLines": [
+                "float ring = outline(circleSdf(p, 0.52), 0.02);",
+                "float cross = max(verticalBar(p), horizontalBar(p));",
+                "cross *= fill(circleSdf(p, 0.42));",
+                "color = cyan * ring + lime * cross;"
+              ],
+              "filename": "challenge_badge.glsl",
+              "highlightedLines": [
+                1,
+                3,
+                4
+              ],
+              "id": "synthesis-badge",
+              "label": "Badge",
+              "position": 1,
+              "previewKey": "synthesis-badge",
+              "previewParameters": {},
+              "value": "ring + clipped cross"
+            },
+            {
+              "codeLines": [
+                "float head = fill(roundBoxSdf(p, vec2(0.46, 0.36), 0.1));",
+                "float eyes = max(circle(leftEye), circle(rightEye));",
+                "float mouth = outline(boxSdf(p + mouthOffset, mouthSize));",
+                "color = violet * head + lime * max(eyes, mouth);"
+              ],
+              "filename": "challenge_face.glsl",
+              "highlightedLines": [
+                1,
+                2,
+                3
+              ],
+              "id": "synthesis-face",
+              "label": "Face",
+              "position": 2,
+              "previewKey": "synthesis-face",
+              "previewParameters": {},
+              "value": "rounded box + cutouts"
+            },
+            {
+              "codeLines": [
+                "float petals = 0.0;",
+                "for (int i = 0; i < 6; i++) {",
+                "  petals = max(petals, circle(p - petalOffset(i)));",
+                "}",
+                "color = violet * petals + lime * circle(p);"
+              ],
+              "filename": "challenge_flower.glsl",
+              "highlightedLines": [
+                2,
+                3
+              ],
+              "id": "synthesis-flower",
+              "label": "Flower",
+              "position": 3,
+              "previewKey": "synthesis-flower",
+              "previewParameters": {},
+              "value": "rotated circle union"
+            },
+            {
+              "codeLines": [
+                "float disc = circleSdf(p, 0.5 * pulse);",
+                "float cut = roundBoxSdf(p, vec2(0.3), 0.08);",
+                "float symbol = max(disc, -cut);",
+                "float frame = outline(circleSdf(p, 0.58), 0.02);",
+                "color = cyan * fill(symbol) + violet * fill(cut) + lime * frame;"
+              ],
+              "filename": "shape_synthesis_final.glsl",
+              "highlightedLines": [
+                1,
+                3,
+                5
+              ],
+              "id": "synthesis-final",
+              "label": "Final mark",
+              "position": 4,
+              "previewKey": "synthesis-final",
+              "previewParameters": {},
+              "value": "animated composition"
+            }
+          ],
+          "sections": [
+            {
+              "body": "Choose a small vocabulary: one outer frame, one dominant filled form, and one contrasting cutout or detail. Assign each element a distance field before thinking about color.",
+              "id": "shape-synthesis-challenge-section-1",
+              "position": 1,
+              "title": "Start from a visual brief"
+            },
+            {
+              "body": "Identify where the composition uses a threshold, primitive, union, intersection, subtraction, repetition, or transform. If one expression is hard to explain, isolate it as a named intermediate field.",
+              "id": "shape-synthesis-challenge-section-2",
+              "position": 2,
+              "title": "Audit every operation"
+            },
+            {
+              "body": "Motion should clarify structure. Pulse a radius, rotate repeated cells, or shift an edge width while keeping the underlying mark recognizable and frame-rate independent.",
+              "id": "shape-synthesis-challenge-section-3",
+              "position": 3,
+              "title": "Animate a parameter, not the identity"
+            }
+          ],
+          "shortTitle": "Module challenge",
+          "takeaway": "A finished procedural mark is a hierarchy: coordinates feed primitives, primitives combine into one field, the field becomes masks, and masks receive color and motion. Debug the hierarchy one layer at a time.",
+          "title": "Shape Synthesis Challenge",
+          "tryHint": "Deconstruct four finished procedural marks"
+        }
+      ],
+      "plannedLessonCount": 0,
+      "plannedTopics": [],
+      "position": 2,
+      "status": "published",
+      "title": "Shape Synthesis"
+    },
+    {
+      "description": "Mix palettes, understand luminance, and shape color with reusable procedural functions.",
+      "id": "color-light",
+      "lessons": [
+        {
+          "conceptLede": "mix() interpolates every channel at once; the real design decision is the value you feed into it.",
+          "conceptTitle": "Treat color as a field",
+          "id": "color-mixing",
+          "intro": "Color is another signal you can shape with coordinates. Learn to interpolate two or more colors, control the transition curve, and turn spatial measurements into deliberate palettes.",
+          "moduleId": "color-light",
+          "position": 1,
+          "presets": [
+            {
+              "codeLines": [
+                "vec3 a = vec3(0.08, 0.84, 1.0);",
+                "vec3 b = vec3(0.72, 0.30, 1.0);",
+                "float t = uv.x;",
+                "vec3 color = mix(a, b, t);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "linear_mix.glsl",
+              "highlightedLines": [
+                4
+              ],
+              "id": "light-mix-linear",
+              "label": "Linear blend",
+              "position": 1,
+              "previewKey": "light-mix-linear",
+              "previewParameters": {},
+              "value": "mix(a, b, uv.x)"
+            },
+            {
+              "codeLines": [
+                "vec3 a = vec3(0.78, 0.96, 0.39);",
+                "vec3 b = vec3(0.08, 0.56, 1.0);",
+                "float t = smoothstep(0.2, 0.8, uv.x);",
+                "vec3 color = mix(a, b, t);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "smooth_mix.glsl",
+              "highlightedLines": [
+                3
+              ],
+              "id": "light-mix-smooth",
+              "label": "Soft center",
+              "position": 2,
+              "previewKey": "light-mix-smooth",
+              "previewParameters": {},
+              "value": "smoothstep(.2, .8, x)"
+            },
+            {
+              "codeLines": [
+                "vec3 left = mix(cyan, violet, uv.x * 2.0);",
+                "vec3 right = mix(violet, coral, uv.x * 2.0 - 1.0);",
+                "vec3 color = mix(left, right, step(0.5, uv.x));",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "three_stop_mix.glsl",
+              "highlightedLines": [
+                1,
+                2,
+                3
+              ],
+              "id": "light-mix-three",
+              "label": "Three stops",
+              "position": 3,
+              "previewKey": "light-mix-three",
+              "previewParameters": {},
+              "value": "cyan → violet → coral"
+            },
+            {
+              "codeLines": [
+                "vec2 p = uv * 2.0 - 1.0;",
+                "float t = smoothstep(0.0, 0.9, length(p));",
+                "vec3 color = mix(warm, cool, t);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "radial_mix.glsl",
+              "highlightedLines": [
+                2,
+                3
+              ],
+              "id": "light-mix-radial",
+              "label": "Radial blend",
+              "position": 4,
+              "previewKey": "light-mix-radial",
+              "previewParameters": {},
+              "value": "mix(a, b, length(p))"
+            }
+          ],
+          "sections": [
+            {
+              "body": "For colors a and b, mix(a, b, t) computes a * (1 - t) + b * t for red, green, and blue independently. A t of 0 returns a, 1 returns b, and values between them trace a straight path through RGB space.",
+              "id": "color-mixing-section-1",
+              "position": 1,
+              "title": "Interpolation is channel-wise"
+            },
+            {
+              "body": "A raw UV coordinate creates an even gradient. Passing it through smoothstep delays both ends and emphasizes the center transition. Distance, noise, time, or a shape mask can all become t, turning the same two colors into entirely different compositions.",
+              "id": "color-mixing-section-2",
+              "position": 2,
+              "title": "Shape the blend factor"
+            },
+            {
+              "body": "A multi-stop gradient is several small mixes joined across adjacent ranges. Remap each range back to 0–1 before mixing, then choose its result with a threshold. This keeps every stop intentional and reusable.",
+              "id": "color-mixing-section-3",
+              "position": 3,
+              "title": "Build longer palettes in segments"
+            }
+          ],
+          "shortTitle": "Mixing color",
+          "takeaway": "Color mixing becomes procedural when the blend factor comes from the image itself. First choose the endpoints, then design the scalar field that travels between them.",
+          "title": "Color Mixing",
+          "tryHint": "Compare four spatial color-mixing strategies"
+        },
+        {
+          "conceptLede": "A weighted dot product compresses RGB into one useful measurement without treating every channel as equally bright.",
+          "conceptTitle": "Read the light inside a color",
+          "id": "luma-and-contrast",
+          "intro": "Brightness is not the average of red, green, and blue. Convert color to perceptual luma, then use that scalar signal to adjust contrast, isolate value bands, and manage exposure.",
+          "moduleId": "color-light",
+          "position": 2,
+          "presets": [
+            {
+              "codeLines": [
+                "vec3 weights = vec3(0.2126, 0.7152, 0.0722);",
+                "float luma = dot(color, weights);",
+                "color = vec3(luma);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "luma.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "light-luma",
+              "label": "Perceptual luma",
+              "position": 1,
+              "previewKey": "light-luma",
+              "previewParameters": {},
+              "value": "dot(rgb, lumaWeights)"
+            },
+            {
+              "codeLines": [
+                "float amount = 1.65;",
+                "vec3 centered = color - 0.5;",
+                "color = centered * amount + 0.5;",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "contrast.glsl",
+              "highlightedLines": [
+                2,
+                3
+              ],
+              "id": "light-contrast",
+              "label": "More contrast",
+              "position": 2,
+              "previewKey": "light-contrast",
+              "previewParameters": {},
+              "value": "(rgb - .5) * 1.65 + .5"
+            },
+            {
+              "codeLines": [
+                "float luma = dot(color, LUMA);",
+                "float band = floor(luma * 5.0) / 4.0;",
+                "color = mix(shadow, highlight, band);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "luma_bands.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "light-threshold",
+              "label": "Value bands",
+              "position": 3,
+              "previewKey": "light-threshold",
+              "previewParameters": {},
+              "value": "floor(luma * 5.0)"
+            },
+            {
+              "codeLines": [
+                "float exposure = 1.7;",
+                "color = vec3(1.0) - exp(-color * exposure);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "exposure.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "light-exposure",
+              "label": "Exposure curve",
+              "position": 4,
+              "previewKey": "light-exposure",
+              "previewParameters": {},
+              "value": "1.0 - exp(-rgb * 1.7)"
+            }
+          ],
+          "sections": [
+            {
+              "body": "The Rec. 709 luma weights assign the most influence to green, less to red, and very little to blue. The dot product turns those three weighted contributions into a single brightness estimate you can reuse as a mask or control value.",
+              "id": "luma-and-contrast-section-1",
+              "position": 1,
+              "title": "Human vision favors green"
+            },
+            {
+              "body": "Subtracting 0.5 moves mid-gray to zero. Scaling then pushes darker values down and brighter values up; adding 0.5 restores the original range. Values may leave 0–1, so clamp when later operations require a bounded signal.",
+              "id": "luma-and-contrast-section-2",
+              "position": 2,
+              "title": "Contrast pivots around a midpoint"
+            },
+            {
+              "body": "Multiplication brightens linearly and can clip abruptly. The exponential exposure curve rises quickly but approaches white gradually, preserving a softer highlight transition that feels closer to light accumulating on a sensor.",
+              "id": "luma-and-contrast-section-3",
+              "position": 3,
+              "title": "Exposure rolls into white"
+            }
+          ],
+          "shortTitle": "Luma and contrast",
+          "takeaway": "Luma converts color into structure. Once brightness is a scalar field, the same threshold, remapping, and easing tools used for shapes can art-direct the light in an image.",
+          "title": "Luma & Contrast",
+          "tryHint": "Inspect and reshape the brightness signal"
+        },
+        {
+          "conceptLede": "Four vec3 parameters control the center, range, repetition, and channel timing of an entire gradient.",
+          "conceptTitle": "Compose color with cosine",
+          "id": "procedural-palettes",
+          "intro": "A palette can be a function instead of a list. Use offset, amplitude, frequency, and phase to generate smooth families of colors from one scalar input.",
+          "moduleId": "color-light",
+          "position": 3,
+          "presets": [
+            {
+              "codeLines": [
+                "vec3 palette(float t) {",
+                "  return a + b * cos(TAU * (c * t + d));",
+                "}",
+                "vec3 color = palette(uv.x);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "cosine_palette.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "palette-cosine",
+              "label": "Cosine ramp",
+              "position": 1,
+              "previewKey": "palette-cosine",
+              "previewParameters": {},
+              "value": "a + b*cos(TAU*(c*t+d))"
+            },
+            {
+              "codeLines": [
+                "vec3 d = vec3(0.0, 0.33, 0.67);",
+                "vec3 color = a + b * cos(TAU * (c * uv.x + d));",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "channel_phase.glsl",
+              "highlightedLines": [
+                1
+              ],
+              "id": "palette-phase",
+              "label": "Channel phase",
+              "position": 2,
+              "previewKey": "palette-phase",
+              "previewParameters": {},
+              "value": "d = vec3(0, .33, .67)"
+            },
+            {
+              "codeLines": [
+                "vec2 p = uv * 2.0 - 1.0;",
+                "float t = length(p) * 0.75;",
+                "t += atan(p.y, p.x) * 0.12;",
+                "vec3 color = palette(t);",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "spatial_palette.glsl",
+              "highlightedLines": [
+                2,
+                3
+              ],
+              "id": "palette-spatial",
+              "label": "Spatial palette",
+              "position": 3,
+              "previewKey": "palette-spatial",
+              "previewParameters": {},
+              "value": "t = radius + angle"
+            },
+            {
+              "codeLines": [
+                "float t = length(p) * 0.8 - u_time * 0.12;",
+                "vec3 phase = d + 0.1 * sin(u_time * 0.35);",
+                "vec3 color = a + b * cos(TAU * (c * t + phase));",
+                "fragColor = vec4(color, 1.0);"
+              ],
+              "filename": "animated_palette.glsl",
+              "highlightedLines": [
+                1
+              ],
+              "id": "palette-animated",
+              "label": "Animated palette",
+              "position": 4,
+              "previewKey": "palette-animated",
+              "previewParameters": {},
+              "value": "t = radius - time*.12"
+            }
+          ],
+          "sections": [
+            {
+              "body": "Parameter a is the palette's center color, while b controls how far each channel swings above and below it. Starting both near 0.5 tends to keep the result inside displayable 0–1 values.",
+              "id": "procedural-palettes-section-1",
+              "position": 1,
+              "title": "Offset and amplitude set the range"
+            },
+            {
+              "body": "Parameter c controls how often each channel cycles as t changes. Parameter d shifts those cycles relative to each other. Separating the red, green, and blue phases produces richer hue travel than moving every channel together.",
+              "id": "procedural-palettes-section-2",
+              "position": 2,
+              "title": "Frequency and phase create character"
+            },
+            {
+              "body": "The palette function does not know about pixels. Feed it uv.x for a strip, distance for rings, angle for a wheel, a shape distance for colored edges, or time for motion. The same palette becomes a reusable rendering tool.",
+              "id": "procedural-palettes-section-3",
+              "position": 3,
+              "title": "The input connects palette to form"
+            }
+          ],
+          "shortTitle": "Procedural palettes",
+          "takeaway": "A procedural palette separates color design from spatial design. Tune the four color parameters once, then reuse the function with any scalar field your shader produces.",
+          "title": "Procedural Palettes",
+          "tryHint": "Change how one palette function travels through color"
+        },
+        {
+          "conceptLede": "A normal, a light direction, and a few dot products are enough to suggest three-dimensional form in a fragment shader.",
+          "conceptTitle": "Make a flat field feel illuminated",
+          "id": "color-light-challenge",
+          "intro": "Combine Module 3 into a luminous procedural orb. Build its albedo from a palette, recover a surface normal, add diffuse and rim light, then animate a polished final composition.",
+          "moduleId": "color-light",
+          "position": 4,
+          "presets": [
+            {
+              "codeLines": [
+                "float orb = 1.0 - smoothstep(r - aa, r + aa, length(p));",
+                "vec3 normal = sphereNormal(p, r);",
+                "vec3 albedo = palette(normal.y * 0.35 + 0.2);",
+                "color = mix(background, albedo, orb);"
+              ],
+              "filename": "01_albedo.glsl",
+              "highlightedLines": [
+                3
+              ],
+              "id": "lighting-albedo",
+              "label": "Palette albedo",
+              "position": 1,
+              "previewKey": "lighting-albedo",
+              "previewParameters": {},
+              "value": "palette(normal.y)"
+            },
+            {
+              "codeLines": [
+                "vec3 lightDir = normalize(vec3(-0.55, 0.65, 0.75));",
+                "float diffuse = max(dot(normal, lightDir), 0.0);",
+                "vec3 lit = albedo * (0.16 + diffuse * 0.92);",
+                "color = mix(background, lit, orb);"
+              ],
+              "filename": "02_diffuse.glsl",
+              "highlightedLines": [
+                2
+              ],
+              "id": "lighting-diffuse",
+              "label": "Diffuse light",
+              "position": 2,
+              "previewKey": "lighting-diffuse",
+              "previewParameters": {},
+              "value": "max(dot(n, light), 0)"
+            },
+            {
+              "codeLines": [
+                "float rim = pow(1.0 - max(normal.z, 0.0), 2.5);",
+                "vec3 lit = albedo * (0.12 + diffuse * 0.72);",
+                "lit += cyan * rim * 0.85;",
+                "color = mix(background, lit, orb);"
+              ],
+              "filename": "03_rim.glsl",
+              "highlightedLines": [
+                1
+              ],
+              "id": "lighting-rim",
+              "label": "Rim light",
+              "position": 3,
+              "previewKey": "lighting-rim",
+              "previewParameters": {},
+              "value": "pow(1.0 - normal.z, 2.5)"
+            },
+            {
+              "codeLines": [
+                "vec3 lightDir = orbitingLight(u_time);",
+                "float diffuse = max(dot(normal, lightDir), 0.0);",
+                "float specular = pow(max(dot(normal, halfDir), 0.0), 42.0);",
+                "vec3 lit = albedo * (0.14 + diffuse * 0.9);",
+                "lit += cyan * rim * 0.6 + warm * specular * 1.3;"
+              ],
+              "filename": "04_final_material.glsl",
+              "highlightedLines": [
+                2,
+                3,
+                5
+              ],
+              "id": "lighting-final",
+              "label": "Final material",
+              "position": 4,
+              "previewKey": "lighting-final",
+              "previewParameters": {},
+              "value": "diffuse + rim + specular"
+            }
+          ],
+          "sections": [
+            {
+              "body": "Inside a circle of radius r, the missing z coordinate of a sphere is sqrt(r² - x² - y²). Combining p.x, p.y, and z produces a normal that turns a flat circle into a surface whose orientation changes across every fragment.",
+              "id": "color-light-challenge-section-1",
+              "position": 1,
+              "title": "Recover a sphere normal"
+            },
+            {
+              "body": "Diffuse light measures how directly the surface faces the light. Rim light strengthens edges that turn away from the camera. Specular light compares the surface normal with the halfway direction between the light and viewer, creating a tight highlight.",
+              "id": "color-light-challenge-section-2",
+              "position": 2,
+              "title": "Layer distinct lighting cues"
+            },
+            {
+              "body": "Multiplying only by diffuse makes the unlit side perfectly black. A small ambient term preserves the palette in shadow, while a restrained halo connects the bright material to its background without hiding the orb's silhouette.",
+              "id": "color-light-challenge-section-3",
+              "position": 3,
+              "title": "Keep ambient light in the mix"
+            }
+          ],
+          "shortTitle": "Module challenge",
+          "takeaway": "Convincing procedural light is a controlled sum of readable cues. Preserve the base palette, add each lighting term for a reason, and animate the light direction instead of rebuilding the material.",
+          "title": "Color & Light Challenge",
+          "tryHint": "Assemble the final material one lighting layer at a time"
+        }
+      ],
+      "plannedLessonCount": 0,
+      "plannedTopics": [],
+      "position": 3,
+      "status": "published",
+      "title": "Color & Light"
+    },
+    {
+      "description": "Combine repetition, noise, and motion to create expressive surfaces entirely in code.",
+      "id": "procedural-textures",
+      "lessons": [],
+      "plannedLessonCount": 5,
+      "plannedTopics": [
+        "Tiling Space",
+        "Value Noise",
+        "Layered Motion",
+        "Fractal Brownian Motion",
+        "Domain Warping"
+      ],
+      "position": 4,
+      "status": "planned",
+      "title": "Procedural Textures"
+    }
+  ],
+  "schemaVersion": 1
+}

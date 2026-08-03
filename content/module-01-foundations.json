@@ -1,0 +1,559 @@
+{
+  "id": "coordinate-foundations",
+  "position": 1,
+  "status": "published",
+  "title": "Coordinate Foundations",
+  "description": "Build a reliable coordinate space for every fragment and learn how resolution shapes the image.",
+  "plannedLessonCount": 0,
+  "plannedTopics": [],
+  "lessons": [
+    {
+      "id": "coordinate-systems-uv-space",
+      "moduleId": "coordinate-foundations",
+      "position": 1,
+      "title": "Coordinate Systems & UV Space",
+      "shortTitle": "Coordinate systems",
+      "intro": "Fragment shaders run once per pixel. Before drawing shapes, turn each pixel position into a predictable coordinate you can reason about.",
+      "conceptTitle": "Mastering the canvas",
+      "conceptLede": "Understand how raw pixels become stable coordinates you can reuse across every screen size.",
+      "tryHint": "Change the coordinate range",
+      "takeaway": "The center of normalized UV space is always (0.5, 0.5). After centering it becomes (0.0, 0.0). Correct the x-axis before measuring distance so circles remain circular.",
+      "presets": [
+        {
+          "id": "normalized",
+          "position": 1,
+          "label": "Normalized",
+          "previewKey": "normalized",
+          "previewParameters": {},
+          "value": "0 → 1",
+          "filename": "normalized_uv.glsl",
+          "codeLines": [
+            "vec2 uv = fragCoord / resolution.xy;",
+            "",
+            "vec3 color = vec3(uv, 0.0);",
+            "fragColor = vec4(color, 1.0);"
+          ],
+          "highlightedLines": [
+            1
+          ]
+        },
+        {
+          "id": "centered",
+          "position": 2,
+          "label": "Centered",
+          "previewKey": "centered",
+          "previewParameters": {},
+          "value": "−1 → 1",
+          "filename": "centered_uv.glsl",
+          "codeLines": [
+            "vec2 uv = fragCoord / resolution.xy;",
+            "uv = uv * 2.0 - 1.0;",
+            "uv.x *= resolution.x / resolution.y;",
+            "",
+            "vec3 color = vec3(",
+            "  uv * 0.5 + 0.5,",
+            "  0.0",
+            ");",
+            "fragColor = vec4(color, 1.0);"
+          ],
+          "highlightedLines": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "pixel-space",
+          "position": 3,
+          "label": "Pixel space",
+          "previewKey": "pixel-space",
+          "previewParameters": {},
+          "value": "0 → resolution",
+          "filename": "pixel_space.glsl",
+          "codeLines": [
+            "vec2 pixel = fragCoord;",
+            "vec2 uv = pixel / resolution.xy;",
+            "vec3 color = vec3(uv, 0.28);",
+            "fragColor = vec4(color, 1.0);"
+          ],
+          "highlightedLines": [
+            1
+          ]
+        },
+        {
+          "id": "aspect-aware",
+          "position": 4,
+          "label": "Corrected",
+          "previewKey": "aspect-aware",
+          "previewParameters": {},
+          "value": "Aspect aware",
+          "filename": "aspect_aware.glsl",
+          "codeLines": [
+            "vec2 uv = fragCoord / resolution.xy;",
+            "vec2 p = uv * 2.0 - 1.0;",
+            "p.x *= resolution.x / resolution.y;",
+            "float radius = length(p);",
+            "vec3 color = vec3(radius);",
+            "fragColor = vec4(color, 1.0);"
+          ],
+          "highlightedLines": [
+            3
+          ]
+        }
+      ],
+      "sections": [
+        {
+          "id": "coordinate-systems-uv-space-section-1",
+          "position": 1,
+          "title": "Start with the current fragment",
+          "body": "gl_FragCoord.xy contains the current pixel position in framebuffer pixels. Its values depend on the viewport, so a 1080-pixel-wide screen produces very different numbers from a 390-pixel-wide phone."
+        },
+        {
+          "id": "coordinate-systems-uv-space-section-2",
+          "position": 2,
+          "title": "Normalize once, use everywhere",
+          "body": "Divide the fragment coordinate by resolution.xy to convert both axes into a portable 0-to-1 range. This normalized vector is conventionally named uv or st."
+        },
+        {
+          "id": "coordinate-systems-uv-space-section-3",
+          "position": 3,
+          "title": "Choose coordinates for the job",
+          "body": "Pixel space is useful for exact sizes. Centered space makes symmetry natural. Aspect-aware space keeps distance-based shapes circular instead of stretching with the screen."
+        }
+      ]
+    },
+    {
+      "id": "colors-fragment-output",
+      "moduleId": "coordinate-foundations",
+      "position": 2,
+      "title": "Colors & Fragment Output",
+      "shortTitle": "Colors and output",
+      "intro": "A fragment shader returns one color for every pixel. Learn how RGB channels, alpha, and color mixing turn numbers into an image.",
+      "conceptTitle": "From numbers to pixels",
+      "conceptLede": "Learn how fragment output combines channels, opacity, and interpolation into visible color.",
+      "tryHint": "Change the color expression",
+      "takeaway": "vec3 stores red, green, and blue. vec4 adds alpha. Use coordinate-driven gradients to inspect your UVs, then mix colors to build intentional palettes.",
+      "presets": [
+        {
+          "id": "rgb-gradient",
+          "position": 1,
+          "label": "RGB channels",
+          "previewKey": "rgb-gradient",
+          "previewParameters": {},
+          "value": "vec3(r, g, b)",
+          "filename": "fragment_color.glsl",
+          "codeLines": [
+            "vec2 uv = fragCoord / resolution.xy;",
+            "vec3 color = vec3(uv.x, uv.y, 0.2);",
+            "fragColor = vec4(color, 1.0);"
+          ],
+          "highlightedLines": [
+            2,
+            3
+          ]
+        },
+        {
+          "id": "color-mix",
+          "position": 2,
+          "label": "Mix colors",
+          "previewKey": "color-mix",
+          "previewParameters": {},
+          "value": "mix(a, b, t)",
+          "filename": "color_mix.glsl",
+          "codeLines": [
+            "vec2 uv = fragCoord / resolution.xy;",
+            "vec3 warm = vec3(1.0, 0.25, 0.12);",
+            "vec3 cool = vec3(0.12, 0.45, 1.0);",
+            "vec3 color = mix(warm, cool, uv.x);",
+            "fragColor = vec4(color, 1.0);"
+          ],
+          "highlightedLines": [
+            4,
+            5
+          ]
+        },
+        {
+          "id": "luminance",
+          "position": 3,
+          "label": "Luminance",
+          "previewKey": "luminance",
+          "previewParameters": {},
+          "value": "vec3(value)",
+          "filename": "luminance.glsl",
+          "codeLines": [
+            "vec2 uv = fragCoord / resolution.xy;",
+            "float value = smoothstep(0.0, 1.0, uv.x);",
+            "vec3 color = vec3(value);",
+            "fragColor = vec4(color, 1.0);"
+          ],
+          "highlightedLines": [
+            2
+          ]
+        },
+        {
+          "id": "channel-split",
+          "position": 4,
+          "label": "Split channels",
+          "previewKey": "channel-split",
+          "previewParameters": {},
+          "value": "r · g · b",
+          "filename": "channel_split.glsl",
+          "codeLines": [
+            "vec2 uv = fragCoord / resolution.xy;",
+            "float red = uv.x;",
+            "float green = 1.0 - uv.y;",
+            "float blue = uv.y;",
+            "vec3 color = vec3(red, green, blue);",
+            "fragColor = vec4(color, 1.0);"
+          ],
+          "highlightedLines": [
+            5
+          ]
+        }
+      ],
+      "sections": [
+        {
+          "id": "colors-fragment-output-section-1",
+          "position": 1,
+          "title": "Think in channels",
+          "body": "A color is data. Red, green, and blue are three independent values, usually between 0.0 and 1.0. Changing one channel changes one ingredient of the final pixel."
+        },
+        {
+          "id": "colors-fragment-output-section-2",
+          "position": 2,
+          "title": "Turn coordinates into color",
+          "body": "Feeding uv.x into red and uv.y into green makes position visible. This is a useful debugging technique: gradients reveal whether your coordinates point in the direction and range you expect."
+        },
+        {
+          "id": "colors-fragment-output-section-3",
+          "position": 3,
+          "title": "Interpolate with mix",
+          "body": "mix(a, b, t) blends from color a to color b. At t = 0 you get a, at t = 1 you get b, and every value between creates a smooth transition."
+        }
+      ]
+    },
+    {
+      "id": "uniforms-time",
+      "moduleId": "coordinate-foundations",
+      "position": 3,
+      "title": "Uniforms & Time",
+      "shortTitle": "Uniforms and time",
+      "intro": "Uniforms let the app send shared values into every fragment. Use elapsed time to create smooth, frame-rate-independent motion.",
+      "conceptTitle": "Uniforms in motion",
+      "conceptLede": "Connect app state to GLSL and create animation from elapsed seconds.",
+      "tryHint": "Change how time flows",
+      "takeaway": "Uniforms are shared inputs, not per-pixel variables. Derive motion from elapsed seconds, then multiply time to control speed without tying animation to frame rate.",
+      "presets": [
+        {
+          "id": "time-static",
+          "position": 1,
+          "label": "Static",
+          "previewKey": "time-static",
+          "previewParameters": {},
+          "value": "u_time = 0",
+          "filename": "static_uniform.glsl",
+          "codeLines": [
+            "uniform float u_time;",
+            "float t = 0.0;",
+            "float wave = sin(uv.x * 8.0 - t);",
+            "fragColor = vec4(vec3(wave), 1.0);"
+          ],
+          "highlightedLines": [
+            2
+          ]
+        },
+        {
+          "id": "time-play",
+          "position": 2,
+          "label": "Play",
+          "previewKey": "time-play",
+          "previewParameters": {},
+          "value": "u_time",
+          "filename": "animated_time.glsl",
+          "codeLines": [
+            "uniform float u_time;",
+            "float t = u_time;",
+            "float wave = sin(uv.x * 8.0 - t * 3.0);",
+            "fragColor = vec4(vec3(wave), 1.0);"
+          ],
+          "highlightedLines": [
+            1,
+            2
+          ]
+        },
+        {
+          "id": "time-slow",
+          "position": 3,
+          "label": "Half speed",
+          "previewKey": "time-slow",
+          "previewParameters": {},
+          "value": "u_time × 0.5",
+          "filename": "slow_time.glsl",
+          "codeLines": [
+            "uniform float u_time;",
+            "float t = u_time * 0.5;",
+            "float wave = sin(uv.x * 8.0 - t * 3.0);",
+            "fragColor = vec4(vec3(wave), 1.0);"
+          ],
+          "highlightedLines": [
+            2
+          ]
+        },
+        {
+          "id": "time-fast",
+          "position": 4,
+          "label": "Double speed",
+          "previewKey": "time-fast",
+          "previewParameters": {},
+          "value": "u_time × 2.0",
+          "filename": "fast_time.glsl",
+          "codeLines": [
+            "uniform float u_time;",
+            "float t = u_time * 2.0;",
+            "float wave = sin(uv.x * 8.0 - t * 3.0);",
+            "fragColor = vec4(vec3(wave), 1.0);"
+          ],
+          "highlightedLines": [
+            2
+          ]
+        }
+      ],
+      "sections": [
+        {
+          "id": "uniforms-time-section-1",
+          "position": 1,
+          "title": "Uniforms connect host and shader",
+          "body": "A uniform is a read-only value supplied by the app to every fragment invocation. Resolution, pointer position, and elapsed time are common uniforms because they describe shared frame state."
+        },
+        {
+          "id": "uniforms-time-section-2",
+          "position": 2,
+          "title": "Animate with elapsed time",
+          "body": "u_time usually stores seconds since the animation started. Feeding it into sin creates smooth repeating motion without counting frames or depending on a particular refresh rate."
+        },
+        {
+          "id": "uniforms-time-section-3",
+          "position": 3,
+          "title": "Control speed with multiplication",
+          "body": "Multiply time before using it: 0.5 runs at half speed and 2.0 runs twice as fast. The animation remains frame-rate independent because its position comes from elapsed time, not frame count."
+        }
+      ]
+    },
+    {
+      "id": "transforming-uvs",
+      "moduleId": "coordinate-foundations",
+      "position": 4,
+      "title": "Transforming UVs",
+      "shortTitle": "Transforming UVs",
+      "intro": "Transforming UVs lets you position, resize, rotate, and repeat a shape without changing the shape function itself.",
+      "conceptTitle": "Move the space, not the shape",
+      "conceptLede": "Apply translation, scale, rotation, and repetition to UVs before evaluating a reusable shape.",
+      "tryHint": "Transform the space before drawing",
+      "takeaway": "Transform coordinates before drawing. Center them before scaling or rotation, remember that coordinate transforms feel inverse to object transforms, and use fract to fold space into repeatable cells.",
+      "presets": [
+        {
+          "id": "transform-translate",
+          "position": 1,
+          "label": "Translate",
+          "previewKey": "transform-translate",
+          "previewParameters": {},
+          "value": "p − offset",
+          "filename": "translate_uv.glsl",
+          "codeLines": [
+            "vec2 p = centeredUv;",
+            "p -= vec2(0.35, -0.18);",
+            "float shape = box(p, vec2(0.3));",
+            "fragColor = vec4(vec3(shape), 1.0);"
+          ],
+          "highlightedLines": [
+            2
+          ]
+        },
+        {
+          "id": "transform-scale",
+          "position": 2,
+          "label": "Scale",
+          "previewKey": "transform-scale",
+          "previewParameters": {},
+          "value": "p × 1.8",
+          "filename": "scale_uv.glsl",
+          "codeLines": [
+            "vec2 p = centeredUv;",
+            "p *= 1.8;",
+            "float shape = box(p, vec2(0.3));",
+            "fragColor = vec4(vec3(shape), 1.0);"
+          ],
+          "highlightedLines": [
+            2
+          ]
+        },
+        {
+          "id": "transform-rotate",
+          "position": 3,
+          "label": "Rotate",
+          "previewKey": "transform-rotate",
+          "previewParameters": {},
+          "value": "mat2(angle)",
+          "filename": "rotate_uv.glsl",
+          "codeLines": [
+            "float a = radians(37.0);",
+            "mat2 rot = mat2(cos(a), -sin(a),",
+            "                sin(a),  cos(a));",
+            "vec2 p = rot * centeredUv;",
+            "float shape = box(p, vec2(0.3));"
+          ],
+          "highlightedLines": [
+            2,
+            4
+          ]
+        },
+        {
+          "id": "transform-repeat",
+          "position": 4,
+          "label": "Repeat",
+          "previewKey": "transform-repeat",
+          "previewParameters": {},
+          "value": "fract(p × 3)",
+          "filename": "repeat_uv.glsl",
+          "codeLines": [
+            "vec2 p = centeredUv * 0.5 + 0.5;",
+            "p = fract(p * 3.0) - 0.5;",
+            "p.x *= resolution.x / resolution.y;",
+            "float shape = box(p, vec2(0.3));",
+            "fragColor = vec4(vec3(shape), 1.0);"
+          ],
+          "highlightedLines": [
+            2
+          ]
+        }
+      ],
+      "sections": [
+        {
+          "id": "transforming-uvs-section-1",
+          "position": 1,
+          "title": "Move the coordinate system",
+          "body": "A shader has no movable object to transform. Instead, subtract an offset from the coordinates before evaluating the shape. Moving the coordinate system left makes the rendered shape appear to move right."
+        },
+        {
+          "id": "transforming-uvs-section-2",
+          "position": 2,
+          "title": "Scale and rotate around the origin",
+          "body": "Multiplying coordinates changes how quickly distance grows, so larger coordinate values make a shape appear smaller. Rotation matrices turn coordinates around the origin, which is why centering UVs first matters."
+        },
+        {
+          "id": "transforming-uvs-section-3",
+          "position": 3,
+          "title": "Repeat space with fract",
+          "body": "fract keeps only the fractional part of each coordinate. Scale first and fract folds the plane into repeating cells—one shape function can then draw an entire pattern."
+        }
+      ]
+    },
+    {
+      "id": "foundation-challenge",
+      "moduleId": "coordinate-foundations",
+      "position": 5,
+      "title": "Foundation Challenge",
+      "shortTitle": "Module challenge",
+      "intro": "Combine coordinates, color, time, and transforms into one layered composition. Isolate each ingredient, then study how they work together.",
+      "conceptTitle": "Assemble the foundation",
+      "conceptLede": "Deconstruct a finished shader into coordinate, mask, motion, and color layers.",
+      "tryHint": "Inspect one layer at a time",
+      "takeaway": "Complex shaders are compositions of simple masks. Build and inspect each layer independently, share one aspect-correct coordinate system, then combine colors in a deliberate order.",
+      "presets": [
+        {
+          "id": "challenge-grid",
+          "position": 1,
+          "label": "Grid layer",
+          "previewKey": "challenge-grid",
+          "previewParameters": {},
+          "value": "UV + time",
+          "filename": "challenge_grid.glsl",
+          "codeLines": [
+            "vec2 p = centeredAspectUv;",
+            "p.x += u_time * 0.035;",
+            "float grid = gridLines(p, 5.0);",
+            "color = mix(dark, blue, grid);"
+          ],
+          "highlightedLines": [
+            2
+          ]
+        },
+        {
+          "id": "challenge-rings",
+          "position": 2,
+          "label": "Pulse rings",
+          "previewKey": "challenge-rings",
+          "previewParameters": {},
+          "value": "length + fract",
+          "filename": "challenge_rings.glsl",
+          "codeLines": [
+            "float radius = length(p);",
+            "float phase = radius * 4.0 - u_time * 0.22;",
+            "float rings = ringMask(fract(phase));",
+            "color = mix(dark, violet, rings);"
+          ],
+          "highlightedLines": [
+            3
+          ]
+        },
+        {
+          "id": "challenge-orbit",
+          "position": 3,
+          "label": "Orbit",
+          "previewKey": "challenge-orbit",
+          "previewParameters": {},
+          "value": "sin + cos",
+          "filename": "challenge_orbit.glsl",
+          "codeLines": [
+            "vec2 orbit = vec2(cos(u_time), sin(u_time));",
+            "orbit *= 0.42;",
+            "float dot = circle(p - orbit, 0.065);",
+            "color = mix(color, lime, dot);"
+          ],
+          "highlightedLines": [
+            1
+          ]
+        },
+        {
+          "id": "challenge-final",
+          "position": 4,
+          "label": "Composite",
+          "previewKey": "challenge-final",
+          "previewParameters": {},
+          "value": "all layers",
+          "filename": "foundation_composite.glsl",
+          "codeLines": [
+            "vec3 color = gridLayer(p, u_time);",
+            "color = mix(color, violet, pulseRings(p));",
+            "color = mix(color, lime, orbitDot(p));",
+            "color *= 0.9 + 0.1 * sin(u_time * 2.0);",
+            "fragColor = vec4(color, 1.0);"
+          ],
+          "highlightedLines": [
+            3,
+            5
+          ]
+        }
+      ],
+      "sections": [
+        {
+          "id": "foundation-challenge-section-1",
+          "position": 1,
+          "title": "Build from independent layers",
+          "body": "Start with a moving grid, then create rings and an orbiting point as separate masks. Small, testable layers make a complex shader easier to reason about than one long expression."
+        },
+        {
+          "id": "foundation-challenge-section-2",
+          "position": 2,
+          "title": "Reuse one coordinate foundation",
+          "body": "Normalize, center, and correct aspect ratio once. Every layer then agrees about the origin and distance, so circles stay round and the composition behaves consistently across screens."
+        },
+        {
+          "id": "foundation-challenge-section-3",
+          "position": 3,
+          "title": "Compose masks with intention",
+          "body": "Use mix to assign each mask a palette role, then combine the layers in a deliberate order. Your checkpoint: identify the coordinate, color, time, and transform idea responsible for every visible part."
+        }
+      ]
+    }
+  ]
+}
