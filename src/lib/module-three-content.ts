@@ -253,4 +253,82 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
     takeaway:
       "A procedural palette separates color design from spatial design. Tune the four color parameters once, then reuse the function with any scalar field your shader produces.",
   },
+  "color-light-challenge": {
+    intro:
+      "Combine Module 3 into a luminous procedural orb. Build its albedo from a palette, recover a surface normal, add diffuse and rim light, then animate a polished final composition.",
+    conceptTitle: "Make a flat field feel illuminated",
+    conceptLede:
+      "A normal, a light direction, and a few dot products are enough to suggest three-dimensional form in a fragment shader.",
+    tryHint: "Assemble the final material one lighting layer at a time",
+    presets: [
+      {
+        label: "Palette albedo",
+        mode: "lighting-albedo",
+        value: "palette(normal.y)",
+        filename: "01_albedo.glsl",
+        code: [
+          "float orb = 1.0 - smoothstep(r - aa, r + aa, length(p));",
+          "vec3 normal = sphereNormal(p, r);",
+          "vec3 albedo = palette(normal.y * 0.35 + 0.2);",
+          "color = mix(background, albedo, orb);",
+        ],
+      },
+      {
+        label: "Diffuse light",
+        mode: "lighting-diffuse",
+        value: "max(dot(n, light), 0)",
+        filename: "02_diffuse.glsl",
+        code: [
+          "vec3 lightDir = normalize(vec3(-0.55, 0.65, 0.75));",
+          "float diffuse = max(dot(normal, lightDir), 0.0);",
+          "vec3 lit = albedo * (0.16 + diffuse * 0.92);",
+          "color = mix(background, lit, orb);",
+        ],
+      },
+      {
+        label: "Rim light",
+        mode: "lighting-rim",
+        value: "pow(1.0 - normal.z, 2.5)",
+        filename: "03_rim.glsl",
+        code: [
+          "float rim = pow(1.0 - max(normal.z, 0.0), 2.5);",
+          "vec3 lit = albedo * (0.12 + diffuse * 0.72);",
+          "lit += cyan * rim * 0.85;",
+          "color = mix(background, lit, orb);",
+        ],
+      },
+      {
+        label: "Final material",
+        mode: "lighting-final",
+        value: "diffuse + rim + specular",
+        filename: "04_final_material.glsl",
+        code: [
+          "vec3 lightDir = orbitingLight(u_time);",
+          "float diffuse = max(dot(normal, lightDir), 0.0);",
+          "float specular = pow(max(dot(normal, halfDir), 0.0), 42.0);",
+          "vec3 lit = albedo * (0.14 + diffuse * 0.9);",
+          "lit += cyan * rim * 0.6 + warm * specular * 1.3;",
+        ],
+      },
+    ],
+    sections: [
+      {
+        title: "Recover a sphere normal",
+        body:
+          "Inside a circle of radius r, the missing z coordinate of a sphere is sqrt(r² - x² - y²). Combining p.x, p.y, and z produces a normal that turns a flat circle into a surface whose orientation changes across every fragment.",
+      },
+      {
+        title: "Layer distinct lighting cues",
+        body:
+          "Diffuse light measures how directly the surface faces the light. Rim light strengthens edges that turn away from the camera. Specular light compares the surface normal with the halfway direction between the light and viewer, creating a tight highlight.",
+      },
+      {
+        title: "Keep ambient light in the mix",
+        body:
+          "Multiplying only by diffuse makes the unlit side perfectly black. A small ambient term preserves the palette in shadow, while a restrained halo connects the bright material to its background without hiding the orb's silhouette.",
+      },
+    ],
+    takeaway:
+      "Convincing procedural light is a controlled sum of readable cues. Preserve the base palette, add each lighting term for a reason, and animate the light direction instead of rebuilding the material.",
+  },
 };

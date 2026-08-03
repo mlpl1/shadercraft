@@ -74,6 +74,11 @@ export const MODULE_THREE_LESSONS = [
     title: "Procedural Palettes",
     shortTitle: "Procedural palettes",
   },
+  {
+    id: "color-light-challenge",
+    title: "Color & Light Challenge",
+    shortTitle: "Module challenge",
+  },
 ] as const;
 
 export type ModuleThreeLessonId = (typeof MODULE_THREE_LESSONS)[number]["id"];

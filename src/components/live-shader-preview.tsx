@@ -62,7 +62,11 @@ export type ShaderPreviewMode =
   | "palette-cosine"
   | "palette-phase"
   | "palette-spatial"
-  | "palette-animated";
+  | "palette-animated"
+  | "lighting-albedo"
+  | "lighting-diffuse"
+  | "lighting-rim"
+  | "lighting-final";
 
 type LiveShaderPreviewProps = {
   mode: ShaderPreviewMode;
@@ -433,7 +437,7 @@ void main() {
       float exposure = 1.7;
       color = vec3(1.0) - exp(-sourceColor * exposure);
     }
-  } else if (u_mode > 51.5) {
+  } else if (u_mode > 51.5 && u_mode < 55.5) {
     vec2 p = centered;
     float t = normalized.x;
     vec3 a = vec3(0.52, 0.48, 0.46);
@@ -453,6 +457,45 @@ void main() {
       t = length(p) * 0.8 - u_time * 0.12;
       d += vec3(0.0, 0.08, 0.18) * sin(u_time * 0.35);
       color = cosinePalette(a, b, c, d, t);
+    }
+  } else if (u_mode > 55.5) {
+    vec2 p = centered;
+    float radius = 0.58;
+    float radialDistance = length(p);
+    float orb = 1.0 - smoothstep(radius - 0.018, radius + 0.018, radialDistance);
+    float z = sqrt(max(0.001, radius * radius - dot(p, p)));
+    vec3 normal = normalize(vec3(p, z));
+    vec3 base = cosinePalette(
+      vec3(0.48),
+      vec3(0.44),
+      vec3(1.0),
+      vec3(0.02, 0.20, 0.38),
+      normal.y * 0.35 + 0.2
+    );
+    vec3 background = vec3(0.018, 0.026, 0.05);
+    vec3 lightDirection = normalize(vec3(-0.55, 0.65, 0.75));
+    float diffuse = max(dot(normal, lightDirection), 0.0);
+    float rim = pow(1.0 - max(normal.z, 0.0), 2.5);
+
+    if (u_mode < 56.5) {
+      color = mix(background, base, orb);
+    } else if (u_mode < 57.5) {
+      vec3 lit = base * (0.16 + diffuse * 0.92);
+      color = mix(background, lit, orb);
+    } else if (u_mode < 58.5) {
+      vec3 lit = base * (0.12 + diffuse * 0.72);
+      lit += vec3(0.24, 0.86, 1.0) * rim * 0.85;
+      color = mix(background, lit, orb);
+    } else {
+      lightDirection = normalize(vec3(cos(u_time * 0.7), sin(u_time * 0.7), 0.8));
+      diffuse = max(dot(normal, lightDirection), 0.0);
+      vec3 halfDirection = normalize(lightDirection + vec3(0.0, 0.0, 1.0));
+      float specular = pow(max(dot(normal, halfDirection), 0.0), 42.0);
+      vec3 lit = base * (0.14 + diffuse * 0.9);
+      lit += vec3(0.35, 0.9, 1.0) * rim * 0.6;
+      lit += vec3(1.0, 0.92, 0.72) * specular * 1.3;
+      float halo = exp(-9.0 * max(radialDistance - radius, 0.0)) * (1.0 - orb);
+      color = mix(background, lit, orb) + vec3(0.12, 0.42, 0.65) * halo * 0.35;
     }
   }
 
@@ -603,6 +646,10 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
         "palette-phase": 53,
         "palette-spatial": 54,
         "palette-animated": 55,
+        "lighting-albedo": 56,
+        "lighting-diffuse": 57,
+        "lighting-rim": 58,
+        "lighting-final": 59,
       };
       gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAtRef.current) / 1000);

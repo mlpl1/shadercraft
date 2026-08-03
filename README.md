@@ -9,8 +9,8 @@ The project is currently an early working prototype built with Expo and React Na
 ## Current features
 
 - Home dashboard and four-module curriculum browser
-- Complete five-lesson Module 01 and Module 02 learning paths with sequential unlocking
-- Interactive lessons spanning UV coordinates, color, time, transforms, distance fields, primitives, boolean operations, and repetition
+- Complete Module 01, Module 02, and Module 03 learning paths with sequential unlocking
+- Interactive lessons spanning UV coordinates, time, transforms, distance fields, color mixing, luma, procedural palettes, and lighting
 - Live `expo-gl` fragment shader with animated output
 - Normalized and centered UV experiments that update both preview and GLSL source
 - Persistent lesson completion and course progress
@@ -18,9 +18,9 @@ The project is currently an early working prototype built with Expo and React Na
 - Reversible completion for accidentally completed lessons
 - Guided completion summary with review and course-navigation actions
 
-Module 01 and Module 02 each contain five interactive lessons and conclude with a layered shader
-challenge. Completing Coordinate Foundations unlocks Shape Synthesis; completing Shape Synthesis
-unlocks Module 03, Color & Light.
+Modules 01 and 02 each contain five interactive lessons; Module 03 contains four. Every module
+concludes with a layered shader challenge. Completing Shape Synthesis unlocks Color & Light, and
+finishing its lighting challenge unlocks Module 04, Procedural Textures.
 
 ## Technology
 
@@ -92,7 +92,8 @@ The Android native project is stored in `android/`. Static images and app icons 
 
 Lesson completion is stored locally on the device. Completing a lesson updates Home and Course
 immediately and unlocks the next lesson in its module. Module 02 becomes available only after all
-five foundation lessons are complete, and Module 03 unlocks after all five Shape Synthesis lessons.
+five foundation lessons are complete, Module 03 unlocks after all five Shape Synthesis lessons, and
+Module 04 unlocks after all four Color & Light lessons.
 A completed lesson can be marked incomplete after confirmation without deleting completion
 records for later lessons.
 
@@ -101,7 +102,6 @@ Progress does not currently sync between devices or GitHub accounts.
 ## Roadmap
 
 - Editable GLSL with debounced shader recompilation and compiler feedback
-- Module 03: Color & Light
 - Automated tests and configured linting
 - Optional cloud progress synchronization
 
