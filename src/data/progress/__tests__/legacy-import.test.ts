@@ -6,16 +6,13 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
 );
 
-import bundledCourse from "../../../../assets/course/bundled-course.json";
-
-import { migrateDatabase } from "../../database/migrations";
-import { installBundledRelease } from "../../database/seed";
-import { NodeSqliteDriver } from "../../database/testing/node-sqlite-driver";
-import { SqliteCourseRepository } from "../../course/sqlite-course-repository";
+import { LEGACY_PROGRESS_STORAGE_KEY } from "../../../lib/progress";
 import { importLegacyProgress, type LegacyProgressStorage } from "../legacy-import";
-import { SqliteProgressRepository } from "../sqlite-progress-repository";
+import type { NodeSqliteDriver } from "../../database/testing/node-sqlite-driver";
+import type { SqliteProgressRepository } from "../sqlite-progress-repository";
+import { createProgressRepositoryTestContext } from "./progress-repository-test-context";
 
-const LEGACY_STORAGE_KEY = "@shadercraft/progress/v1";
+const LEGACY_STORAGE_KEY = LEGACY_PROGRESS_STORAGE_KEY;
 
 function createStorage(value: string | null): LegacyProgressStorage {
   return {
@@ -27,18 +24,9 @@ function createStorage(value: string | null): LegacyProgressStorage {
 describe("importLegacyProgress", () => {
   let driver: NodeSqliteDriver;
   let repository: SqliteProgressRepository;
-  let nextId: number;
 
   beforeEach(async () => {
-    driver = new NodeSqliteDriver(":memory:");
-    await migrateDatabase(driver);
-    await installBundledRelease(driver, bundledCourse);
-    const courseRepository = new SqliteCourseRepository(driver);
-    nextId = 0;
-    repository = new SqliteProgressRepository(driver, courseRepository, {
-      generateId: () => `test-id-${++nextId}`,
-      now: () => "2026-08-03T00:00:00.000Z",
-    });
+    ({ driver, repository } = await createProgressRepositoryTestContext());
   });
 
   afterEach(async () => {

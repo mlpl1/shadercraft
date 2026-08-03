@@ -21,5 +21,12 @@ export interface ProgressRepository {
   isLessonCompleted(lessonId: string): Promise<boolean>;
   setLessonCompleted(lessonId: string, completed: boolean): Promise<void>;
   getPendingMutations(): Promise<ProgressMutation[]>;
+  /**
+   * Atomically inserts one completed progress row (and its outbox mutation) per given lesson ID
+   * under the active learner profile, and records that the one-time legacy AsyncStorage import has
+   * run — all within a single underlying transaction. Used by `./legacy-import` to satisfy the
+   * design spec's requirement that the per-lesson rows and the import marker commit together.
+   */
+  importLegacyCompletions(lessonIds: readonly string[]): Promise<void>;
   subscribe(listener: () => void): () => void;
 }

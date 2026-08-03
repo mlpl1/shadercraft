@@ -40,10 +40,12 @@ export type SqliteProgressRepositoryOptions = {
 };
 
 /**
- * SQLite-backed implementation of {@link ProgressRepository}. Also exposes a small set of
- * additional methods (`hasImportedLegacyProgress`, `markLegacyProgressImported`) used exclusively
- * by the legacy AsyncStorage import in `./legacy-import`; those are intentionally left off the
- * `ProgressRepository` interface because no other consumer needs them.
+ * SQLite-backed implementation of {@link ProgressRepository}. Also exposes two additional methods
+ * (`hasImportedLegacyProgress`, `markLegacyProgressImported`) used exclusively by the legacy
+ * AsyncStorage import in `./legacy-import`; those are intentionally left off the
+ * `ProgressRepository` interface because no other consumer needs them. `importLegacyCompletions`,
+ * by contrast, *is* on the interface, since any future `ProgressRepository` implementation would
+ * need the same atomic bulk-write guarantee to support the same one-time import.
  */
 export class SqliteProgressRepository implements ProgressRepository {
   private readonly listeners = new Set<() => void>();
@@ -91,51 +93,92 @@ export class SqliteProgressRepository implements ProgressRepository {
 
   async setLessonCompleted(lessonId: string, completed: boolean): Promise<void> {
     const profileId = await this.getActiveProfileId();
-    const completedValue = completed ? 1 : 0;
+
+    const didChange = await this.driver.transaction(() =>
+      this.upsertLessonCompletion(profileId, lessonId, completed),
+    );
+
+    if (didChange) {
+      this.notifySubscribers();
+    }
+  }
+
+  /**
+   * Atomically inserts one completed progress row (with its outbox mutation) per lesson ID and
+   * records the `legacy_progress_imported` marker, all within a single transaction, so callers get
+   * an all-or-nothing guarantee rather than one committed by each row's own transaction. See
+   * `./legacy-import` for the caller and the design spec's seven-step import protocol.
+   */
+  async importLegacyCompletions(lessonIds: readonly string[]): Promise<void> {
+    const profileId = await this.getActiveProfileId();
 
     const didChange = await this.driver.transaction(async () => {
-      const existing = await this.driver.first<ProgressRow>(
-        `SELECT completed, server_revision FROM lesson_progress
-         WHERE profile_id = ? AND lesson_id = ?`,
-        [profileId, lessonId],
-      );
-
-      if (existing?.completed === completedValue) {
-        return false;
+      let anyChanged = false;
+      for (const lessonId of lessonIds) {
+        const rowChanged = await this.upsertLessonCompletion(profileId, lessonId, true);
+        anyChanged = anyChanged || rowChanged;
       }
 
-      const timestamp = this.now();
-      await this.driver.run(
-        `INSERT INTO lesson_progress
-          (profile_id, lesson_id, completed, server_revision, locally_modified_at, server_updated_at)
-         VALUES (?, ?, ?, 0, ?, NULL)
-         ON CONFLICT(profile_id, lesson_id) DO UPDATE SET
-           completed = excluded.completed,
-           locally_modified_at = excluded.locally_modified_at`,
-        [profileId, lessonId, completedValue, timestamp],
-      );
-
-      await this.driver.run(
-        `INSERT INTO sync_outbox
-          (profile_id, mutation_id, entity_type, entity_id, operation, payload_json,
-           base_revision, attempts, created_at, last_error, merged_at)
-         VALUES (?, ?, 'lesson_progress', ?, 'upsert', ?, ?, 0, ?, NULL, NULL)`,
-        [
-          profileId,
-          this.generateId(),
-          lessonId,
-          JSON.stringify({ lessonId, completed }),
-          existing?.server_revision ?? 0,
-          timestamp,
-        ],
-      );
-
-      return true;
+      await this.writeLegacyImportMarker();
+      return anyChanged;
     });
 
     if (didChange) {
       this.notifySubscribers();
     }
+  }
+
+  /**
+   * Inserts or updates the single `lesson_progress` row for `lessonId` and, only if the explicit
+   * completion state actually changed, appends the matching `sync_outbox` mutation. Must be called
+   * from within a `driver.transaction`; the driver implementations here do not support nesting
+   * transactions, so callers that need this atomic with other writes (e.g.
+   * `importLegacyCompletions`) share one transaction rather than opening their own per call.
+   */
+  private async upsertLessonCompletion(
+    profileId: string,
+    lessonId: string,
+    completed: boolean,
+  ): Promise<boolean> {
+    const completedValue = completed ? 1 : 0;
+
+    const existing = await this.driver.first<ProgressRow>(
+      `SELECT completed, server_revision FROM lesson_progress
+       WHERE profile_id = ? AND lesson_id = ?`,
+      [profileId, lessonId],
+    );
+
+    if (existing?.completed === completedValue) {
+      return false;
+    }
+
+    const timestamp = this.now();
+    await this.driver.run(
+      `INSERT INTO lesson_progress
+        (profile_id, lesson_id, completed, server_revision, locally_modified_at, server_updated_at)
+       VALUES (?, ?, ?, 0, ?, NULL)
+       ON CONFLICT(profile_id, lesson_id) DO UPDATE SET
+         completed = excluded.completed,
+         locally_modified_at = excluded.locally_modified_at`,
+      [profileId, lessonId, completedValue, timestamp],
+    );
+
+    await this.driver.run(
+      `INSERT INTO sync_outbox
+        (profile_id, mutation_id, entity_type, entity_id, operation, payload_json,
+         base_revision, attempts, created_at, last_error, merged_at)
+       VALUES (?, ?, 'lesson_progress', ?, 'upsert', ?, ?, 0, ?, NULL, NULL)`,
+      [
+        profileId,
+        this.generateId(),
+        lessonId,
+        JSON.stringify({ lessonId, completed }),
+        existing?.server_revision ?? 0,
+        timestamp,
+      ],
+    );
+
+    return true;
   }
 
   async getPendingMutations(): Promise<ProgressMutation[]> {
@@ -180,6 +223,11 @@ export class SqliteProgressRepository implements ProgressRepository {
 
   /** Used only by `importLegacyProgress`; not part of `ProgressRepository`. */
   async markLegacyProgressImported(): Promise<void> {
+    await this.writeLegacyImportMarker();
+  }
+
+  /** Shared by `markLegacyProgressImported` and `importLegacyCompletions`. */
+  private async writeLegacyImportMarker(): Promise<void> {
     await this.driver.run(
       `INSERT INTO app_metadata (key, value) VALUES (?, 'true')
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,

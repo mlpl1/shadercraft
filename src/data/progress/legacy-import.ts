@@ -16,7 +16,8 @@ export type LegacyProgressStorage = {
  * 3. Read and validate the AsyncStorage value.
  * 4. Insert one explicit completed progress row per valid lesson ID under the active anonymous
  *    learner profile.
- * 5. Record the import marker.
+ * 5. Record the import marker, in the same SQLite transaction as step 4 (see
+ *    `SqliteProgressRepository.importLegacyCompletions`).
  * 6. Read the inserted rows back and verify them.
  * 7. Remove the AsyncStorage value only after verification (or immediately, on a resumed import
  *    where the marker was already set by a prior run that crashed before this cleanup step).
@@ -39,11 +40,7 @@ export async function importLegacyProgress(
   const legacyState = parseLegacyProgressState(rawValue);
   const uniqueLessonIds = Array.from(new Set(legacyState?.completedLessonIds ?? []));
 
-  for (const lessonId of uniqueLessonIds) {
-    await repository.setLessonCompleted(lessonId, true);
-  }
-
-  await repository.markLegacyProgressImported();
+  await repository.importLegacyCompletions(uniqueLessonIds);
 
   const verifiedCompletions = await Promise.all(
     uniqueLessonIds.map((lessonId) => repository.isLessonCompleted(lessonId)),

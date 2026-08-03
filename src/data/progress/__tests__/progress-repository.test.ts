@@ -1,26 +1,13 @@
-import bundledCourse from "../../../../assets/course/bundled-course.json";
-
-import { migrateDatabase } from "../../database/migrations";
-import { installBundledRelease } from "../../database/seed";
-import { NodeSqliteDriver } from "../../database/testing/node-sqlite-driver";
-import { SqliteCourseRepository } from "../../course/sqlite-course-repository";
-import { SqliteProgressRepository } from "../sqlite-progress-repository";
+import type { NodeSqliteDriver } from "../../database/testing/node-sqlite-driver";
+import type { SqliteProgressRepository } from "../sqlite-progress-repository";
+import { createProgressRepositoryTestContext } from "./progress-repository-test-context";
 
 describe("SQLite progress repository", () => {
   let driver: NodeSqliteDriver;
   let repository: SqliteProgressRepository;
-  let nextId: number;
 
   beforeEach(async () => {
-    driver = new NodeSqliteDriver(":memory:");
-    await migrateDatabase(driver);
-    await installBundledRelease(driver, bundledCourse);
-    const courseRepository = new SqliteCourseRepository(driver);
-    nextId = 0;
-    repository = new SqliteProgressRepository(driver, courseRepository, {
-      generateId: () => `test-id-${++nextId}`,
-      now: () => "2026-08-03T00:00:00.000Z",
-    });
+    ({ driver, repository } = await createProgressRepositoryTestContext());
   });
 
   afterEach(async () => {
