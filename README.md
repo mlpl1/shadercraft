@@ -9,8 +9,8 @@ The project is currently an early working prototype built with Expo and React Na
 ## Current features
 
 - Home dashboard and four-module curriculum browser
-- Five-lesson Module 01 learning path with sequential unlocking
-- Implemented lessons: **Coordinate Systems & UV Space** and **Colors & Fragment Output**
+- Complete five-lesson Module 01 and Module 02 learning paths with sequential unlocking
+- Interactive lessons spanning UV coordinates, color, time, transforms, distance fields, primitives, boolean operations, and repetition
 - Live `expo-gl` fragment shader with animated output
 - Normalized and centered UV experiments that update both preview and GLSL source
 - Persistent lesson completion and course progress
@@ -18,8 +18,9 @@ The project is currently an early working prototype built with Expo and React Na
 - Reversible completion for accidentally completed lessons
 - Guided completion summary with review and course-navigation actions
 
-Module 01 contains five interactive lessons and concludes with a layered shader challenge.
-Completing all five lessons unlocks Module 02, Shape Synthesis, in the learning path.
+Module 01 and Module 02 each contain five interactive lessons and conclude with a layered shader
+challenge. Completing Coordinate Foundations unlocks Shape Synthesis; completing Shape Synthesis
+unlocks Module 03, Color & Light.
 
 ## Technology
 
@@ -90,17 +91,17 @@ The Android native project is stored in `android/`. Static images and app icons 
 ## Progress behavior
 
 Lesson completion is stored locally on the device. Completing a lesson updates Home and Course
-immediately and unlocks the next lesson in Module 01. Module 02 becomes available only after all
-five foundation lessons are complete. A completed lesson can be marked incomplete after
-confirmation without deleting completion records for later lessons.
+immediately and unlocks the next lesson in its module. Module 02 becomes available only after all
+five foundation lessons are complete, and Module 03 unlocks after all five Shape Synthesis lessons.
+A completed lesson can be marked incomplete after confirmation without deleting completion
+records for later lessons.
 
 Progress does not currently sync between devices or GitHub accounts.
 
 ## Roadmap
 
-- Finish Uniforms & Time, Transforming UVs, and the Module 01 challenge
 - Editable GLSL with debounced shader recompilation and compiler feedback
-- Module 02: Shape Synthesis
+- Module 03: Color & Light
 - Automated tests and configured linting
 - Optional cloud progress synchronization
 

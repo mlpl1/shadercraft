@@ -8,9 +8,13 @@ import { Colors, Radius, Spacing } from "../constants/theme";
 import { useProgress } from "../context/progress-context";
 import {
   getCurrentModuleOneLesson,
+  getCurrentModuleTwoLesson,
   getModuleOneCompletedCount,
+  getModuleTwoCompletedCount,
   isModuleOneComplete,
+  isModuleTwoComplete,
   MODULE_ONE_LESSONS,
+  MODULE_TWO_LESSONS,
 } from "../lib/curriculum";
 
 const modules = [
@@ -34,7 +38,13 @@ const modules = [
     description:
       "Turn distance fields into clean geometric forms with thresholds, smooth edges, and composition.",
     lessonCount: 5,
-    topics: ["Step & Smoothstep", "Circles and Boxes", "Boolean Shape Operations"],
+    topics: [
+      "Step & Smoothstep",
+      "Circles & Boxes",
+      "Boolean Shape Operations",
+      "Repetition & Composition",
+      "Shape Synthesis Challenge",
+    ],
   },
   {
     moduleNumber: 3,
@@ -59,11 +69,17 @@ export default function CourseScreen() {
   const { isHydrated, progress, progressPercent } = useProgress();
   const moduleOneCompletedCount = getModuleOneCompletedCount(progress.completedLessonIds);
   const hasCompletedModuleOne = isModuleOneComplete(progress.completedLessonIds);
-  const unlockedModuleCount = hasCompletedModuleOne ? 2 : 1;
+  const moduleTwoCompletedCount = getModuleTwoCompletedCount(progress.completedLessonIds);
+  const hasCompletedModuleTwo = isModuleTwoComplete(progress.completedLessonIds);
+  const unlockedModuleCount = hasCompletedModuleTwo ? 3 : hasCompletedModuleOne ? 2 : 1;
   const progressWidth = `${progressPercent}%` as `${number}%`;
   const currentModuleOneLesson = getCurrentModuleOneLesson(progress.completedLessonIds);
   const currentModuleOneLessonIndex = MODULE_ONE_LESSONS.findIndex(
     (lesson) => lesson.id === currentModuleOneLesson.id,
+  );
+  const currentModuleTwoLesson = getCurrentModuleTwoLesson(progress.completedLessonIds);
+  const currentModuleTwoLessonIndex = MODULE_TWO_LESSONS.findIndex(
+    (lesson) => lesson.id === currentModuleTwoLesson.id,
   );
 
   const getModuleStatus = (
@@ -74,7 +90,11 @@ export default function CourseScreen() {
       return moduleOneCompletedCount > 0 ? "in-progress" : "available";
     }
 
-    if (moduleNumber === 2 && hasCompletedModuleOne) return "available";
+    if (moduleNumber === 2 && hasCompletedModuleOne) {
+      if (hasCompletedModuleTwo) return "complete";
+      return moduleTwoCompletedCount > 0 ? "in-progress" : "available";
+    }
+    if (moduleNumber === 3 && hasCompletedModuleTwo) return "available";
     return "locked";
   };
 
@@ -85,9 +105,15 @@ export default function CourseScreen() {
       return;
     }
 
+    if (moduleNumber === 2) {
+      const currentLesson = getCurrentModuleTwoLesson(progress.completedLessonIds);
+      router.push({ pathname: "/module-two-lesson", params: { lessonId: currentLesson.id } });
+      return;
+    }
+
     Alert.alert(
       "Module unlocked",
-      "Shape Synthesis is ready. Its first lesson will be added in the next content pass.",
+      "Color & Light is ready. Its first lesson will be added in the next content pass.",
     );
   };
 
@@ -139,14 +165,22 @@ export default function CourseScreen() {
                 <CourseModuleCard
                   {...module}
                   completedLessonCount={
-                    module.moduleNumber === 1 ? moduleOneCompletedCount : 0
+                    module.moduleNumber === 1
+                      ? moduleOneCompletedCount
+                      : module.moduleNumber === 2
+                        ? moduleTwoCompletedCount
+                        : 0
                   }
                   currentLessonIndex={
                     module.moduleNumber === 1
                       ? hasCompletedModuleOne
                         ? -1
                         : currentModuleOneLessonIndex
-                      : 0
+                      : module.moduleNumber === 2
+                        ? hasCompletedModuleTwo
+                          ? -1
+                          : currentModuleTwoLessonIndex
+                        : 0
                   }
                   key={module.moduleNumber}
                   onPress={

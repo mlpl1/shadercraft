@@ -30,7 +30,27 @@ export type ShaderPreviewMode =
   | "logo-scanlines"
   | "logo-ribbon"
   | "logo-cutout"
-  | "logo-final";
+  | "logo-final"
+  | "edge-hard"
+  | "edge-smooth"
+  | "edge-outline"
+  | "edge-animated"
+  | "primitive-circle"
+  | "primitive-box"
+  | "primitive-rounded-box"
+  | "primitive-combined"
+  | "boolean-union"
+  | "boolean-intersection"
+  | "boolean-subtraction"
+  | "boolean-xor"
+  | "repeat-grid"
+  | "repeat-rotate"
+  | "repeat-layer"
+  | "repeat-animate"
+  | "synthesis-badge"
+  | "synthesis-face"
+  | "synthesis-flower"
+  | "synthesis-final";
 
 type LiveShaderPreviewProps = {
   mode: ShaderPreviewMode;
@@ -59,6 +79,15 @@ float gridLine(float value, float scale) {
   float cell = fract(value * scale);
   float distanceToEdge = min(cell, 1.0 - cell);
   return 1.0 - smoothstep(0.0, 0.025, distanceToEdge);
+}
+
+float sdBox(vec2 p, vec2 halfSize) {
+  vec2 q = abs(p) - halfSize;
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+}
+
+float sdRoundBox(vec2 p, vec2 halfSize, float radius) {
+  return sdBox(p, halfSize - vec2(radius)) - radius;
 }
 
 void main() {
@@ -183,7 +212,7 @@ void main() {
       color = mix(color, lime, orbit);
       color *= 0.82 + 0.18 * (0.5 + 0.5 * sin(u_time * 2.0));
     }
-  } else if (u_mode > 19.5) {
+  } else if (u_mode > 19.5 && u_mode < 23.5) {
     vec2 p = centered;
     float row = floor((p.y + 0.70) * 17.0);
     float random = fract(sin(row * 91.73) * 43758.5453);
@@ -244,6 +273,105 @@ void main() {
       color = background + ink * finalMask + ink * glow * 0.10;
       color *= 0.94 + 0.06 * sin(u_time * 1.2 + p.y * 4.0);
     }
+  } else if (u_mode > 23.5) {
+    vec2 p = centered;
+    vec3 background = vec3(0.025, 0.04, 0.065);
+    vec3 lime = vec3(0.78, 0.96, 0.39);
+    vec3 cyan = vec3(0.31, 0.84, 1.0);
+    vec3 violet = vec3(0.61, 0.48, 1.0);
+    float circleDistance = length(p) - 0.42;
+    float boxDistance = sdBox(p, vec2(0.36));
+    float mask = 0.0;
+
+    if (u_mode < 24.5) {
+      mask = 1.0 - step(0.0, circleDistance);
+      color = mix(background, lime, mask);
+    } else if (u_mode < 25.5) {
+      mask = 1.0 - smoothstep(-0.025, 0.025, circleDistance);
+      color = mix(background, cyan, mask);
+    } else if (u_mode < 26.5) {
+      mask = 1.0 - smoothstep(0.018, 0.035, abs(circleDistance));
+      color = mix(background, lime, mask);
+    } else if (u_mode < 27.5) {
+      float radius = 0.34 + 0.08 * sin(u_time * 2.0);
+      mask = 1.0 - smoothstep(-0.02, 0.02, length(p) - radius);
+      color = mix(background, mix(cyan, violet, normalized.y), mask);
+    } else if (u_mode < 28.5) {
+      mask = 1.0 - smoothstep(-0.018, 0.018, length(p) - 0.4);
+      color = mix(background, cyan, mask);
+    } else if (u_mode < 29.5) {
+      mask = 1.0 - smoothstep(-0.018, 0.018, sdBox(p, vec2(0.38, 0.28)));
+      color = mix(background, lime, mask);
+    } else if (u_mode < 30.5) {
+      mask = 1.0 - smoothstep(-0.018, 0.018, sdRoundBox(p, vec2(0.42, 0.3), 0.1));
+      color = mix(background, violet, mask);
+    } else if (u_mode < 31.5) {
+      float circleMask = 1.0 - smoothstep(-0.02, 0.02, length(p + vec2(0.2, 0.0)) - 0.3);
+      float boxMask = 1.0 - smoothstep(-0.02, 0.02, sdBox(p - vec2(0.2, 0.0), vec2(0.28)));
+      color = background + cyan * circleMask * 0.8 + lime * boxMask * 0.8;
+    } else if (u_mode < 35.5) {
+      float a = length(p + vec2(0.18, 0.0)) - 0.34;
+      float b = sdRoundBox(p - vec2(0.18, 0.0), vec2(0.32), 0.08);
+      float distanceField;
+      if (u_mode < 32.5) distanceField = min(a, b);
+      else if (u_mode < 33.5) distanceField = max(a, b);
+      else if (u_mode < 34.5) distanceField = max(a, -b);
+      else distanceField = max(min(a, b), -max(a, b));
+      mask = 1.0 - smoothstep(-0.018, 0.018, distanceField);
+      color = mix(background, u_mode < 34.5 ? lime : violet, mask);
+    } else if (u_mode < 39.5) {
+      vec2 cell = fract((p * 0.5 + 0.5) * 4.0) - 0.5;
+      cell.x *= u_resolution.x / u_resolution.y;
+      if (u_mode > 36.5) {
+        float angle = (floor((p.x * 0.5 + 0.5) * 4.0) + floor((p.y * 0.5 + 0.5) * 4.0)) * 0.35;
+        if (u_mode > 38.5) angle += u_time;
+        mat2 rotation = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
+        cell = rotation * cell;
+      }
+      float repeatedCircle = length(cell) - 0.16;
+      float repeatedBox = sdBox(cell, vec2(0.13));
+      if (u_mode < 36.5) mask = 1.0 - smoothstep(-0.018, 0.018, repeatedCircle);
+      else if (u_mode < 37.5) mask = 1.0 - smoothstep(-0.018, 0.018, repeatedBox);
+      else if (u_mode < 38.5) {
+        float circles = 1.0 - smoothstep(-0.018, 0.018, repeatedCircle);
+        float boxes = 1.0 - smoothstep(-0.018, 0.018, repeatedBox);
+        color = background + cyan * circles * 0.7 + violet * boxes * 0.5;
+      } else mask = 1.0 - smoothstep(-0.018, 0.018, repeatedBox);
+      if (u_mode < 37.5 || u_mode > 38.5) color = mix(background, lime, mask);
+    } else {
+      float outer = length(p) - 0.52;
+      float ring = 1.0 - smoothstep(0.015, 0.035, abs(outer));
+      if (u_mode < 40.5) {
+        float cross = max(
+          1.0 - smoothstep(0.055, 0.075, abs(p.x)),
+          1.0 - smoothstep(0.055, 0.075, abs(p.y))
+        );
+        color = background + cyan * ring + lime * cross * (1.0 - step(0.42, length(p)));
+      } else if (u_mode < 41.5) {
+        float head = 1.0 - smoothstep(-0.02, 0.02, sdRoundBox(p, vec2(0.46, 0.36), 0.1));
+        float eyes = max(
+          1.0 - smoothstep(0.045, 0.065, length(p - vec2(-0.18, 0.1))),
+          1.0 - smoothstep(0.045, 0.065, length(p - vec2(0.18, 0.1)))
+        );
+        float mouth = 1.0 - smoothstep(0.015, 0.03, abs(sdBox(p + vec2(0.0, 0.15), vec2(0.2, 0.02))));
+        color = background + violet * head * 0.65 + lime * max(eyes, mouth);
+      } else if (u_mode < 42.5) {
+        float petals = 0.0;
+        for (int i = 0; i < 6; i++) {
+          float angle = float(i) * 1.04719755;
+          vec2 offset = vec2(cos(angle), sin(angle)) * 0.3;
+          petals = max(petals, 1.0 - smoothstep(-0.015, 0.02, length(p - offset) - 0.2));
+        }
+        float centerDot = 1.0 - smoothstep(0.12, 0.14, length(p));
+        color = background + violet * petals * 0.75 + lime * centerDot;
+      } else {
+        float pulse = 0.92 + 0.08 * sin(u_time * 2.0);
+        float disc = 1.0 - smoothstep(-0.02, 0.02, length(p) - 0.5 * pulse);
+        float cut = 1.0 - smoothstep(-0.02, 0.02, sdRoundBox(p, vec2(0.3), 0.08));
+        float frame = 1.0 - smoothstep(0.015, 0.03, abs(length(p) - 0.58));
+        color = background + cyan * disc * (1.0 - cut) + violet * cut * 0.7 + lime * frame;
+      }
+    }
   }
 
   gl_FragColor = vec4(color, 1.0);
@@ -274,7 +402,7 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
   const modeRef = useRef(mode);
   const frameRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
-  const startedAtRef = useRef(globalThis.performance.now());
+  const startedAtRef = useRef(0);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -294,6 +422,8 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
   }, []);
 
   const createContext = (gl: ExpoWebGLRenderingContext) => {
+    if (startedAtRef.current === 0) startedAtRef.current = globalThis.performance.now();
+
     const vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
     const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
     const program = gl.createProgram();
@@ -359,6 +489,26 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
         "logo-ribbon": 21,
         "logo-cutout": 22,
         "logo-final": 23,
+        "edge-hard": 24,
+        "edge-smooth": 25,
+        "edge-outline": 26,
+        "edge-animated": 27,
+        "primitive-circle": 28,
+        "primitive-box": 29,
+        "primitive-rounded-box": 30,
+        "primitive-combined": 31,
+        "boolean-union": 32,
+        "boolean-intersection": 33,
+        "boolean-subtraction": 34,
+        "boolean-xor": 35,
+        "repeat-grid": 36,
+        "repeat-rotate": 37,
+        "repeat-layer": 38,
+        "repeat-animate": 39,
+        "synthesis-badge": 40,
+        "synthesis-face": 41,
+        "synthesis-flower": 42,
+        "synthesis-final": 43,
       };
       gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAtRef.current) / 1000);
@@ -373,7 +523,7 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
 
   return (
     <View style={styles.container}>
-      <GLView key="scanline-thickness-v3" onContextCreate={createContext} style={styles.glView} />
+      <GLView key="shape-synthesis-v1" onContextCreate={createContext} style={styles.glView} />
     </View>
   );
 }

@@ -16,19 +16,26 @@ import { Colors, Radius, Spacing } from "../constants/theme";
 import { useProgress } from "../context/progress-context";
 import {
   getCurrentModuleOneLesson,
-  isModuleOneLessonUnlocked,
+  getCurrentModuleTwoLesson,
   isModuleOneComplete,
+  isModuleTwoComplete,
   MODULE_ONE_LESSONS,
+  MODULE_TWO_LESSONS,
 } from "../lib/curriculum";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { hasCompletedLesson, isHydrated, progress, progressPercent } = useProgress();
-  const featuredLesson = getCurrentModuleOneLesson(progress.completedLessonIds);
-  const featuredLessonIndex = MODULE_ONE_LESSONS.findIndex(
+  const hasCompletedModuleOne = isModuleOneComplete(progress.completedLessonIds);
+  const hasCompletedModuleTwo = isModuleTwoComplete(progress.completedLessonIds);
+  const featuredLessons = hasCompletedModuleOne ? MODULE_TWO_LESSONS : MODULE_ONE_LESSONS;
+  const featuredLesson = hasCompletedModuleOne
+    ? getCurrentModuleTwoLesson(progress.completedLessonIds)
+    : getCurrentModuleOneLesson(progress.completedLessonIds);
+  const featuredLessonIndex = featuredLessons.findIndex(
     (lesson) => lesson.id === featuredLesson.id,
   );
-  const hasCompletedModuleOne = isModuleOneComplete(progress.completedLessonIds);
+  const featuredModuleNumber = hasCompletedModuleOne ? 2 : 1;
   const featuredIsComplete = hasCompletedLesson(featuredLesson.id);
   const progressWidth = `${progressPercent}%` as `${number}%`;
 
@@ -60,7 +67,10 @@ export default function HomeScreen() {
             accessibilityLabel={`${featuredIsComplete ? "Review" : "Start"} ${featuredLesson.title}`}
             accessibilityRole="button"
             onPress={() =>
-              router.push({ pathname: "/lesson", params: { lessonId: featuredLesson.id } })
+              router.push({
+                pathname: hasCompletedModuleOne ? "/module-two-lesson" : "/lesson",
+                params: { lessonId: featuredLesson.id },
+              })
             }
             style={({ pressed }) => [styles.continueCard, pressed && styles.pressedCard]}
           >
@@ -69,7 +79,7 @@ export default function HomeScreen() {
             <View style={styles.cardBody}>
               <View style={styles.cardMetadata}>
                 <Text style={styles.cardEyebrow}>
-                  Module 01 · Lesson {String(featuredLessonIndex + 1).padStart(2, "0")}
+                  Module {String(featuredModuleNumber).padStart(2, "0")} · Lesson {String(featuredLessonIndex + 1).padStart(2, "0")}
                 </Text>
                 <Text style={styles.currentLabel}>
                   {featuredIsComplete ? "Completed" : featuredLessonIndex > 0 ? "Continue" : "Start here"}
@@ -108,16 +118,29 @@ export default function HomeScreen() {
               </Pressable>
 
               <Pressable
-                accessibilityLabel="Explore unlocked Module 2"
+                accessibilityLabel={hasCompletedModuleTwo ? "Explore unlocked Module 3" : "Continue Module 2"}
                 accessibilityRole="button"
-                onPress={() => router.push("/course")}
+                onPress={() =>
+                  hasCompletedModuleTwo
+                    ? router.push("/course")
+                    : router.push({
+                        pathname: "/module-two-lesson",
+                        params: { lessonId: getCurrentModuleTwoLesson(progress.completedLessonIds).id },
+                      })
+                }
                 style={({ pressed }) => [styles.unlockedCard, pressed && styles.pressedCard]}
               >
                 <View style={styles.unlockedCopy}>
-                  <Text style={styles.unlockedEyebrow}>Module 02 unlocked</Text>
-                  <Text style={styles.unlockedTitle}>Shape Synthesis</Text>
+                  <Text style={styles.unlockedEyebrow}>
+                    {hasCompletedModuleTwo ? "Module 03 unlocked" : "Module 02 in progress"}
+                  </Text>
+                  <Text style={styles.unlockedTitle}>
+                    {hasCompletedModuleTwo ? "Color & Light" : "Shape Synthesis"}
+                  </Text>
                   <Text style={styles.unlockedBody}>
-                    Your coordinate foundation is complete. Explore the next module in the course.
+                    {hasCompletedModuleTwo
+                      ? "Shape Synthesis is complete. Explore the next module in the course."
+                      : "Continue building procedural geometry from reusable distance fields."}
                   </Text>
                 </View>
                 <Text style={styles.unlockedArrow}>→</Text>
@@ -128,12 +151,11 @@ export default function HomeScreen() {
           <View style={styles.learningPath}>
             <Text style={styles.pathHeading}>Up next</Text>
             <View style={styles.lessonList}>
-              {MODULE_ONE_LESSONS.map((lesson, index) => {
+              {featuredLessons.map((lesson, index) => {
                 const complete = hasCompletedLesson(lesson.id);
-                const unlocked = isModuleOneLessonUnlocked(
-                  lesson.id,
-                  progress.completedLessonIds,
-                );
+                const unlocked =
+                  index === 0 ||
+                  progress.completedLessonIds.includes(featuredLessons[index - 1].id);
 
                 return (
                   <LessonRow
@@ -144,7 +166,7 @@ export default function HomeScreen() {
                         ? undefined
                         : () =>
                             router.push({
-                              pathname: "/lesson",
+                              pathname: hasCompletedModuleOne ? "/module-two-lesson" : "/lesson",
                               params: { lessonId: lesson.id },
                             })
                     }

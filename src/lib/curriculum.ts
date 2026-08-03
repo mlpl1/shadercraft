@@ -28,6 +28,36 @@ export const MODULE_ONE_LESSONS = [
 
 export type ModuleOneLessonId = (typeof MODULE_ONE_LESSONS)[number]["id"];
 
+export const MODULE_TWO_LESSONS = [
+  {
+    id: "step-and-smoothstep",
+    title: "Step & Smoothstep",
+    shortTitle: "Edges and thresholds",
+  },
+  {
+    id: "circles-and-boxes",
+    title: "Circles & Boxes",
+    shortTitle: "Primitive shapes",
+  },
+  {
+    id: "boolean-shape-operations",
+    title: "Boolean Shape Operations",
+    shortTitle: "Shape operations",
+  },
+  {
+    id: "shape-repetition-composition",
+    title: "Repetition & Composition",
+    shortTitle: "Repeat and layer",
+  },
+  {
+    id: "shape-synthesis-challenge",
+    title: "Shape Synthesis Challenge",
+    shortTitle: "Module challenge",
+  },
+] as const;
+
+export type ModuleTwoLessonId = (typeof MODULE_TWO_LESSONS)[number]["id"];
+
 export const COORDINATE_SYSTEMS_LESSON_ID: ModuleOneLessonId =
   "coordinate-systems-uv-space";
 export const COLORS_FRAGMENT_OUTPUT_LESSON_ID: ModuleOneLessonId =
@@ -70,5 +100,43 @@ export function getCurrentModuleOneLesson(completedLessonIds: string[]) {
         isModuleOneLessonUnlocked(lesson.id, completedLessonIds) &&
         !completedLessonIds.includes(lesson.id),
     ) ?? MODULE_ONE_LESSONS[MODULE_ONE_LESSONS.length - 1]
+  );
+}
+
+export function getModuleTwoLesson(lessonId: string | undefined) {
+  return MODULE_TWO_LESSONS.find((lesson) => lesson.id === lessonId);
+}
+
+export function getNextModuleTwoLesson(lessonId: ModuleTwoLessonId) {
+  const index = MODULE_TWO_LESSONS.findIndex((lesson) => lesson.id === lessonId);
+  return MODULE_TWO_LESSONS[index + 1];
+}
+
+export function getModuleTwoCompletedCount(completedLessonIds: string[]) {
+  return MODULE_TWO_LESSONS.filter((lesson) => completedLessonIds.includes(lesson.id)).length;
+}
+
+export function isModuleTwoComplete(completedLessonIds: string[]) {
+  return getModuleTwoCompletedCount(completedLessonIds) === MODULE_TWO_LESSONS.length;
+}
+
+export function isModuleTwoLessonUnlocked(
+  lessonId: ModuleTwoLessonId,
+  completedLessonIds: string[],
+) {
+  if (!isModuleOneComplete(completedLessonIds)) return false;
+  const index = MODULE_TWO_LESSONS.findIndex((lesson) => lesson.id === lessonId);
+  return index === 0 || completedLessonIds.includes(MODULE_TWO_LESSONS[index - 1].id);
+}
+
+export function getCurrentModuleTwoLesson(completedLessonIds: string[]) {
+  if (!isModuleOneComplete(completedLessonIds)) return MODULE_TWO_LESSONS[0];
+
+  return (
+    MODULE_TWO_LESSONS.find(
+      (lesson) =>
+        isModuleTwoLessonUnlocked(lesson.id, completedLessonIds) &&
+        !completedLessonIds.includes(lesson.id),
+    ) ?? MODULE_TWO_LESSONS[MODULE_TWO_LESSONS.length - 1]
   );
 }
