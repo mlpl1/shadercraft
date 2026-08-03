@@ -181,8 +181,11 @@ modules
   release_id
   id
   position
+  status
   title
   description
+  planned_lesson_count
+  planned_topics_json
 
 lessons
   release_id
@@ -280,6 +283,12 @@ required for merging anonymous work and synchronizing undo actions.
 Lessons unlock sequentially by position within a module. Modules unlock sequentially when the
 previous module is complete. These rules are calculated by repository queries and domain helpers
 using the active curriculum release and local progress.
+
+`modules.status` is either `published` or `planned`. A planned module may provide a lesson count and
+topic labels for the course roadmap without publishing incomplete lesson records. Planned lessons
+do not contribute to progress totals and cannot open a lesson route. When a later curriculum
+release changes the module to `published`, its complete validated lessons become available while
+the stable module ID and ordering remain unchanged.
 
 A generalized prerequisite graph is deferred until the product needs optional or branching
 paths. This avoids schema and UI complexity that has no current consumer.
@@ -456,6 +465,7 @@ They must not record authentication tokens or complete user-authored shader sour
 ### Repositories and domain rules
 
 - Module and lesson ordering
+- Planned-module roadmap display and exclusion from progress totals
 - Sequential unlocking
 - Progress percentages
 - Complete and uncomplete operations
@@ -511,6 +521,7 @@ behavioral changes.
 
 - Screens no longer import module-specific curriculum data.
 - A fresh install receives a complete bundled curriculum.
+- Planned modules remain visible without creating incomplete lesson records.
 - The entire active curriculum remains usable offline.
 - Existing completion data survives the SQLite migration.
 - Completing and uncompleting lessons works without authentication or connectivity.
