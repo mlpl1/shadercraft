@@ -239,6 +239,7 @@ learner_profiles
   id
   kind
   supabase_user_id
+  merged_into_profile_id
   created_at
   last_used_at
 
@@ -261,6 +262,7 @@ sync_outbox
   attempts
   created_at
   last_error
+  merged_at
 
 sync_state
   profile_id
