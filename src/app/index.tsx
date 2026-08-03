@@ -16,10 +16,13 @@ import { Colors, Radius, Spacing } from "../constants/theme";
 import { useProgress } from "../context/progress-context";
 import {
   getCurrentModuleOneLesson,
+  getCurrentModuleThreeLesson,
   getCurrentModuleTwoLesson,
   isModuleOneComplete,
+  isModuleThreeComplete,
   isModuleTwoComplete,
   MODULE_ONE_LESSONS,
+  MODULE_THREE_LESSONS,
   MODULE_TWO_LESSONS,
 } from "../lib/curriculum";
 
@@ -28,14 +31,26 @@ export default function HomeScreen() {
   const { hasCompletedLesson, isHydrated, progress, progressPercent } = useProgress();
   const hasCompletedModuleOne = isModuleOneComplete(progress.completedLessonIds);
   const hasCompletedModuleTwo = isModuleTwoComplete(progress.completedLessonIds);
-  const featuredLessons = hasCompletedModuleOne ? MODULE_TWO_LESSONS : MODULE_ONE_LESSONS;
-  const featuredLesson = hasCompletedModuleOne
-    ? getCurrentModuleTwoLesson(progress.completedLessonIds)
-    : getCurrentModuleOneLesson(progress.completedLessonIds);
+  const hasCompletedModuleThree = isModuleThreeComplete(progress.completedLessonIds);
+  const featuredLessons = hasCompletedModuleTwo
+    ? MODULE_THREE_LESSONS
+    : hasCompletedModuleOne
+      ? MODULE_TWO_LESSONS
+      : MODULE_ONE_LESSONS;
+  const featuredLesson = hasCompletedModuleTwo
+    ? getCurrentModuleThreeLesson(progress.completedLessonIds)
+    : hasCompletedModuleOne
+      ? getCurrentModuleTwoLesson(progress.completedLessonIds)
+      : getCurrentModuleOneLesson(progress.completedLessonIds);
   const featuredLessonIndex = featuredLessons.findIndex(
     (lesson) => lesson.id === featuredLesson.id,
   );
-  const featuredModuleNumber = hasCompletedModuleOne ? 2 : 1;
+  const featuredModuleNumber = hasCompletedModuleTwo ? 3 : hasCompletedModuleOne ? 2 : 1;
+  const featuredPathname = hasCompletedModuleTwo
+    ? "/module-three-lesson"
+    : hasCompletedModuleOne
+      ? "/module-two-lesson"
+      : "/lesson";
   const featuredIsComplete = hasCompletedLesson(featuredLesson.id);
   const progressWidth = `${progressPercent}%` as `${number}%`;
 
@@ -68,7 +83,7 @@ export default function HomeScreen() {
             accessibilityRole="button"
             onPress={() =>
               router.push({
-                pathname: hasCompletedModuleOne ? "/module-two-lesson" : "/lesson",
+                pathname: featuredPathname,
                 params: { lessonId: featuredLesson.id },
               })
             }
@@ -118,29 +133,50 @@ export default function HomeScreen() {
               </Pressable>
 
               <Pressable
-                accessibilityLabel={hasCompletedModuleTwo ? "Explore unlocked Module 3" : "Continue Module 2"}
+                accessibilityLabel={
+                  hasCompletedModuleThree
+                    ? "Explore unlocked Module 4"
+                    : hasCompletedModuleTwo
+                      ? "Continue Module 3"
+                      : "Continue Module 2"
+                }
                 accessibilityRole="button"
                 onPress={() =>
-                  hasCompletedModuleTwo
+                  hasCompletedModuleThree
                     ? router.push("/course")
-                    : router.push({
-                        pathname: "/module-two-lesson",
-                        params: { lessonId: getCurrentModuleTwoLesson(progress.completedLessonIds).id },
-                      })
+                    : hasCompletedModuleTwo
+                      ? router.push({
+                          pathname: "/module-three-lesson",
+                          params: { lessonId: getCurrentModuleThreeLesson(progress.completedLessonIds).id },
+                        })
+                      : router.push({
+                          pathname: "/module-two-lesson",
+                          params: { lessonId: getCurrentModuleTwoLesson(progress.completedLessonIds).id },
+                        })
                 }
                 style={({ pressed }) => [styles.unlockedCard, pressed && styles.pressedCard]}
               >
                 <View style={styles.unlockedCopy}>
                   <Text style={styles.unlockedEyebrow}>
-                    {hasCompletedModuleTwo ? "Module 03 unlocked" : "Module 02 in progress"}
+                    {hasCompletedModuleThree
+                      ? "Module 04 unlocked"
+                      : hasCompletedModuleTwo
+                        ? "Module 03 in progress"
+                        : "Module 02 in progress"}
                   </Text>
                   <Text style={styles.unlockedTitle}>
-                    {hasCompletedModuleTwo ? "Color & Light" : "Shape Synthesis"}
+                    {hasCompletedModuleThree
+                      ? "Procedural Textures"
+                      : hasCompletedModuleTwo
+                        ? "Color & Light"
+                        : "Shape Synthesis"}
                   </Text>
                   <Text style={styles.unlockedBody}>
-                    {hasCompletedModuleTwo
-                      ? "Shape Synthesis is complete. Explore the next module in the course."
-                      : "Continue building procedural geometry from reusable distance fields."}
+                    {hasCompletedModuleThree
+                      ? "Color & Light is complete. Explore the next module in the course."
+                      : hasCompletedModuleTwo
+                        ? "Turn scalar fields into expressive palettes, contrast, and light."
+                        : "Continue building procedural geometry from reusable distance fields."}
                   </Text>
                 </View>
                 <Text style={styles.unlockedArrow}>→</Text>
@@ -166,7 +202,7 @@ export default function HomeScreen() {
                         ? undefined
                         : () =>
                             router.push({
-                              pathname: hasCompletedModuleOne ? "/module-two-lesson" : "/lesson",
+                              pathname: featuredPathname,
                               params: { lessonId: lesson.id },
                             })
                     }

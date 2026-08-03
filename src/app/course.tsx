@@ -8,12 +8,16 @@ import { Colors, Radius, Spacing } from "../constants/theme";
 import { useProgress } from "../context/progress-context";
 import {
   getCurrentModuleOneLesson,
+  getCurrentModuleThreeLesson,
   getCurrentModuleTwoLesson,
   getModuleOneCompletedCount,
+  getModuleThreeCompletedCount,
   getModuleTwoCompletedCount,
   isModuleOneComplete,
+  isModuleThreeComplete,
   isModuleTwoComplete,
   MODULE_ONE_LESSONS,
+  MODULE_THREE_LESSONS,
   MODULE_TWO_LESSONS,
 } from "../lib/curriculum";
 
@@ -52,7 +56,7 @@ const modules = [
     description:
       "Mix palettes, understand luminance, and shape color with reusable procedural functions.",
     lessonCount: 4,
-    topics: ["Color Mixing", "Luma & Contrast", "Procedural Palettes"],
+    topics: ["Color Mixing", "Luma & Contrast", "Procedural Palettes", "Color & Light Challenge"],
   },
   {
     moduleNumber: 4,
@@ -71,7 +75,15 @@ export default function CourseScreen() {
   const hasCompletedModuleOne = isModuleOneComplete(progress.completedLessonIds);
   const moduleTwoCompletedCount = getModuleTwoCompletedCount(progress.completedLessonIds);
   const hasCompletedModuleTwo = isModuleTwoComplete(progress.completedLessonIds);
-  const unlockedModuleCount = hasCompletedModuleTwo ? 3 : hasCompletedModuleOne ? 2 : 1;
+  const moduleThreeCompletedCount = getModuleThreeCompletedCount(progress.completedLessonIds);
+  const hasCompletedModuleThree = isModuleThreeComplete(progress.completedLessonIds);
+  const unlockedModuleCount = hasCompletedModuleThree
+    ? 4
+    : hasCompletedModuleTwo
+      ? 3
+      : hasCompletedModuleOne
+        ? 2
+        : 1;
   const progressWidth = `${progressPercent}%` as `${number}%`;
   const currentModuleOneLesson = getCurrentModuleOneLesson(progress.completedLessonIds);
   const currentModuleOneLessonIndex = MODULE_ONE_LESSONS.findIndex(
@@ -80,6 +92,10 @@ export default function CourseScreen() {
   const currentModuleTwoLesson = getCurrentModuleTwoLesson(progress.completedLessonIds);
   const currentModuleTwoLessonIndex = MODULE_TWO_LESSONS.findIndex(
     (lesson) => lesson.id === currentModuleTwoLesson.id,
+  );
+  const currentModuleThreeLesson = getCurrentModuleThreeLesson(progress.completedLessonIds);
+  const currentModuleThreeLessonIndex = MODULE_THREE_LESSONS.findIndex(
+    (lesson) => lesson.id === currentModuleThreeLesson.id,
   );
 
   const getModuleStatus = (
@@ -94,7 +110,11 @@ export default function CourseScreen() {
       if (hasCompletedModuleTwo) return "complete";
       return moduleTwoCompletedCount > 0 ? "in-progress" : "available";
     }
-    if (moduleNumber === 3 && hasCompletedModuleTwo) return "available";
+    if (moduleNumber === 3 && hasCompletedModuleTwo) {
+      if (hasCompletedModuleThree) return "complete";
+      return moduleThreeCompletedCount > 0 ? "in-progress" : "available";
+    }
+    if (moduleNumber === 4 && hasCompletedModuleThree) return "available";
     return "locked";
   };
 
@@ -111,9 +131,15 @@ export default function CourseScreen() {
       return;
     }
 
+    if (moduleNumber === 3) {
+      const currentLesson = getCurrentModuleThreeLesson(progress.completedLessonIds);
+      router.push({ pathname: "/module-three-lesson", params: { lessonId: currentLesson.id } });
+      return;
+    }
+
     Alert.alert(
-      "Module unlocked",
-      "Color & Light is ready. Its first lesson will be added in the next content pass.",
+      "Coming next",
+      "Procedural Textures is unlocked. Its lessons are the next part of the course to build.",
     );
   };
 
@@ -169,6 +195,8 @@ export default function CourseScreen() {
                       ? moduleOneCompletedCount
                       : module.moduleNumber === 2
                         ? moduleTwoCompletedCount
+                        : module.moduleNumber === 3
+                          ? moduleThreeCompletedCount
                         : 0
                   }
                   currentLessonIndex={
@@ -180,7 +208,11 @@ export default function CourseScreen() {
                         ? hasCompletedModuleTwo
                           ? -1
                           : currentModuleTwoLessonIndex
-                        : 0
+                        : module.moduleNumber === 3
+                          ? hasCompletedModuleThree
+                            ? -1
+                            : currentModuleThreeLessonIndex
+                          : 0
                   }
                   key={module.moduleNumber}
                   onPress={

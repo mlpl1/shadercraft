@@ -50,7 +50,11 @@ export type ShaderPreviewMode =
   | "synthesis-badge"
   | "synthesis-face"
   | "synthesis-flower"
-  | "synthesis-final";
+  | "synthesis-final"
+  | "light-mix-linear"
+  | "light-mix-smooth"
+  | "light-mix-three"
+  | "light-mix-radial";
 
 type LiveShaderPreviewProps = {
   mode: ShaderPreviewMode;
@@ -273,7 +277,7 @@ void main() {
       color = background + ink * finalMask + ink * glow * 0.10;
       color *= 0.94 + 0.06 * sin(u_time * 1.2 + p.y * 4.0);
     }
-  } else if (u_mode > 23.5) {
+  } else if (u_mode > 23.5 && u_mode < 43.5) {
     vec2 p = centered;
     vec3 background = vec3(0.025, 0.04, 0.065);
     vec3 lime = vec3(0.78, 0.96, 0.39);
@@ -371,6 +375,29 @@ void main() {
         float frame = 1.0 - smoothstep(0.015, 0.03, abs(length(p) - 0.58));
         color = background + cyan * disc * (1.0 - cut) + violet * cut * 0.7 + lime * frame;
       }
+    }
+  } else if (u_mode > 43.5) {
+    vec2 p = centered;
+    vec3 dark = vec3(0.025, 0.04, 0.065);
+    vec3 cyan = vec3(0.08, 0.84, 1.0);
+    vec3 violet = vec3(0.72, 0.30, 1.0);
+    vec3 coral = vec3(1.0, 0.36, 0.22);
+    vec3 lime = vec3(0.78, 0.96, 0.39);
+
+    if (u_mode < 44.5) {
+      color = mix(cyan, violet, normalized.x);
+    } else if (u_mode < 45.5) {
+      float t = smoothstep(0.2, 0.8, normalized.x);
+      color = mix(lime, cyan, t);
+    } else if (u_mode < 46.5) {
+      float t = normalized.x * 2.0;
+      vec3 left = mix(cyan, violet, clamp(t, 0.0, 1.0));
+      vec3 right = mix(violet, coral, clamp(t - 1.0, 0.0, 1.0));
+      color = mix(left, right, step(0.5, normalized.x));
+    } else {
+      float t = smoothstep(0.0, 0.92, length(p));
+      color = mix(coral, cyan, t);
+      color = mix(dark, color, 0.9 + 0.1 * cos(length(p) * 12.0));
     }
   }
 
@@ -509,6 +536,10 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
         "synthesis-face": 41,
         "synthesis-flower": 42,
         "synthesis-final": 43,
+        "light-mix-linear": 44,
+        "light-mix-smooth": 45,
+        "light-mix-three": 46,
+        "light-mix-radial": 47,
       };
       gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAtRef.current) / 1000);

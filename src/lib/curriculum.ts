@@ -58,6 +58,17 @@ export const MODULE_TWO_LESSONS = [
 
 export type ModuleTwoLessonId = (typeof MODULE_TWO_LESSONS)[number]["id"];
 
+export const MODULE_THREE_LESSONS = [
+  {
+    id: "color-mixing",
+    title: "Color Mixing",
+    shortTitle: "Mixing color",
+  },
+] as const;
+
+export type ModuleThreeLessonId = (typeof MODULE_THREE_LESSONS)[number]["id"];
+export const MODULE_THREE_LESSON_COUNT = 4;
+
 export const COORDINATE_SYSTEMS_LESSON_ID: ModuleOneLessonId =
   "coordinate-systems-uv-space";
 export const COLORS_FRAGMENT_OUTPUT_LESSON_ID: ModuleOneLessonId =
@@ -138,5 +149,43 @@ export function getCurrentModuleTwoLesson(completedLessonIds: string[]) {
         isModuleTwoLessonUnlocked(lesson.id, completedLessonIds) &&
         !completedLessonIds.includes(lesson.id),
     ) ?? MODULE_TWO_LESSONS[MODULE_TWO_LESSONS.length - 1]
+  );
+}
+
+export function getModuleThreeLesson(lessonId: string | undefined) {
+  return MODULE_THREE_LESSONS.find((lesson) => lesson.id === lessonId);
+}
+
+export function getNextModuleThreeLesson(lessonId: ModuleThreeLessonId) {
+  const index = MODULE_THREE_LESSONS.findIndex((lesson) => lesson.id === lessonId);
+  return MODULE_THREE_LESSONS[index + 1];
+}
+
+export function getModuleThreeCompletedCount(completedLessonIds: string[]) {
+  return MODULE_THREE_LESSONS.filter((lesson) => completedLessonIds.includes(lesson.id)).length;
+}
+
+export function isModuleThreeComplete(completedLessonIds: string[]) {
+  return getModuleThreeCompletedCount(completedLessonIds) === MODULE_THREE_LESSON_COUNT;
+}
+
+export function isModuleThreeLessonUnlocked(
+  lessonId: ModuleThreeLessonId,
+  completedLessonIds: string[],
+) {
+  if (!isModuleTwoComplete(completedLessonIds)) return false;
+  const index = MODULE_THREE_LESSONS.findIndex((lesson) => lesson.id === lessonId);
+  return index === 0 || completedLessonIds.includes(MODULE_THREE_LESSONS[index - 1].id);
+}
+
+export function getCurrentModuleThreeLesson(completedLessonIds: string[]) {
+  if (!isModuleTwoComplete(completedLessonIds)) return MODULE_THREE_LESSONS[0];
+
+  return (
+    MODULE_THREE_LESSONS.find(
+      (lesson) =>
+        isModuleThreeLessonUnlocked(lesson.id, completedLessonIds) &&
+        !completedLessonIds.includes(lesson.id),
+    ) ?? MODULE_THREE_LESSONS[MODULE_THREE_LESSONS.length - 1]
   );
 }
