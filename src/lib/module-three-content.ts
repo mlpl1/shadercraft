@@ -175,4 +175,82 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
     takeaway:
       "Luma converts color into structure. Once brightness is a scalar field, the same threshold, remapping, and easing tools used for shapes can art-direct the light in an image.",
   },
+  "procedural-palettes": {
+    intro:
+      "A palette can be a function instead of a list. Use offset, amplitude, frequency, and phase to generate smooth families of colors from one scalar input.",
+    conceptTitle: "Compose color with cosine",
+    conceptLede:
+      "Four vec3 parameters control the center, range, repetition, and channel timing of an entire gradient.",
+    tryHint: "Change how one palette function travels through color",
+    presets: [
+      {
+        label: "Cosine ramp",
+        mode: "palette-cosine",
+        value: "a + b*cos(TAU*(c*t+d))",
+        filename: "cosine_palette.glsl",
+        code: [
+          "vec3 palette(float t) {",
+          "  return a + b * cos(TAU * (c * t + d));",
+          "}",
+          "vec3 color = palette(uv.x);",
+          "fragColor = vec4(color, 1.0);",
+        ],
+      },
+      {
+        label: "Channel phase",
+        mode: "palette-phase",
+        value: "d = vec3(0, .33, .67)",
+        filename: "channel_phase.glsl",
+        code: [
+          "vec3 d = vec3(0.0, 0.33, 0.67);",
+          "vec3 color = a + b * cos(TAU * (c * uv.x + d));",
+          "fragColor = vec4(color, 1.0);",
+        ],
+      },
+      {
+        label: "Spatial palette",
+        mode: "palette-spatial",
+        value: "t = radius + angle",
+        filename: "spatial_palette.glsl",
+        code: [
+          "vec2 p = uv * 2.0 - 1.0;",
+          "float t = length(p) * 0.75;",
+          "t += atan(p.y, p.x) * 0.12;",
+          "vec3 color = palette(t);",
+          "fragColor = vec4(color, 1.0);",
+        ],
+      },
+      {
+        label: "Animated palette",
+        mode: "palette-animated",
+        value: "t = radius - time*.12",
+        filename: "animated_palette.glsl",
+        code: [
+          "float t = length(p) * 0.8 - u_time * 0.12;",
+          "vec3 phase = d + 0.1 * sin(u_time * 0.35);",
+          "vec3 color = a + b * cos(TAU * (c * t + phase));",
+          "fragColor = vec4(color, 1.0);",
+        ],
+      },
+    ],
+    sections: [
+      {
+        title: "Offset and amplitude set the range",
+        body:
+          "Parameter a is the palette's center color, while b controls how far each channel swings above and below it. Starting both near 0.5 tends to keep the result inside displayable 0–1 values.",
+      },
+      {
+        title: "Frequency and phase create character",
+        body:
+          "Parameter c controls how often each channel cycles as t changes. Parameter d shifts those cycles relative to each other. Separating the red, green, and blue phases produces richer hue travel than moving every channel together.",
+      },
+      {
+        title: "The input connects palette to form",
+        body:
+          "The palette function does not know about pixels. Feed it uv.x for a strip, distance for rings, angle for a wheel, a shape distance for colored edges, or time for motion. The same palette becomes a reusable rendering tool.",
+      },
+    ],
+    takeaway:
+      "A procedural palette separates color design from spatial design. Tune the four color parameters once, then reuse the function with any scalar field your shader produces.",
+  },
 };

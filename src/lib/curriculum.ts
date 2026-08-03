@@ -69,6 +69,11 @@ export const MODULE_THREE_LESSONS = [
     title: "Luma & Contrast",
     shortTitle: "Luma and contrast",
   },
+  {
+    id: "procedural-palettes",
+    title: "Procedural Palettes",
+    shortTitle: "Procedural palettes",
+  },
 ] as const;
 
 export type ModuleThreeLessonId = (typeof MODULE_THREE_LESSONS)[number]["id"];

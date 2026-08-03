@@ -58,7 +58,11 @@ export type ShaderPreviewMode =
   | "light-luma"
   | "light-contrast"
   | "light-threshold"
-  | "light-exposure";
+  | "light-exposure"
+  | "palette-cosine"
+  | "palette-phase"
+  | "palette-spatial"
+  | "palette-animated";
 
 type LiveShaderPreviewProps = {
   mode: ShaderPreviewMode;
@@ -96,6 +100,10 @@ float sdBox(vec2 p, vec2 halfSize) {
 
 float sdRoundBox(vec2 p, vec2 halfSize, float radius) {
   return sdBox(p, halfSize - vec2(radius)) - radius;
+}
+
+vec3 cosinePalette(vec3 a, vec3 b, vec3 c, vec3 d, float t) {
+  return a + b * cos(6.2831853 * (c * t + d));
 }
 
 void main() {
@@ -403,7 +411,7 @@ void main() {
       color = mix(coral, cyan, t);
       color = mix(dark, color, 0.9 + 0.1 * cos(length(p) * 12.0));
     }
-  } else if (u_mode > 47.5) {
+  } else if (u_mode > 47.5 && u_mode < 51.5) {
     vec2 p = centered;
     vec3 sourceColor = mix(
       vec3(0.05, 0.32, 0.95),
@@ -424,6 +432,27 @@ void main() {
     } else {
       float exposure = 1.7;
       color = vec3(1.0) - exp(-sourceColor * exposure);
+    }
+  } else if (u_mode > 51.5) {
+    vec2 p = centered;
+    float t = normalized.x;
+    vec3 a = vec3(0.52, 0.48, 0.46);
+    vec3 b = vec3(0.46, 0.42, 0.50);
+    vec3 c = vec3(1.0, 1.0, 1.0);
+    vec3 d = vec3(0.02, 0.18, 0.38);
+
+    if (u_mode < 52.5) {
+      color = cosinePalette(a, b, c, d, t);
+    } else if (u_mode < 53.5) {
+      d = vec3(0.0, 0.33, 0.67);
+      color = cosinePalette(a, b, c, d, t);
+    } else if (u_mode < 54.5) {
+      t = length(p) * 0.75 + atan(p.y, p.x) * 0.12;
+      color = cosinePalette(a, b, c, d, t);
+    } else {
+      t = length(p) * 0.8 - u_time * 0.12;
+      d += vec3(0.0, 0.08, 0.18) * sin(u_time * 0.35);
+      color = cosinePalette(a, b, c, d, t);
     }
   }
 
@@ -570,6 +599,10 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
         "light-contrast": 49,
         "light-threshold": 50,
         "light-exposure": 51,
+        "palette-cosine": 52,
+        "palette-phase": 53,
+        "palette-spatial": 54,
+        "palette-animated": 55,
       };
       gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAtRef.current) / 1000);
