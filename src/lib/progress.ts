@@ -1,9 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { TOTAL_LESSON_COUNT } from "./curriculum";
 
-export { COORDINATE_SYSTEMS_LESSON_ID } from "./curriculum";
-
-const STORAGE_KEY = "@shadercraft/progress/v1";
+/**
+ * The single AsyncStorage key that held all learner progress before the SQLite migration.
+ * `src/data/progress/legacy-import.ts` reads and clears this key exactly once; this file now
+ * only exists to keep `src/context/progress-context.tsx` compiling until it is rewired to the
+ * SQLite-backed progress repository, and to provide the legacy parsing helper the importer needs.
+ */
+export const LEGACY_PROGRESS_STORAGE_KEY = "@shadercraft/progress/v1";
 
 export type ProgressState = {
   completedLessonIds: string[];
@@ -26,13 +30,22 @@ function isProgressState(value: unknown): value is ProgressState {
   );
 }
 
+/** Parses a raw legacy AsyncStorage value, returning `null` if it is missing or malformed. */
+export function parseLegacyProgressState(rawValue: string | null): ProgressState | null {
+  if (!rawValue) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(rawValue);
+    return isProgressState(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function loadProgress(): Promise<ProgressState> {
   try {
-    const storedProgress = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!storedProgress) return EMPTY_PROGRESS;
-
-    const parsedProgress: unknown = JSON.parse(storedProgress);
-    return isProgressState(parsedProgress) ? parsedProgress : EMPTY_PROGRESS;
+    const storedProgress = await AsyncStorage.getItem(LEGACY_PROGRESS_STORAGE_KEY);
+    return parseLegacyProgressState(storedProgress) ?? EMPTY_PROGRESS;
   } catch (error) {
     console.warn("Unable to load Shadercraft progress", error);
     return EMPTY_PROGRESS;
@@ -40,7 +53,7 @@ export async function loadProgress(): Promise<ProgressState> {
 }
 
 export async function saveProgress(progress: ProgressState) {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+  await AsyncStorage.setItem(LEGACY_PROGRESS_STORAGE_KEY, JSON.stringify(progress));
 }
 
 export function hasCompletedLesson(progress: ProgressState, lessonId: string) {
