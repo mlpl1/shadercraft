@@ -54,7 +54,11 @@ export type ShaderPreviewMode =
   | "light-mix-linear"
   | "light-mix-smooth"
   | "light-mix-three"
-  | "light-mix-radial";
+  | "light-mix-radial"
+  | "light-luma"
+  | "light-contrast"
+  | "light-threshold"
+  | "light-exposure";
 
 type LiveShaderPreviewProps = {
   mode: ShaderPreviewMode;
@@ -376,7 +380,7 @@ void main() {
         color = background + cyan * disc * (1.0 - cut) + violet * cut * 0.7 + lime * frame;
       }
     }
-  } else if (u_mode > 43.5) {
+  } else if (u_mode > 43.5 && u_mode < 47.5) {
     vec2 p = centered;
     vec3 dark = vec3(0.025, 0.04, 0.065);
     vec3 cyan = vec3(0.08, 0.84, 1.0);
@@ -398,6 +402,28 @@ void main() {
       float t = smoothstep(0.0, 0.92, length(p));
       color = mix(coral, cyan, t);
       color = mix(dark, color, 0.9 + 0.1 * cos(length(p) * 12.0));
+    }
+  } else if (u_mode > 47.5) {
+    vec2 p = centered;
+    vec3 sourceColor = mix(
+      vec3(0.05, 0.32, 0.95),
+      vec3(1.0, 0.72, 0.12),
+      smoothstep(-0.8, 0.8, p.x + p.y * 0.45)
+    );
+    sourceColor += vec3(0.35, 0.03, 0.25) * (0.5 + 0.5 * sin(p.x * 9.0));
+    float luma = dot(sourceColor, vec3(0.2126, 0.7152, 0.0722));
+
+    if (u_mode < 48.5) {
+      color = vec3(luma);
+    } else if (u_mode < 49.5) {
+      float contrast = 1.65;
+      color = (sourceColor - 0.5) * contrast + 0.5;
+    } else if (u_mode < 50.5) {
+      float bands = floor(luma * 5.0) / 4.0;
+      color = mix(vec3(0.03, 0.05, 0.09), vec3(0.78, 0.96, 0.39), bands);
+    } else {
+      float exposure = 1.7;
+      color = vec3(1.0) - exp(-sourceColor * exposure);
     }
   }
 
@@ -540,6 +566,10 @@ export function LiveShaderPreview({ mode, restartToken = 0 }: LiveShaderPreviewP
         "light-mix-smooth": 45,
         "light-mix-three": 46,
         "light-mix-radial": 47,
+        "light-luma": 48,
+        "light-contrast": 49,
+        "light-threshold": 50,
+        "light-exposure": 51,
       };
       gl.uniform1f(coordinateMode, modeValue[modeRef.current]);
       gl.uniform1f(time, (globalThis.performance.now() - startedAtRef.current) / 1000);

@@ -64,6 +64,11 @@ export const MODULE_THREE_LESSONS = [
     title: "Color Mixing",
     shortTitle: "Mixing color",
   },
+  {
+    id: "luma-and-contrast",
+    title: "Luma & Contrast",
+    shortTitle: "Luma and contrast",
+  },
 ] as const;
 
 export type ModuleThreeLessonId = (typeof MODULE_THREE_LESSONS)[number]["id"];
