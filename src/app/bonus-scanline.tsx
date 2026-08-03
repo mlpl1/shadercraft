@@ -62,6 +62,13 @@ const codeByMode: Record<LogoMode, string[]> = {
   ],
 };
 
+const highlightedLinesByMode: Record<LogoMode, number[]> = {
+  "logo-scanlines": [1],
+  "logo-ribbon": [1, 2, 3],
+  "logo-cutout": [1],
+  "logo-final": [7, 8],
+};
+
 const explanations = [
   {
     title: "Build horizontal scanlines",
@@ -188,7 +195,14 @@ export default function BonusScanlineScreen() {
               {codeByMode[mode].map((line, index) => (
                 <View key={line} style={styles.codeLine}>
                   <Text style={styles.lineNumber}>{index + 1}</Text>
-                  <Text style={[styles.codeText, index === 1 && styles.codeAccent]}>{line}</Text>
+                  <Text
+                    style={[
+                      styles.codeText,
+                      highlightedLinesByMode[mode].includes(index + 1) && styles.codeAccent,
+                    ]}
+                  >
+                    {line}
+                  </Text>
                 </View>
               ))}
             </View>

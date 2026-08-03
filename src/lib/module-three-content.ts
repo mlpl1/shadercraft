@@ -4,6 +4,7 @@ import type { ModuleThreeLessonId } from "./curriculum";
 export type ModuleThreePreset = {
   code: string[];
   filename: string;
+  highlightedLines: number[];
   label: string;
   mode: ShaderPreviewMode;
   value: string;
@@ -33,6 +34,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "light-mix-linear",
         value: "mix(a, b, uv.x)",
         filename: "linear_mix.glsl",
+        highlightedLines: [4],
         code: [
           "vec3 a = vec3(0.08, 0.84, 1.0);",
           "vec3 b = vec3(0.72, 0.30, 1.0);",
@@ -46,6 +48,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "light-mix-smooth",
         value: "smoothstep(.2, .8, x)",
         filename: "smooth_mix.glsl",
+        highlightedLines: [3],
         code: [
           "vec3 a = vec3(0.78, 0.96, 0.39);",
           "vec3 b = vec3(0.08, 0.56, 1.0);",
@@ -59,6 +62,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "light-mix-three",
         value: "cyan → violet → coral",
         filename: "three_stop_mix.glsl",
+        highlightedLines: [1, 2, 3],
         code: [
           "vec3 left = mix(cyan, violet, uv.x * 2.0);",
           "vec3 right = mix(violet, coral, uv.x * 2.0 - 1.0);",
@@ -71,6 +75,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "light-mix-radial",
         value: "mix(a, b, length(p))",
         filename: "radial_mix.glsl",
+        highlightedLines: [2, 3],
         code: [
           "vec2 p = uv * 2.0 - 1.0;",
           "float t = smoothstep(0.0, 0.9, length(p));",
@@ -112,6 +117,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "light-luma",
         value: "dot(rgb, lumaWeights)",
         filename: "luma.glsl",
+        highlightedLines: [2],
         code: [
           "vec3 weights = vec3(0.2126, 0.7152, 0.0722);",
           "float luma = dot(color, weights);",
@@ -124,6 +130,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "light-contrast",
         value: "(rgb - .5) * 1.65 + .5",
         filename: "contrast.glsl",
+        highlightedLines: [2, 3],
         code: [
           "float amount = 1.65;",
           "vec3 centered = color - 0.5;",
@@ -136,6 +143,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "light-threshold",
         value: "floor(luma * 5.0)",
         filename: "luma_bands.glsl",
+        highlightedLines: [2],
         code: [
           "float luma = dot(color, LUMA);",
           "float band = floor(luma * 5.0) / 4.0;",
@@ -148,6 +156,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "light-exposure",
         value: "1.0 - exp(-rgb * 1.7)",
         filename: "exposure.glsl",
+        highlightedLines: [2],
         code: [
           "float exposure = 1.7;",
           "color = vec3(1.0) - exp(-color * exposure);",
@@ -188,6 +197,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "palette-cosine",
         value: "a + b*cos(TAU*(c*t+d))",
         filename: "cosine_palette.glsl",
+        highlightedLines: [2],
         code: [
           "vec3 palette(float t) {",
           "  return a + b * cos(TAU * (c * t + d));",
@@ -201,6 +211,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "palette-phase",
         value: "d = vec3(0, .33, .67)",
         filename: "channel_phase.glsl",
+        highlightedLines: [1],
         code: [
           "vec3 d = vec3(0.0, 0.33, 0.67);",
           "vec3 color = a + b * cos(TAU * (c * uv.x + d));",
@@ -212,6 +223,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "palette-spatial",
         value: "t = radius + angle",
         filename: "spatial_palette.glsl",
+        highlightedLines: [2, 3],
         code: [
           "vec2 p = uv * 2.0 - 1.0;",
           "float t = length(p) * 0.75;",
@@ -225,6 +237,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "palette-animated",
         value: "t = radius - time*.12",
         filename: "animated_palette.glsl",
+        highlightedLines: [1],
         code: [
           "float t = length(p) * 0.8 - u_time * 0.12;",
           "vec3 phase = d + 0.1 * sin(u_time * 0.35);",
@@ -266,6 +279,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "lighting-albedo",
         value: "palette(normal.y)",
         filename: "01_albedo.glsl",
+        highlightedLines: [3],
         code: [
           "float orb = 1.0 - smoothstep(r - aa, r + aa, length(p));",
           "vec3 normal = sphereNormal(p, r);",
@@ -278,6 +292,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "lighting-diffuse",
         value: "max(dot(n, light), 0)",
         filename: "02_diffuse.glsl",
+        highlightedLines: [2],
         code: [
           "vec3 lightDir = normalize(vec3(-0.55, 0.65, 0.75));",
           "float diffuse = max(dot(normal, lightDir), 0.0);",
@@ -290,6 +305,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "lighting-rim",
         value: "pow(1.0 - normal.z, 2.5)",
         filename: "03_rim.glsl",
+        highlightedLines: [1],
         code: [
           "float rim = pow(1.0 - max(normal.z, 0.0), 2.5);",
           "vec3 lit = albedo * (0.12 + diffuse * 0.72);",
@@ -302,6 +318,7 @@ export const MODULE_THREE_CONTENT: Record<ModuleThreeLessonId, ModuleThreeLesson
         mode: "lighting-final",
         value: "diffuse + rim + specular",
         filename: "04_final_material.glsl",
+        highlightedLines: [2, 3, 5],
         code: [
           "vec3 lightDir = orbitingLight(u_time);",
           "float diffuse = max(dot(normal, lightDir), 0.0);",

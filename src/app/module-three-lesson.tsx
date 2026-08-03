@@ -182,7 +182,14 @@ export default function ModuleThreeLessonScreen() {
                   {preset.code.map((line, index) => (
                     <View key={`${index}-${line}`} style={styles.codeLine}>
                       <Text style={styles.lineNumber}>{index + 1}</Text>
-                      <Text style={[styles.codeText, index === 1 && styles.codeAccent]}>{line}</Text>
+                      <Text
+                        style={[
+                          styles.codeText,
+                          preset.highlightedLines.includes(index + 1) && styles.codeAccent,
+                        ]}
+                      >
+                        {line}
+                      </Text>
                     </View>
                   ))}
                 </View>

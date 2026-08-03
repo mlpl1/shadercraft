@@ -4,6 +4,7 @@ import type { ModuleTwoLessonId } from "./curriculum";
 export type ModuleTwoPreset = {
   code: string[];
   filename: string;
+  highlightedLines: number[];
   label: string;
   mode: ShaderPreviewMode;
   value: string;
@@ -32,6 +33,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "edge-hard",
         value: "step(edge, x)",
         filename: "hard_threshold.glsl",
+        highlightedLines: [2],
         code: [
           "float d = length(p) - 0.42;",
           "float mask = 1.0 - step(0.0, d);",
@@ -43,6 +45,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "edge-smooth",
         value: "smoothstep(a, b, x)",
         filename: "smooth_edge.glsl",
+        highlightedLines: [2],
         code: [
           "float d = length(p) - 0.42;",
           "float mask = 1.0 - smoothstep(-0.025, 0.025, d);",
@@ -54,6 +57,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "edge-outline",
         value: "abs(distance)",
         filename: "distance_outline.glsl",
+        highlightedLines: [1],
         code: [
           "float d = abs(length(p) - 0.42);",
           "float line = 1.0 - smoothstep(0.018, 0.035, d);",
@@ -65,6 +69,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "edge-animated",
         value: "radius + sin(time)",
         filename: "animated_threshold.glsl",
+        highlightedLines: [1],
         code: [
           "float radius = 0.34 + 0.08 * sin(u_time * 2.0);",
           "float d = length(p) - radius;",
@@ -101,6 +106,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "primitive-circle",
         value: "length(p) - r",
         filename: "circle_sdf.glsl",
+        highlightedLines: [2],
         code: [
           "float circleSdf(vec2 p, float r) {",
           "  return length(p) - r;",
@@ -113,6 +119,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "primitive-box",
         value: "sdBox(p, size)",
         filename: "box_sdf.glsl",
+        highlightedLines: [2],
         code: [
           "vec2 q = abs(p) - vec2(0.38, 0.28);",
           "float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);",
@@ -124,6 +131,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "primitive-rounded-box",
         value: "sdBox - radius",
         filename: "rounded_box.glsl",
+        highlightedLines: [2, 3],
         code: [
           "float radius = 0.10;",
           "float d = sdBox(p, vec2(0.42, 0.30) - radius);",
@@ -136,6 +144,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "primitive-combined",
         value: "two independent masks",
         filename: "primitive_layers.glsl",
+        highlightedLines: [1, 2],
         code: [
           "float circle = fill(circleSdf(p + vec2(0.2, 0.0), 0.3));",
           "float box = fill(boxSdf(p - vec2(0.2, 0.0), vec2(0.28)));",
@@ -172,6 +181,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "boolean-union",
         value: "min(a, b)",
         filename: "shape_union.glsl",
+        highlightedLines: [3],
         code: ["float a = circleSdf(p + offset, 0.34);", "float b = boxSdf(p - offset, size);", "float d = min(a, b);", "color = lime * fill(d);"],
       },
       {
@@ -179,6 +189,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "boolean-intersection",
         value: "max(a, b)",
         filename: "shape_intersection.glsl",
+        highlightedLines: [3],
         code: ["float a = circleSdf(p + offset, 0.34);", "float b = boxSdf(p - offset, size);", "float d = max(a, b);", "color = lime * fill(d);"],
       },
       {
@@ -186,6 +197,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "boolean-subtraction",
         value: "max(a, -b)",
         filename: "shape_subtraction.glsl",
+        highlightedLines: [3],
         code: ["float a = circleSdf(p + offset, 0.34);", "float b = boxSdf(p - offset, size);", "float d = max(a, -b);", "color = lime * fill(d);"],
       },
       {
@@ -193,6 +205,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "boolean-xor",
         value: "inside one only",
         filename: "shape_xor.glsl",
+        highlightedLines: [3],
         code: ["float insideOne = min(a, b);", "float insideBoth = max(a, b);", "float d = max(insideOne, -insideBoth);", "color = violet * fill(d);"],
       },
     ],
@@ -225,6 +238,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "repeat-grid",
         value: "fract(p × 4)",
         filename: "repeat_grid.glsl",
+        highlightedLines: [1],
         code: ["vec2 cell = fract((p * 0.5 + 0.5) * 4.0) - 0.5;", "cell.x *= resolution.x / resolution.y;", "float d = length(cell) - 0.16;", "color = lime * fill(d);"],
       },
       {
@@ -232,6 +246,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "repeat-rotate",
         value: "rotation × cell",
         filename: "rotated_cells.glsl",
+        highlightedLines: [3],
         code: ["vec2 cell = repeat(p, 4.0);", "float angle = (cellId.x + cellId.y) * 0.35;", "cell = rotate(angle) * cell;", "color = lime * fill(boxSdf(cell, vec2(0.13)));"],
       },
       {
@@ -239,6 +254,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "repeat-layer",
         value: "circles + boxes",
         filename: "layered_pattern.glsl",
+        highlightedLines: [3],
         code: ["float circles = fill(circleSdf(cell, 0.16));", "float boxes = fill(boxSdf(rotate(angle) * cell, vec2(0.13)));", "color = cyan * circles * 0.7 + violet * boxes * 0.5;"],
       },
       {
@@ -246,6 +262,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "repeat-animate",
         value: "angle + u_time",
         filename: "animated_pattern.glsl",
+        highlightedLines: [2],
         code: ["vec2 cell = repeat(p, 4.0);", "cell = rotate(cellAngle + u_time) * cell;", "float shape = fill(boxSdf(cell, vec2(0.13)));", "color = lime * shape;"],
       },
     ],
@@ -278,6 +295,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "synthesis-badge",
         value: "ring + clipped cross",
         filename: "challenge_badge.glsl",
+        highlightedLines: [1, 3, 4],
         code: ["float ring = outline(circleSdf(p, 0.52), 0.02);", "float cross = max(verticalBar(p), horizontalBar(p));", "cross *= fill(circleSdf(p, 0.42));", "color = cyan * ring + lime * cross;"],
       },
       {
@@ -285,6 +303,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "synthesis-face",
         value: "rounded box + cutouts",
         filename: "challenge_face.glsl",
+        highlightedLines: [1, 2, 3],
         code: ["float head = fill(roundBoxSdf(p, vec2(0.46, 0.36), 0.1));", "float eyes = max(circle(leftEye), circle(rightEye));", "float mouth = outline(boxSdf(p + mouthOffset, mouthSize));", "color = violet * head + lime * max(eyes, mouth);"],
       },
       {
@@ -292,6 +311,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "synthesis-flower",
         value: "rotated circle union",
         filename: "challenge_flower.glsl",
+        highlightedLines: [2, 3],
         code: ["float petals = 0.0;", "for (int i = 0; i < 6; i++) {", "  petals = max(petals, circle(p - petalOffset(i)));", "}", "color = violet * petals + lime * circle(p);"],
       },
       {
@@ -299,6 +319,7 @@ export const MODULE_TWO_CONTENT: Record<ModuleTwoLessonId, ModuleTwoLessonConten
         mode: "synthesis-final",
         value: "animated composition",
         filename: "shape_synthesis_final.glsl",
+        highlightedLines: [1, 3, 5],
         code: ["float disc = circleSdf(p, 0.5 * pulse);", "float cut = roundBoxSdf(p, vec2(0.3), 0.08);", "float symbol = max(disc, -cut);", "float frame = outline(circleSdf(p, 0.58), 0.02);", "color = cyan * fill(symbol) + violet * fill(cut) + lime * frame;"],
       },
     ],
