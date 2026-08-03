@@ -1,13 +1,8 @@
-// `../legacy-import` imports `src/lib/progress.ts`, which imports the AsyncStorage native module
-// at module scope for `loadProgress`/`saveProgress` (kept only so progress-context.tsx still
-// compiles until Task 7). That native module isn't available under plain Jest, so it needs the
-// package's own documented mock swapped in before anything requires it transitively.
-jest.mock("@react-native-async-storage/async-storage", () =>
-  require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
-);
-
-import { LEGACY_PROGRESS_STORAGE_KEY } from "../../../lib/progress";
-import { importLegacyProgress, type LegacyProgressStorage } from "../legacy-import";
+import {
+  importLegacyProgress,
+  LEGACY_PROGRESS_STORAGE_KEY,
+  type LegacyProgressStorage,
+} from "../legacy-import";
 import type { NodeSqliteDriver } from "../../database/testing/node-sqlite-driver";
 import type { SqliteProgressRepository } from "../sqlite-progress-repository";
 import { createProgressRepositoryTestContext } from "./progress-repository-test-context";

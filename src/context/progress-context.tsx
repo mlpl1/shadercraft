@@ -8,14 +8,14 @@ import {
   useState,
 } from "react";
 
-import {
-  EMPTY_PROGRESS,
-  getProgressPercent,
-  hasCompletedLesson,
-  loadProgress,
-  type ProgressState,
-  saveProgress,
-} from "../lib/progress";
+import { getProgressPercent } from "../data/course/domain";
+import { useCourse } from "./course-context";
+import { useData } from "./data-context";
+
+export type ProgressState = {
+  completedLessonIds: string[];
+  version: 1;
+};
 
 type ProgressContextValue = {
   completeLesson: (lessonId: string) => Promise<void>;
@@ -28,78 +28,113 @@ type ProgressContextValue = {
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
 
+/**
+ * Loads explicit lesson completions from the progress repository and keeps them fresh whenever
+ * either the progress repository (a completion changed) or the course repository (the active
+ * release changed, so which lesson IDs count toward the total changed) reports an invalidation.
+ * The progress percentage is always computed against the active release's published lesson IDs, so
+ * a curriculum activation refreshes totals immediately.
+ */
 export function ProgressProvider({ children }: PropsWithChildren) {
-  const [progress, setProgress] = useState(EMPTY_PROGRESS);
+  const data = useData();
+  const courseRepository = data.status === "ready" ? data.courseRepository : null;
+  const progressRepository = data.status === "ready" ? data.progressRepository : null;
+  const { activeRelease } = useCourse();
+
+  const [completedLessonIds, setCompletedLessonIds] = useState<string[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
+  const refresh = useCallback(async () => {
+    if (!progressRepository) return;
 
-    loadProgress().then((storedProgress) => {
-      if (!isMounted) return;
-      setProgress(storedProgress);
-      setIsHydrated(true);
+    const nextCompletedLessonIds = await progressRepository.getCompletedLessonIds();
+    setCompletedLessonIds(nextCompletedLessonIds);
+    setIsHydrated(true);
+  }, [progressRepository]);
+
+  useEffect(() => {
+    if (!progressRepository || !courseRepository) return;
+
+    let isMounted = true;
+    void refresh();
+
+    const unsubscribeProgress = progressRepository.subscribe(() => {
+      if (isMounted) {
+        void refresh();
+      }
+    });
+    const unsubscribeCourse = courseRepository.subscribe(() => {
+      if (isMounted) {
+        void refresh();
+      }
     });
 
     return () => {
       isMounted = false;
+      unsubscribeProgress();
+      unsubscribeCourse();
     };
-  }, []);
+  }, [progressRepository, courseRepository, refresh]);
 
-  const completeLesson = useCallback(
-    async (lessonId: string) => {
-      if (hasCompletedLesson(progress, lessonId)) return;
+  const hasCompletedLesson = useCallback(
+    (lessonId: string) => completedLessonIds.includes(lessonId),
+    [completedLessonIds],
+  );
 
-      const nextProgress: ProgressState = {
-        ...progress,
-        completedLessonIds: [...progress.completedLessonIds, lessonId],
-      };
+  const setLessonCompletion = useCallback(
+    async (lessonId: string, completed: boolean) => {
+      if (!progressRepository) return;
+      if (completedLessonIds.includes(lessonId) === completed) return;
 
-      setProgress(nextProgress);
+      const previousCompletedLessonIds = completedLessonIds;
+      const nextCompletedLessonIds = completed
+        ? [...previousCompletedLessonIds, lessonId]
+        : previousCompletedLessonIds.filter(
+            (completedLessonId) => completedLessonId !== lessonId,
+          );
+
+      setCompletedLessonIds(nextCompletedLessonIds);
 
       try {
-        await saveProgress(nextProgress);
+        await progressRepository.setLessonCompleted(lessonId, completed);
       } catch (error) {
-        setProgress(progress);
+        setCompletedLessonIds(previousCompletedLessonIds);
         throw error;
       }
     },
-    [progress],
+    [completedLessonIds, progressRepository],
+  );
+
+  const completeLesson = useCallback(
+    (lessonId: string) => setLessonCompletion(lessonId, true),
+    [setLessonCompletion],
   );
 
   const uncompleteLesson = useCallback(
-    async (lessonId: string) => {
-      if (!hasCompletedLesson(progress, lessonId)) return;
+    (lessonId: string) => setLessonCompletion(lessonId, false),
+    [setLessonCompletion],
+  );
 
-      const nextProgress: ProgressState = {
-        ...progress,
-        completedLessonIds: progress.completedLessonIds.filter(
-          (completedLessonId) => completedLessonId !== lessonId,
-        ),
-      };
+  const progress = useMemo<ProgressState>(
+    () => ({ completedLessonIds, version: 1 }),
+    [completedLessonIds],
+  );
 
-      setProgress(nextProgress);
-
-      try {
-        await saveProgress(nextProgress);
-      } catch (error) {
-        setProgress(progress);
-        throw error;
-      }
-    },
-    [progress],
+  const progressPercent = useMemo(
+    () => (activeRelease ? getProgressPercent(activeRelease, completedLessonIds) : 0),
+    [activeRelease, completedLessonIds],
   );
 
   const value = useMemo<ProgressContextValue>(
     () => ({
       completeLesson,
-      hasCompletedLesson: (lessonId) => hasCompletedLesson(progress, lessonId),
+      hasCompletedLesson,
       isHydrated,
       progress,
-      progressPercent: getProgressPercent(progress),
+      progressPercent,
       uncompleteLesson,
     }),
-    [completeLesson, isHydrated, progress, uncompleteLesson],
+    [completeLesson, hasCompletedLesson, isHydrated, progress, progressPercent, uncompleteLesson],
   );
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;

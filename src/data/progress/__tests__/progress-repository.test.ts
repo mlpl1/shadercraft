@@ -21,6 +21,18 @@ describe("SQLite progress repository", () => {
     await expect(repository.getActiveProfileId()).resolves.toBe(profileId);
   });
 
+  test("resolves a single profile for two concurrent calls on a cold cache", async () => {
+    const [firstProfileId, secondProfileId] = await Promise.all([
+      repository.getActiveProfileId(),
+      repository.getActiveProfileId(),
+    ]);
+
+    expect(firstProfileId).toBe(secondProfileId);
+
+    const profileRows = await driver.all<{ id: string }>("SELECT id FROM learner_profiles");
+    expect(profileRows).toHaveLength(1);
+  });
+
   test("completes and uncompletes a lesson, recording one mutation per explicit change", async () => {
     await repository.setLessonCompleted("color-mixing", true);
     expect(await repository.isLessonCompleted("color-mixing")).toBe(true);

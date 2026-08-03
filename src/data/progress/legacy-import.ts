@@ -1,4 +1,3 @@
-import { LEGACY_PROGRESS_STORAGE_KEY, parseLegacyProgressState } from "../../lib/progress";
 import type { SqliteProgressRepository } from "./sqlite-progress-repository";
 
 /** The subset of AsyncStorage's API the legacy importer needs. */
@@ -6,6 +5,37 @@ export type LegacyProgressStorage = {
   getItem(key: string): Promise<string | null>;
   removeItem(key: string): Promise<void>;
 };
+
+/** The single AsyncStorage key that held all learner progress before the SQLite migration. */
+export const LEGACY_PROGRESS_STORAGE_KEY = "@shadercraft/progress/v1";
+
+type LegacyProgressState = {
+  completedLessonIds: string[];
+  version: 1;
+};
+
+function isLegacyProgressState(value: unknown): value is LegacyProgressState {
+  if (!value || typeof value !== "object") return false;
+
+  const candidate = value as Partial<LegacyProgressState>;
+  return (
+    candidate.version === 1 &&
+    Array.isArray(candidate.completedLessonIds) &&
+    candidate.completedLessonIds.every((lessonId) => typeof lessonId === "string")
+  );
+}
+
+/** Parses a raw legacy AsyncStorage value, returning `null` if it is missing or malformed. */
+function parseLegacyProgressState(rawValue: string | null): LegacyProgressState | null {
+  if (!rawValue) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(rawValue);
+    return isLegacyProgressState(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Imports the legacy `@shadercraft/progress/v1` AsyncStorage value into SQLite, following the

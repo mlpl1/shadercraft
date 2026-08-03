@@ -52,6 +52,7 @@ export class SqliteProgressRepository implements ProgressRepository {
   private readonly generateId: () => string;
   private readonly now: () => string;
   private cachedProfile: LearnerProfile | null = null;
+  private pendingProfile: Promise<LearnerProfile> | null = null;
 
   constructor(
     private readonly driver: DatabaseDriver,
@@ -241,36 +242,60 @@ export class SqliteProgressRepository implements ProgressRepository {
     }
   }
 
+  /**
+   * Resolves (creating if needed) the single active anonymous learner profile, memoizing both the
+   * resolved value and the in-flight promise. Caching only the resolved value would leave a window
+   * between the synchronous cache check and the first `await` where two concurrent cold-cache
+   * callers both see `cachedProfile === null` and both open a `driver.transaction`; neither
+   * `DatabaseDriver` implementation supports nested transactions, so the second `BEGIN` throws.
+   * Caching the in-flight promise means every concurrent caller awaits the same transaction.
+   */
   private async getOrCreateActiveProfile(): Promise<LearnerProfile> {
     if (this.cachedProfile) {
       return this.cachedProfile;
     }
 
-    return this.driver.transaction(async () => {
-      const existing = await this.driver.first<LearnerProfileRow>(
-        `SELECT id, kind, supabase_user_id, merged_into_profile_id FROM learner_profiles
-         WHERE kind = 'anonymous' AND merged_into_profile_id IS NULL
-         ORDER BY created_at ASC
-         LIMIT 1`,
-      );
+    if (!this.pendingProfile) {
+      this.pendingProfile = this.driver
+        .transaction(async () => {
+          const existing = await this.driver.first<LearnerProfileRow>(
+            `SELECT id, kind, supabase_user_id, merged_into_profile_id FROM learner_profiles
+             WHERE kind = 'anonymous' AND merged_into_profile_id IS NULL
+             ORDER BY created_at ASC
+             LIMIT 1`,
+          );
 
-      if (existing) {
-        this.cachedProfile = toLearnerProfile(existing);
-        return this.cachedProfile;
-      }
+          if (existing) {
+            return toLearnerProfile(existing);
+          }
 
-      const id = this.generateId();
-      const timestamp = this.now();
-      await this.driver.run(
-        `INSERT INTO learner_profiles
-          (id, kind, supabase_user_id, merged_into_profile_id, created_at, last_used_at)
-         VALUES (?, 'anonymous', NULL, NULL, ?, ?)`,
-        [id, timestamp, timestamp],
-      );
+          const id = this.generateId();
+          const timestamp = this.now();
+          await this.driver.run(
+            `INSERT INTO learner_profiles
+              (id, kind, supabase_user_id, merged_into_profile_id, created_at, last_used_at)
+             VALUES (?, 'anonymous', NULL, NULL, ?, ?)`,
+            [id, timestamp, timestamp],
+          );
 
-      this.cachedProfile = { id, kind: "anonymous", supabaseUserId: null, mergedIntoProfileId: null };
-      return this.cachedProfile;
-    });
+          const created: LearnerProfile = {
+            id,
+            kind: "anonymous",
+            supabaseUserId: null,
+            mergedIntoProfileId: null,
+          };
+          return created;
+        })
+        .then((profile) => {
+          this.cachedProfile = profile;
+          return profile;
+        })
+        .finally(() => {
+          this.pendingProfile = null;
+        });
+    }
+
+    return this.pendingProfile;
   }
 }
 
