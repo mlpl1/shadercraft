@@ -37,7 +37,7 @@ function describeQueuedChanges(queued: number): string {
 
 function syncStatusLabel(status: SyncStatus, queued: number): string {
   switch (status) {
-    case "idle":
+    case "up-to-date":
       // Never "Up to date" while the outbox still holds something: a queued change is precisely what
       // has *not* reached the server yet, and saying otherwise is what made a working sync look broken.
       return queued > 0 ? `${describeQueuedChanges(queued)} waiting to sync` : "Up to date";
@@ -45,8 +45,18 @@ function syncStatusLabel(status: SyncStatus, queued: number): string {
       return "Syncing…";
     case "attention":
       return "Needs attention";
-    case "offline":
+    case "retrying":
       return "Waiting to retry";
+    case "offline":
+      // The device has no network, so the queue is not stuck — it is simply waiting, and saying how much
+      // is waiting is the difference between "something is broken" and "nothing is lost".
+      return queued > 0
+        ? `Offline — ${describeQueuedChanges(queued)} waiting`
+        : "Offline — nothing waiting";
+    case "signed-out":
+      // Not reachable from this panel, which only renders for a signed-in account, but the union is
+      // handled exhaustively so a future status cannot slip through as a blank label.
+      return "Not signed in";
   }
 }
 
@@ -281,7 +291,7 @@ function AuthenticatedPanel({
           <Text style={styles.syncValue}>{formatLastSuccessfulSync(sync.lastSuccessAt)}</Text>
         </View>
 
-        {sync.errorKind && sync.status !== "idle" ? (
+        {sync.errorKind && sync.status !== "up-to-date" ? (
           <Text style={styles.syncNotice}>{describeSyncErrorKind(sync.errorKind)}</Text>
         ) : null}
 

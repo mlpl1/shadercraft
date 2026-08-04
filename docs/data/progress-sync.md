@@ -163,9 +163,19 @@ and upload order decides which of two actions on the same lesson the server acce
 as authoritative (`SqliteProgressRepository.getPendingMutations`).
 
 Rows with `merged_at IS NULL` are still pending — the partial index
-`idx_sync_outbox_profile_pending_created_at` is what makes that filter cheap, and it is also what the account screen's
-"Pending changes" count reflects (`ProgressSyncEngine`'s `SyncResult.pending`, surfaced through
-`useSyncStatus()`).
+`idx_sync_outbox_profile_pending_created_at` is what makes that filter cheap, and it is also what the
+account screen's "Pending changes" count reflects. That count is read from this table by `SyncProvider`
+(`getPendingMutations`), not taken from the last pass's `SyncResult.pending`: the moments the number
+matters most are the ones where no pass has run since — a device with no network, or one that queued a
+change while a pass was already reading the outbox — and a pass's own figure is stale in exactly those
+cases.
+
+The same applies to the "Last successful sync" readout, which is `sync_state.last_success_at` read
+through `ProgressSyncRepository.getLastSyncSuccessAt`, so it survives relaunches. It is `NULL` until a
+pass actually *moves* something: a pass with nothing to push and nothing to pull deliberately records
+nothing (see `ProgressSyncEngine.runOnce`, whose `recordSyncSuccess` call exists only to keep the column
+fresh for a pass that pushed but had nothing to pull), so a brand-new account can sync cleanly and still
+read "Not yet". That is not a failure, and the screen never presents it as one.
 
 To inspect the server side instead, `npx supabase status` prints `STUDIO_URL`
 (`http://127.0.0.1:54323` by default) — Supabase Studio's table editor and SQL editor work against
@@ -185,11 +195,48 @@ disabled. It renders one of:
   sign-up that comes back awaiting email confirmation (`SignUpResult.kind === "confirm-email"`) is
   shown as a success needing a further step, never as an error.
 - **Authenticated** — the signed-in email (never any token material — `AuthSession` does not carry
-  any), the current sync status, the pending-mutation count, and a "last successful sync" readout
-  that only ever reflects a pass that actually completed since the screen was opened. A "Retry
-  sync" action appears only in the `attention` state; sync health is otherwise purely informational
-  and never blocks anything. "Sign out" asks for confirmation, explicitly noting that offline
-  progress on the device remains available either way.
+  any), the current sync status, the queued-mutation count, and the durable "last successful sync"
+  timestamp. A "Retry sync" action appears only in the `attention` state; sync health is otherwise
+  purely informational and never blocks anything. "Sign out" asks for confirmation, explicitly noting
+  that offline progress on the device remains available either way.
+
+## Sync status, and what each one means
+
+`SyncScheduler` publishes one of six statuses (`src/data/sync/sync-scheduler.ts`), and they are kept
+distinct because a learner reads each of them differently — one shared name for several of them is what
+made a working sync look broken:
+
+| Status | Means | Screen reads |
+| --- | --- | --- |
+| `signed-out` | No authenticated session. Nothing syncs; nothing is wrong. | (the sign-in panel) |
+| `offline` | Signed in, but the device reports no usable network. Nothing is attempted or scheduled. | "Offline — N changes waiting" |
+| `syncing` | A pass is running. | "Syncing…" |
+| `retrying` | One pass failed with a network up; an automatic retry is on the backoff ladder. | "Waiting to retry" |
+| `up-to-date` | The last pass succeeded and the server refuses nothing. | "Up to date", or "N changes waiting to sync" if the outbox is not empty |
+| `attention` | Repeated failure, an expired session, or a mutation the server keeps refusing. | "Needs attention" + a "Retry sync" action |
+
+Connectivity is what makes `offline` possible, and it is the fix for a real delay: the backoff ladder
+runs 2s → 60s, so a device that lost its network mid-outage used to sit out the remaining wait long
+after the network was back. `SyncProvider` watches `expo-network` (the only place it is imported) and
+feeds a framework-free `SyncConnectivityMonitor` into the scheduler, which:
+
+- attempts nothing while the device reports itself offline — every request would fail on the first byte,
+  and spending backoff steps on that is what caused the delay;
+- **syncs immediately** when connectivity returns, cancelling any pending backoff wait;
+- does *not* reset the failure streak on a network return — only a successful pass earns that, so a
+  flapping connection still escalates to `attention` instead of looping on the first rung forever;
+- leaves an `auth` `attention` state alone in either direction, since a network that came and went says
+  nothing about a session the server has already refused.
+
+An *unknown* network state is treated as **reachable**, never as offline. Every field of
+`NetworkState` is optional and `isInternetReachable` is `undefined` on platforms that do not probe;
+only an explicit negative counts, because a device with an ambiguous state must be allowed to try and
+let the attempt decide rather than stop syncing outright.
+
+`expo-network` is a native module, so adding it needs a rebuild (`npm run android` / `npm run ios`) —
+a Metro reload will not pick it up. With `EXPO_PUBLIC_SUPABASE_ENABLED` unset, no listener is registered
+and the platform is never even queried; `src/context/__tests__/disabled-cloud-sync.test.tsx` asserts
+exactly that.
 
 Errors surfaced from `AuthService` calls are shown as-is (they are already normalised, safe `Error`
 messages with no raw Supabase payload); sync errors are shown only as their pre-classified kind

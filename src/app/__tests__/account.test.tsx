@@ -54,7 +54,7 @@ function buildAuth(overrides: AuthOverrides = {}): ReturnType<typeof useAuth> {
 
 function buildSync(overrides: SyncOverrides = {}): ReturnType<typeof useSyncStatus> {
   return {
-    status: "idle",
+    status: "up-to-date",
     pending: 0,
     errorKind: null,
     lastSuccessAt: null,
@@ -218,7 +218,7 @@ describe("AccountScreen", () => {
     mockUseAuth.mockReturnValue(
       buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
     );
-    mockUseSyncStatus.mockReturnValue(buildSync({ status: "idle", pending: 3 }));
+    mockUseSyncStatus.mockReturnValue(buildSync({ status: "up-to-date", pending: 3 }));
 
     await renderAccountScreen();
 
@@ -248,7 +248,7 @@ describe("AccountScreen", () => {
     mockUseAuth.mockReturnValue(
       buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
     );
-    mockUseSyncStatus.mockReturnValue(buildSync({ status: "idle", lastSuccessAt: null }));
+    mockUseSyncStatus.mockReturnValue(buildSync({ status: "up-to-date", lastSuccessAt: null }));
 
     await renderAccountScreen();
 
@@ -259,7 +259,7 @@ describe("AccountScreen", () => {
     mockUseAuth.mockReturnValue(
       buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
     );
-    mockUseSyncStatus.mockReturnValue(buildSync({ status: "idle", pending: 2 }));
+    mockUseSyncStatus.mockReturnValue(buildSync({ status: "up-to-date", pending: 2 }));
 
     await renderAccountScreen();
 
@@ -271,7 +271,7 @@ describe("AccountScreen", () => {
     mockUseAuth.mockReturnValue(
       buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
     );
-    mockUseSyncStatus.mockReturnValue(buildSync({ status: "idle", pending: 0 }));
+    mockUseSyncStatus.mockReturnValue(buildSync({ status: "up-to-date", pending: 0 }));
 
     await renderAccountScreen();
 
@@ -305,7 +305,32 @@ describe("AccountScreen", () => {
     expect(sync.retrySync).toHaveBeenCalledTimes(1);
   });
 
-  test("does not show a Retry sync action for a single offline blip", async () => {
+  test("does not show a Retry sync action for a single failure that is already retrying", async () => {
+    mockUseAuth.mockReturnValue(
+      buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
+    );
+    mockUseSyncStatus.mockReturnValue(buildSync({ status: "retrying", pending: 1 }));
+
+    await renderAccountScreen();
+
+    await waitFor(() => expect(screen.getByText("Waiting to retry")).toBeTruthy());
+    expect(screen.queryByRole("button", { name: "Retry sync" })).toBeNull();
+  });
+
+  test("says how many changes are waiting while signed in with no network", async () => {
+    mockUseAuth.mockReturnValue(
+      buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
+    );
+    mockUseSyncStatus.mockReturnValue(buildSync({ status: "offline", pending: 3 }));
+
+    await renderAccountScreen();
+
+    await waitFor(() => expect(screen.getByText("Offline — 3 changes waiting")).toBeTruthy());
+    // Nothing is wrong and nothing is lost, so there is no failure notice and nothing to retry.
+    expect(screen.queryByRole("button", { name: "Retry sync" })).toBeNull();
+  });
+
+  test("reads correctly for a single waiting change", async () => {
     mockUseAuth.mockReturnValue(
       buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
     );
@@ -313,8 +338,19 @@ describe("AccountScreen", () => {
 
     await renderAccountScreen();
 
-    await waitFor(() => expect(screen.getByText("learner@example.com")).toBeTruthy());
-    expect(screen.queryByRole("button", { name: "Retry sync" })).toBeNull();
+    await waitFor(() => expect(screen.getByText("Offline — 1 change waiting")).toBeTruthy());
+  });
+
+  test("says something coherent when offline with nothing queued at all", async () => {
+    mockUseAuth.mockReturnValue(
+      buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
+    );
+    mockUseSyncStatus.mockReturnValue(buildSync({ status: "offline", pending: 0 }));
+
+    await renderAccountScreen();
+
+    await waitFor(() => expect(screen.getByText("Offline — nothing waiting")).toBeTruthy());
+    expect(screen.queryByText("Offline — 0 changes waiting")).toBeNull();
   });
 
   test("confirms before signing out, mentioning offline progress stays available, and only signs out after confirming", async () => {

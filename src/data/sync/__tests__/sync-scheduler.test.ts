@@ -2,6 +2,7 @@ import { ProgressRemoteError } from "../progress-remote";
 import type { SyncResult } from "../progress-sync-engine";
 import {
   SyncScheduler,
+  type SyncConnectivityMonitor,
   type SyncEngineLike,
   type SyncSchedulerState,
   type SyncSchedulerTimer,
@@ -46,6 +47,35 @@ function createFakeClock() {
       if (!entry) throw new Error("No pending timer to fire");
       entry.run();
     },
+  };
+}
+
+/**
+ * A stand-in for the device's connectivity, driven explicitly. `set` both changes what `isOnline()`
+ * answers *and* notifies subscribers, the way a real network transition does — a fake that only did one
+ * of the two would let a scheduler that ignores the notification still look correct.
+ */
+function createFakeConnectivity(initiallyOnline = true) {
+  let online = initiallyOnline;
+  const listeners = new Set<(online: boolean) => void>();
+
+  const monitor: SyncConnectivityMonitor = {
+    isOnline: () => online,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+
+  return {
+    monitor,
+    set(next: boolean): void {
+      online = next;
+      for (const listener of [...listeners]) listener(next);
+    },
+    listenerCount: () => listeners.size,
   };
 }
 
@@ -98,7 +128,7 @@ function collectStates(scheduler: SyncScheduler): SyncSchedulerState[] {
 describe("SyncScheduler", () => {
   test("attempts a sync as soon as an authenticated session begins", () => {
     const { engine, calls } = createFakeEngine();
-    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+    const scheduler = new SyncScheduler(engine, { timer: createFakeClock().clock });
 
     scheduler.setSession(SESSION);
 
@@ -109,7 +139,7 @@ describe("SyncScheduler", () => {
   test("never schedules or attempts anything while anonymous", () => {
     const { engine, calls } = createFakeEngine();
     const { clock, scheduled } = createFakeClock();
-    const scheduler = new SyncScheduler(engine, clock);
+    const scheduler = new SyncScheduler(engine, { timer: clock });
 
     scheduler.setSession(null);
     scheduler.notifyAppForeground();
@@ -118,23 +148,23 @@ describe("SyncScheduler", () => {
 
     expect(calls).toEqual([]);
     expect(scheduled).toEqual([]);
-    expect(scheduler.getState()).toEqual({ status: "offline", pending: 0, errorKind: null });
+    expect(scheduler.getState()).toEqual({ status: "signed-out", errorKind: null });
   });
 
-  test("becomes idle with the returned pending count after a successful pass", async () => {
+  test("becomes up to date after a successful pass", async () => {
     const { engine, resolveNext } = createFakeEngine();
-    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+    const scheduler = new SyncScheduler(engine, { timer: createFakeClock().clock });
 
     scheduler.setSession(SESSION);
     resolveNext(makeResult(3));
     await flush();
 
-    expect(scheduler.getState()).toEqual({ status: "idle", pending: 3, errorKind: null });
+    expect(scheduler.getState()).toEqual({ status: "up-to-date", errorKind: null });
   });
 
   test("attempts again when the app returns to the foreground", async () => {
     const { engine, calls, resolveNext } = createFakeEngine();
-    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+    const scheduler = new SyncScheduler(engine, { timer: createFakeClock().clock });
 
     scheduler.setSession(SESSION);
     resolveNext(makeResult());
@@ -148,7 +178,7 @@ describe("SyncScheduler", () => {
   test("a manual retry attempts immediately and cancels a pending backoff wait", async () => {
     const { engine, calls, rejectNext } = createFakeEngine();
     const { clock, scheduled } = createFakeClock();
-    const scheduler = new SyncScheduler(engine, clock);
+    const scheduler = new SyncScheduler(engine, { timer: clock });
 
     scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "network down"));
@@ -165,7 +195,7 @@ describe("SyncScheduler", () => {
 
   test("a local mutation attempts a sync while idle", async () => {
     const { engine, calls, resolveNext } = createFakeEngine();
-    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+    const scheduler = new SyncScheduler(engine, { timer: createFakeClock().clock });
 
     scheduler.setSession(SESSION);
     resolveNext(makeResult());
@@ -178,7 +208,7 @@ describe("SyncScheduler", () => {
 
   test("a local mutation does not pile onto a pending backoff wait", async () => {
     const { engine, calls, rejectNext } = createFakeEngine();
-    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+    const scheduler = new SyncScheduler(engine, { timer: createFakeClock().clock });
 
     scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "network down"));
@@ -192,7 +222,7 @@ describe("SyncScheduler", () => {
 
   test("a local mutation does not start a second sync while one is already in flight", () => {
     const { engine, calls } = createFakeEngine();
-    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+    const scheduler = new SyncScheduler(engine, { timer: createFakeClock().clock });
 
     scheduler.setSession(SESSION);
     expect(scheduler.getState().status).toBe("syncing");
@@ -205,7 +235,7 @@ describe("SyncScheduler", () => {
   test("backs off 2s, 4s, 8s, 16s, 32s, then a 60s ceiling on consecutive transport failures", async () => {
     const { engine, rejectNext } = createFakeEngine();
     const { clock, scheduled, fireLatest } = createFakeClock();
-    const scheduler = new SyncScheduler(engine, clock);
+    const scheduler = new SyncScheduler(engine, { timer: clock });
 
     scheduler.setSession(SESSION);
     const delays: number[] = [];
@@ -222,7 +252,7 @@ describe("SyncScheduler", () => {
   test("resets the backoff to 2s after a successful pass", async () => {
     const { engine, rejectNext, resolveNext } = createFakeEngine();
     const { clock, scheduled, fireLatest } = createFakeClock();
-    const scheduler = new SyncScheduler(engine, clock);
+    const scheduler = new SyncScheduler(engine, { timer: clock });
 
     scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "first failure"));
@@ -237,7 +267,7 @@ describe("SyncScheduler", () => {
     fireLatest();
     resolveNext(makeResult());
     await flush();
-    expect(scheduler.getState().status).toBe("idle");
+    expect(scheduler.getState().status).toBe("up-to-date");
 
     scheduler.notifyAppForeground();
     rejectNext(new ProgressRemoteError("transport", "third failure"));
@@ -248,12 +278,12 @@ describe("SyncScheduler", () => {
   test("escalates to attention only after a second consecutive failure", async () => {
     const { engine, rejectNext } = createFakeEngine();
     const { clock, fireLatest } = createFakeClock();
-    const scheduler = new SyncScheduler(engine, clock);
+    const scheduler = new SyncScheduler(engine, { timer: clock });
 
     scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "first failure"));
     await flush();
-    expect(scheduler.getState().status).toBe("offline");
+    expect(scheduler.getState().status).toBe("retrying");
 
     fireLatest();
     rejectNext(new ProgressRemoteError("transport", "second failure"));
@@ -261,10 +291,10 @@ describe("SyncScheduler", () => {
     expect(scheduler.getState().status).toBe("attention");
   });
 
-  test("pauses without scheduling a retry on an auth failure, but keeps the last pending count", async () => {
+  test("pauses without scheduling a retry on an auth failure", async () => {
     const { engine, calls, resolveNext, rejectNext } = createFakeEngine();
     const { clock, scheduled } = createFakeClock();
-    const scheduler = new SyncScheduler(engine, clock);
+    const scheduler = new SyncScheduler(engine, { timer: clock });
 
     scheduler.setSession(SESSION);
     resolveNext(makeResult(2));
@@ -274,7 +304,7 @@ describe("SyncScheduler", () => {
     rejectNext(new ProgressRemoteError("auth", "session expired"));
     await flush();
 
-    expect(scheduler.getState()).toEqual({ status: "attention", pending: 2, errorKind: "auth" });
+    expect(scheduler.getState()).toEqual({ status: "attention", errorKind: "auth" });
     expect(scheduled).toHaveLength(0);
 
     // The soft local-mutation trigger must not hammer a session already known to be bad.
@@ -285,7 +315,7 @@ describe("SyncScheduler", () => {
   test("signing out mid-backoff cancels the pending retry and clears state", async () => {
     const { engine, rejectNext } = createFakeEngine();
     const { clock, scheduled } = createFakeClock();
-    const scheduler = new SyncScheduler(engine, clock);
+    const scheduler = new SyncScheduler(engine, { timer: clock });
 
     scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "network down"));
@@ -296,31 +326,31 @@ describe("SyncScheduler", () => {
     scheduler.setSession(null);
 
     expect(scheduled[0].cancelled).toBe(true);
-    expect(scheduler.getState()).toEqual({ status: "offline", pending: 0, errorKind: null });
+    expect(scheduler.getState()).toEqual({ status: "signed-out", errorKind: null });
   });
 
   test("signing out while a pass is in flight discards its eventual result", async () => {
     const { engine, calls, resolveNext } = createFakeEngine();
-    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+    const scheduler = new SyncScheduler(engine, { timer: createFakeClock().clock });
 
     scheduler.setSession(SESSION);
     expect(scheduler.getState().status).toBe("syncing");
 
     scheduler.setSession(null);
-    expect(scheduler.getState()).toEqual({ status: "offline", pending: 0, errorKind: null });
+    expect(scheduler.getState()).toEqual({ status: "signed-out", errorKind: null });
 
     // The in-flight pass for the now-abandoned profile finishes late; it must not resurrect
-    // "syncing" or leak its pending count into the signed-out state.
+    // "syncing" from the signed-out state.
     resolveNext(makeResult(7));
     await flush();
 
-    expect(scheduler.getState()).toEqual({ status: "offline", pending: 0, errorKind: null });
+    expect(scheduler.getState()).toEqual({ status: "signed-out", errorKind: null });
     expect(calls).toEqual(["profile-1"]);
   });
 
   test("ignores a stale result from a profile that has since been switched away from", async () => {
     const { engine, calls, resolveNext } = createFakeEngine();
-    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+    const scheduler = new SyncScheduler(engine, { timer: createFakeClock().clock });
     const states = collectStates(scheduler);
 
     scheduler.setSession(SESSION_A);
@@ -333,18 +363,19 @@ describe("SyncScheduler", () => {
     await flush();
 
     expect(scheduler.getState().status).toBe("syncing");
-    expect(states.some((state) => state.pending === 9)).toBe(false);
+    // Had profile-a's result been honoured, profile-b would have been published as caught up.
+    expect(states.every((state) => state.status === "syncing")).toBe(true);
 
     resolveNext(makeResult(1));
     await flush();
 
-    expect(scheduler.getState()).toEqual({ status: "idle", pending: 1, errorKind: null });
+    expect(scheduler.getState()).toEqual({ status: "up-to-date", errorKind: null });
   });
 
   test("dispose cancels a pending retry and ignores every further trigger", async () => {
     const { engine, calls, rejectNext } = createFakeEngine();
     const { clock, scheduled } = createFakeClock();
-    const scheduler = new SyncScheduler(engine, clock);
+    const scheduler = new SyncScheduler(engine, { timer: clock });
 
     scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "network down"));
@@ -364,7 +395,7 @@ describe("SyncScheduler", () => {
 
   test("hands the engine the Supabase account the profile belongs to, not just the profile", async () => {
     const { engine, identities, resolveNext } = createFakeEngine();
-    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+    const scheduler = new SyncScheduler(engine, { timer: createFakeClock().clock });
 
     scheduler.setSession(SESSION_A);
     resolveNext(makeResult());
@@ -376,16 +407,16 @@ describe("SyncScheduler", () => {
     expect(identities).toEqual([SESSION_A, SESSION_B]);
   });
 
-  test("asks for attention, not idle, when a pass leaves a mutation the server keeps refusing", async () => {
+  test("asks for attention, not up to date, when a pass leaves a mutation the server keeps refusing", async () => {
     const { engine, resolveNext } = createFakeEngine();
     const { clock, scheduled } = createFakeClock();
-    const scheduler = new SyncScheduler(engine, clock);
+    const scheduler = new SyncScheduler(engine, { timer: clock });
 
     scheduler.setSession(SESSION);
     resolveNext(makeResult(1, 1));
     await flush();
 
-    expect(scheduler.getState()).toEqual({ status: "attention", pending: 1, errorKind: "rejected" });
+    expect(scheduler.getState()).toEqual({ status: "attention", errorKind: "rejected" });
     // The pass itself succeeded, so there is nothing to back off from — retrying the same request on a
     // timer is exactly what a permanent refusal does not need.
     expect(scheduled).toEqual([]);
@@ -393,7 +424,7 @@ describe("SyncScheduler", () => {
 
   test("queues an explicit retry that arrives while a pass is in flight, rather than dropping it", async () => {
     const { engine, calls, resolveNext } = createFakeEngine();
-    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+    const scheduler = new SyncScheduler(engine, { timer: createFakeClock().clock });
 
     scheduler.setSession(SESSION);
     expect(calls).toEqual(["profile-1"]);
@@ -413,6 +444,145 @@ describe("SyncScheduler", () => {
     resolveNext(makeResult());
     await flush();
     expect(calls).toEqual(["profile-1", "profile-1"]);
-    expect(scheduler.getState().status).toBe("idle");
+    expect(scheduler.getState().status).toBe("up-to-date");
+  });
+
+  test("reports offline instead of attempting while the device has no network", () => {
+    const { engine, calls } = createFakeEngine();
+    const { clock, scheduled } = createFakeClock();
+    const connectivity = createFakeConnectivity(false);
+    const scheduler = new SyncScheduler(engine, { timer: clock, connectivity: connectivity.monitor });
+
+    scheduler.setSession(SESSION);
+    scheduler.notifyLocalMutation();
+    scheduler.notifyAppForeground();
+
+    // Every request would fail on the first byte, and burning backoff steps on that leaves the ladder
+    // long by the time the network is actually back — the delay this whole state exists to remove.
+    expect(calls).toEqual([]);
+    expect(scheduled).toEqual([]);
+    expect(scheduler.getState()).toEqual({ status: "offline", errorKind: null });
+  });
+
+  test("syncs the moment the network returns, rather than waiting out the backoff", async () => {
+    const { engine, calls, rejectNext } = createFakeEngine();
+    const { clock, scheduled } = createFakeClock();
+    const connectivity = createFakeConnectivity(true);
+    const scheduler = new SyncScheduler(engine, { timer: clock, connectivity: connectivity.monitor });
+
+    scheduler.setSession(SESSION);
+    rejectNext(new ProgressRemoteError("transport", "network down"));
+    await flush();
+    expect(scheduler.getState().status).toBe("retrying");
+    expect(scheduled).toHaveLength(1);
+
+    connectivity.set(false);
+
+    expect(scheduler.getState()).toEqual({ status: "offline", errorKind: null });
+    expect(scheduled[0].cancelled).toBe(true);
+
+    connectivity.set(true);
+
+    expect(calls).toEqual(["profile-1", "profile-1"]);
+    expect(scheduler.getState().status).toBe("syncing");
+    // No timer was ever fired to get here: the one that existed was cancelled, and no other was made.
+    expect(scheduled).toHaveLength(1);
+  });
+
+  test("does not restart the failure ladder just because the network came back", async () => {
+    const { engine, rejectNext } = createFakeEngine();
+    const { clock, scheduled } = createFakeClock();
+    const connectivity = createFakeConnectivity(true);
+    const scheduler = new SyncScheduler(engine, { timer: clock, connectivity: connectivity.monitor });
+
+    scheduler.setSession(SESSION);
+    rejectNext(new ProgressRemoteError("transport", "first failure"));
+    await flush();
+    expect(scheduled[0].delayMs).toBe(2000);
+
+    connectivity.set(false);
+    connectivity.set(true);
+    rejectNext(new ProgressRemoteError("transport", "second failure"));
+    await flush();
+
+    // Only a *successful* pass clears the streak. A device flapping between networks would otherwise
+    // sit on the first rung forever and never say anything is wrong.
+    expect(scheduler.getState().status).toBe("attention");
+    expect(scheduled[1].delayMs).toBe(4000);
+  });
+
+  test("reports offline, not a scheduled retry, when a pass fails with the network already gone", async () => {
+    const { engine, rejectNext } = createFakeEngine();
+    const { clock, scheduled } = createFakeClock();
+    const connectivity = createFakeConnectivity(true);
+    const scheduler = new SyncScheduler(engine, { timer: clock, connectivity: connectivity.monitor });
+
+    scheduler.setSession(SESSION);
+    // Airplane mode mid-pass: the request in flight is already doomed.
+    connectivity.set(false);
+    rejectNext(new ProgressRemoteError("transport", "network unreachable"));
+    await flush();
+
+    // "Offline" is the true account of that failure, and a timer would only fire into the same wall.
+    expect(scheduler.getState()).toEqual({ status: "offline", errorKind: null });
+    expect(scheduled).toEqual([]);
+  });
+
+  test("leaves an expired session needing attention while the network flaps", async () => {
+    const { engine, calls, rejectNext } = createFakeEngine();
+    const { clock, scheduled } = createFakeClock();
+    const connectivity = createFakeConnectivity(true);
+    const scheduler = new SyncScheduler(engine, { timer: clock, connectivity: connectivity.monitor });
+
+    scheduler.setSession(SESSION);
+    rejectNext(new ProgressRemoteError("auth", "session expired"));
+    await flush();
+    expect(scheduler.getState()).toEqual({ status: "attention", errorKind: "auth" });
+
+    connectivity.set(false);
+    // A network that came and went says nothing about a session the server has already refused, and
+    // reporting "offline" would replace the one thing the learner actually has to act on.
+    expect(scheduler.getState()).toEqual({ status: "attention", errorKind: "auth" });
+
+    connectivity.set(true);
+
+    expect(calls).toEqual(["profile-1"]);
+    expect(scheduler.getState()).toEqual({ status: "attention", errorKind: "auth" });
+    expect(scheduled).toEqual([]);
+  });
+
+  test("keeps reporting signed-out, not offline, when the network changes while anonymous", () => {
+    const { engine, calls } = createFakeEngine();
+    const { clock } = createFakeClock();
+    const connectivity = createFakeConnectivity(true);
+    const scheduler = new SyncScheduler(engine, { timer: clock, connectivity: connectivity.monitor });
+
+    scheduler.setSession(null);
+    connectivity.set(false);
+    connectivity.set(true);
+
+    // There is nothing to sync and no account to sync it for; "offline" would put a network complaint
+    // in front of a learner who never asked for an account.
+    expect(calls).toEqual([]);
+    expect(scheduler.getState()).toEqual({ status: "signed-out", errorKind: null });
+  });
+
+  test("stops listening to connectivity once disposed", async () => {
+    const { engine, calls, resolveNext } = createFakeEngine();
+    const { clock } = createFakeClock();
+    const connectivity = createFakeConnectivity(true);
+    const scheduler = new SyncScheduler(engine, { timer: clock, connectivity: connectivity.monitor });
+
+    scheduler.setSession(SESSION);
+    resolveNext(makeResult());
+    await flush();
+    expect(connectivity.listenerCount()).toBe(1);
+
+    scheduler.dispose();
+
+    expect(connectivity.listenerCount()).toBe(0);
+    connectivity.set(false);
+    connectivity.set(true);
+    expect(calls).toEqual(["profile-1"]);
   });
 });

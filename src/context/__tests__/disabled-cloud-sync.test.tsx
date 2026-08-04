@@ -27,9 +27,20 @@ jest.mock("../../data/sync/sync-scheduler", () => {
   return { ...actual, SyncScheduler: jest.fn() };
 });
 
+// `expo-network` is a native module, so it needs a mock either way; making both of its entry points
+// `jest.fn()` is what lets the assertions below be about them *not* being reached. A local-only build
+// must not register a network listener or even ask the platform for the current state.
+jest.mock("expo-network", () => ({
+  NetworkStateType: { NONE: "NONE", WIFI: "WIFI", UNKNOWN: "UNKNOWN" },
+  getNetworkStateAsync: jest.fn(),
+  addNetworkStateListener: jest.fn(),
+}));
+
 import { act, render, screen, waitFor } from "@testing-library/react-native";
 import { Text } from "react-native";
 import { AppState } from "react-native";
+
+import * as Network from "expo-network";
 
 import type { CourseRepository } from "../../data/course/course-repository";
 import type { LearnerProfile, ProgressRepository } from "../../data/progress/progress-repository";
@@ -157,7 +168,7 @@ describe("AuthProvider/SyncProvider with cloud sync disabled", () => {
     expect(mockGetSupabaseClient).not.toHaveBeenCalled();
   });
 
-  test("schedules no timer and registers no AppState listener", async () => {
+  test("schedules no timer and registers no AppState or network listener", async () => {
     await render(
       <DataContext.Provider value={dataValue}>
         <AuthProvider>
@@ -175,6 +186,10 @@ describe("AuthProvider/SyncProvider with cloud sync disabled", () => {
     // the only place this codebase calls `setTimeout` for sync is inside `SyncScheduler` itself.
     expect(MockSyncScheduler).not.toHaveBeenCalled();
     expect(addEventListenerSpy).not.toHaveBeenCalled();
+    // Connectivity is watched only to resume sync; with no sync at all there is nothing to resume, and a
+    // local-only build has no business subscribing to the device's network or querying its state.
+    expect(Network.addNetworkStateListener).not.toHaveBeenCalled();
+    expect(Network.getNetworkStateAsync).not.toHaveBeenCalled();
   });
 
   test("renders children immediately, never gating local content on auth or sync hydration", async () => {
@@ -207,7 +222,7 @@ describe("AuthProvider/SyncProvider with cloud sync disabled", () => {
     await waitFor(() => expect(screen.getByTestId("auth-hydrated")).toHaveTextContent("true"));
   });
 
-  test("useSyncStatus() reports a coherent disabled state, not a false attention", async () => {
+  test("useSyncStatus() reports a coherent disabled state, not a false attention or a network complaint", async () => {
     await render(
       <DataContext.Provider value={dataValue}>
         <AuthProvider>
@@ -219,7 +234,7 @@ describe("AuthProvider/SyncProvider with cloud sync disabled", () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByTestId("sync-status")).toHaveTextContent("offline:0:null"),
+      expect(screen.getByTestId("sync-status")).toHaveTextContent("signed-out:0:null"),
     );
   });
 });

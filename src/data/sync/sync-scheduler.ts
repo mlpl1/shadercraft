@@ -3,27 +3,34 @@ import type { SyncResult } from "./progress-sync-engine";
 
 /**
  * What the UI can render about background sync, without ever describing a state that would justify
- * blocking or delaying local learning.
+ * blocking or delaying local learning. Five distinct situations, because a learner acts differently in
+ * each and one name for several of them is what made a working sync look broken:
  *
- * - `"offline"` — nothing is syncing right now: either no authenticated session is active, or the
- *   most recent attempt failed once and a retry is already scheduled.
- * - `"idle"` — authenticated and caught up; the last pass, if any, succeeded.
+ * - `"signed-out"` — no authenticated session is active. Nothing syncs, nothing is scheduled, and
+ *   nothing is wrong: this is every local-only learner's normal state.
+ * - `"offline"` — signed in, but the device reports no usable network. No pass is attempted and no
+ *   retry is scheduled; the moment connectivity returns, one runs (see
+ *   {@link SyncConnectivityMonitor}). Local changes keep queueing meanwhile.
  * - `"syncing"` — a pass is currently running.
+ * - `"retrying"` — the most recent pass failed once with a network up, and an automatic retry is
+ *   already waiting on the backoff ladder. Expected to clear itself.
+ * - `"up-to-date"` — the last pass succeeded and left nothing the server refuses. Whether anything is
+ *   still queued locally is a separate fact the UI reads from the outbox, not from here.
  * - `"attention"` — failure has repeated, the session itself needs the learner's attention
  *   (expired/invalid), or a pass otherwise succeeded but left a mutation the server keeps refusing
  *   ({@link SyncResult.blocked}). Never blocking: it is a signal to surface non-intrusively, not an
  *   error page.
  */
-export type SyncStatus = "offline" | "idle" | "syncing" | "attention";
+export type SyncStatus =
+  | "signed-out"
+  | "offline"
+  | "syncing"
+  | "retrying"
+  | "up-to-date"
+  | "attention";
 
 export type SyncSchedulerState = {
   status: SyncStatus;
-  /**
-   * The last known count of outbox mutations still queued. Carried through a failure rather than
-   * reset, so `attention` never has to guess whether "something's wrong" also means "and now we don't
-   * know how much is unsynced" — see `ProgressSyncEngine`'s own `SyncResult.pending`.
-   */
-  pending: number;
   /** The safe classification of the most recent failure. Cleared to `null` on the next success. */
   errorKind: ProgressRemoteErrorKind | null;
 };
@@ -66,6 +73,36 @@ const REAL_TIMER: SyncSchedulerTimer = {
 };
 
 /**
+ * The device's connectivity, injected for the same reason the timer is: the scheduler must stay free of
+ * native modules, so a test drives outages directly and `src/context/sync-context.tsx` is the single
+ * place that ever touches `expo-network`.
+ *
+ * `isOnline()` answers the scheduler's only question — "is there any point sending a request?" — and
+ * must answer `true` whenever the platform is merely *unsure*. Unknown is not offline: a device whose
+ * reachability cannot be determined has to be allowed to try and let the attempt decide, or it would
+ * stop syncing altogether.
+ */
+export type SyncConnectivityMonitor = {
+  isOnline(): boolean;
+  /** Notified on every change, with the new value. Returns its own unsubscribe. */
+  subscribe(listener: (online: boolean) => void): () => void;
+};
+
+/**
+ * The default for anything that has no connectivity source: always try. Same principle as an unknown
+ * `NetworkState` — the attempt itself, not an assumption, decides whether the network is there.
+ */
+const ALWAYS_ONLINE: SyncConnectivityMonitor = {
+  isOnline: () => true,
+  subscribe: () => () => {},
+};
+
+export type SyncSchedulerOptions = {
+  timer?: SyncSchedulerTimer;
+  connectivity?: SyncConnectivityMonitor;
+};
+
+/**
  * Bounded exponential backoff between automatic retries after a failed pass: doubling from 2s up to
  * a 60s ceiling. Reset to the first step by any successful pass — see {@link SyncScheduler.setSession}
  * and the success branch of {@link SyncScheduler.attempt}.
@@ -73,13 +110,13 @@ const REAL_TIMER: SyncSchedulerTimer = {
 export const BACKOFF_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 32_000, 60_000];
 
 /**
- * How many consecutive automatic failures escalate the non-blocking state from `"offline"` (a single
+ * How many consecutive automatic failures escalate the non-blocking state from `"retrying"` (a single
  * blip, expected to clear itself on the next scheduled retry) to `"attention"` (worth a learner's
  * notice, even though nothing is blocked).
  */
 const ATTENTION_AFTER_CONSECUTIVE_FAILURES = 2;
 
-const INITIAL_STATE: SyncSchedulerState = { status: "offline", pending: 0, errorKind: null };
+const INITIAL_STATE: SyncSchedulerState = { status: "signed-out", errorKind: null };
 
 /**
  * Decides *when* {@link SyncEngineLike.sync} runs and what the UI should show about it. The engine
@@ -87,9 +124,10 @@ const INITIAL_STATE: SyncSchedulerState = { status: "offline", pending: 0, error
  * everything here is about the schedule around it — startup, foreground return, local writes, manual
  * retry, and the backoff that follows a failure — never about the sync algorithm itself.
  *
- * Every external event arrives through one of four methods, so the whole schedule can be driven and
- * observed by a test without touching a clock, `AppState`, or Supabase's own auth listener; turning
- * those real triggers into these calls is `src/context/sync-context.tsx`'s job, not this class's.
+ * Every external event arrives through one of four methods or through the injected
+ * {@link SyncConnectivityMonitor}, so the whole schedule can be driven and observed by a test without
+ * touching a clock, `AppState`, `expo-network`, or Supabase's own auth listener; turning those real
+ * triggers into these calls is `src/context/sync-context.tsx`'s job, not this class's.
  *
  * - {@link setSession} — the authenticated profile changed: signed in, switched accounts, a session
  *   refresh, or signed out. Carries the profile *and* the Supabase account it belongs to, since every
@@ -100,6 +138,11 @@ const INITIAL_STATE: SyncSchedulerState = { status: "offline", pending: 0, error
  *   than dropped when a pass is already in flight, since a person asked for it and handing them the
  *   pass already running would look like the control did nothing.
  * - {@link notifyLocalMutation} — a local write just queued a fresh outbox mutation.
+ *
+ * Connectivity is the fifth trigger, and the only one that is not a method: losing the network stops
+ * the schedule and says so, and regaining it attempts at once. Nothing is *ever* attempted while the
+ * device reports itself offline — every request would fail on the first byte, and spending backoff steps
+ * on that is what left a device sitting out a 60s wait long after the network was back.
  *
  * `setSession`, `notifyAppForeground`, and `retry` all attempt immediately, cancelling any pending
  * backoff wait first: each is either the start of a session or something a person or the OS just did,
@@ -137,11 +180,20 @@ export class SyncScheduler {
   private followUpRequested = false;
   private cancelPendingRetry: (() => void) | null = null;
   private disposed = false;
+  private readonly timer: SyncSchedulerTimer;
+  private readonly connectivity: SyncConnectivityMonitor;
+  private readonly unsubscribeConnectivity: () => void;
 
   constructor(
     private readonly engine: SyncEngineLike,
-    private readonly timer: SyncSchedulerTimer = REAL_TIMER,
-  ) {}
+    options: SyncSchedulerOptions = {},
+  ) {
+    this.timer = options.timer ?? REAL_TIMER;
+    this.connectivity = options.connectivity ?? ALWAYS_ONLINE;
+    this.unsubscribeConnectivity = this.connectivity.subscribe((online) => {
+      this.handleConnectivityChange(online);
+    });
+  }
 
   getState(): SyncSchedulerState {
     return this.state;
@@ -169,7 +221,7 @@ export class SyncScheduler {
     this.followUpRequested = false;
 
     if (session === null) {
-      this.publish({ status: "offline", pending: 0, errorKind: null });
+      this.publish({ status: "signed-out", errorKind: null });
       return;
     }
 
@@ -203,7 +255,38 @@ export class SyncScheduler {
     this.disposed = true;
     this.followUpRequested = false;
     this.cancelTimer();
+    this.unsubscribeConnectivity();
     this.listeners.clear();
+  }
+
+  /**
+   * The network came or went.
+   *
+   * Losing it cancels the backoff wait — every step of that ladder would fire into the same wall — and
+   * publishes `offline`, which is the true account of why nothing is moving. Regaining it attempts at
+   * once, because the reason the wait existed has just gone away; waiting out the remainder is exactly
+   * the delay a learner feels as "sync took ages to notice I was back".
+   *
+   * The failure streak is deliberately *not* reset here: only a successful pass earns that. A device
+   * flapping between networks would otherwise sit on the ladder's first rung forever and never escalate.
+   *
+   * While an `auth` failure is holding the session paused, neither direction changes anything: a network
+   * that came and went says nothing about a session the server has already refused, and replacing that
+   * `attention` with `offline` would hide the one thing the learner has to act on.
+   */
+  private handleConnectivityChange(online: boolean): void {
+    if (this.disposed || this.session === null || this.authPaused) return;
+
+    if (!online) {
+      this.cancelTimer();
+      this.publishOffline();
+      return;
+    }
+
+    // A pass already in flight will report its own outcome; starting a second one is what
+    // `ProgressSyncEngine.sync` would only dedupe back into the first anyway.
+    if (this.syncing) return;
+    this.attempt();
   }
 
   private attempt(): void {
@@ -211,12 +294,20 @@ export class SyncScheduler {
     if (session === null) return;
 
     this.cancelTimer();
+    if (!this.connectivity.isOnline()) {
+      // Known-offline — not merely unsure, which counts as online (see `SyncConnectivityMonitor`).
+      // Whatever asked for this pass stays true until the network is back, and `handleConnectivityChange`
+      // runs it then; queued mutations are untouched either way.
+      this.publishOffline();
+      return;
+    }
+
     this.syncing = true;
     this.authPaused = false;
     // A pass starting now supersedes any queued follow-up: it will read the outbox afresh anyway.
     this.followUpRequested = false;
     const generation = this.generation;
-    this.publish({ ...this.state, status: "syncing" });
+    this.publish({ status: "syncing", errorKind: this.state.errorKind });
 
     this.engine.sync(session.profileId, session.supabaseUserId).then(
       (result) => {
@@ -228,9 +319,9 @@ export class SyncScheduler {
         if (result.blocked > 0) {
           // Reported as `rejected` because that is what a blocked mutation means to the learner: the
           // server has considered it and will not take it, and no amount of waiting changes that.
-          this.publish({ status: "attention", pending: result.pending, errorKind: "rejected" });
+          this.publish({ status: "attention", errorKind: "rejected" });
         } else {
-          this.publish({ status: "idle", pending: result.pending, errorKind: null });
+          this.publish({ status: "up-to-date", errorKind: null });
         }
         this.runQueuedFollowUp();
       },
@@ -262,15 +353,33 @@ export class SyncScheduler {
       // simply stops scheduling and waits for whatever happens next: a fresh sign-in, a foreground
       // return, or a manual retry.
       this.authPaused = true;
-      this.publish({ status: "attention", pending: this.state.pending, errorKind: "auth" });
+      this.publish({ status: "attention", errorKind: "auth" });
       return;
     }
 
     this.failureStreak += 1;
+
+    // The network went away under the pass. It failed for a reason that has nothing to say about the
+    // server, so say *that* — and schedule nothing, because `handleConnectivityChange` owns the resume.
+    // The streak still counted, so a flapping connection escalates rather than looping quietly.
+    if (!this.connectivity.isOnline()) {
+      this.publishOffline();
+      return;
+    }
+
     const status: SyncStatus =
-      this.failureStreak >= ATTENTION_AFTER_CONSECUTIVE_FAILURES ? "attention" : "offline";
-    this.publish({ status, pending: this.state.pending, errorKind: kind });
+      this.failureStreak >= ATTENTION_AFTER_CONSECUTIVE_FAILURES ? "attention" : "retrying";
+    this.publish({ status, errorKind: kind });
     this.scheduleRetry();
+  }
+
+  /**
+   * The one place `offline` is published, and it always clears `errorKind`: "this device has no network"
+   * is the whole explanation, and an earlier failure's kind only describes a server that is now
+   * unreachable anyway — showing "it will keep retrying automatically" underneath would be a lie.
+   */
+  private publishOffline(): void {
+    this.publish({ status: "offline", errorKind: null });
   }
 
   private scheduleRetry(): void {

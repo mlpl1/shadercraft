@@ -30,8 +30,17 @@ jest.mock("../../data/sync/progress-sync-engine", () => ({
 // `src/app/__tests__/account.test.tsx` mocks it.
 jest.mock("../auth-context", () => ({ useAuth: jest.fn() }));
 
+// The one native module in play. `addNetworkStateListener` is the seam every connectivity test below
+// drives: the listener registered through it *is* the device's network as far as this suite is concerned.
+jest.mock("expo-network", () => ({
+  NetworkStateType: { NONE: "NONE", WIFI: "WIFI", UNKNOWN: "UNKNOWN" },
+  getNetworkStateAsync: jest.fn(),
+  addNetworkStateListener: jest.fn(),
+}));
+
 import { act, render, screen, waitFor } from "@testing-library/react-native";
 import { Text } from "react-native";
+import * as Network from "expo-network";
 
 import type { CourseRepository } from "../../data/course/course-repository";
 import type {
@@ -44,6 +53,53 @@ import { DataContext, type DataContextValue } from "../data-context";
 import { SyncProvider, useSyncStatus } from "../sync-context";
 
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+const mockAddNetworkStateListener = Network.addNetworkStateListener as jest.MockedFunction<
+  typeof Network.addNetworkStateListener
+>;
+const mockGetNetworkStateAsync = Network.getNetworkStateAsync as jest.MockedFunction<
+  typeof Network.getNetworkStateAsync
+>;
+
+const CONNECTED: Network.NetworkState = {
+  isConnected: true,
+  isInternetReachable: true,
+  type: Network.NetworkStateType.WIFI,
+};
+const DISCONNECTED: Network.NetworkState = {
+  isConnected: false,
+  isInternetReachable: false,
+  type: Network.NetworkStateType.NONE,
+};
+
+/**
+ * Stands in for the device's network. `emit` calls whatever listener `SyncProvider` registered — so a
+ * provider that registered none, or that ignored the callback, fails rather than quietly passing.
+ */
+function createFakeNetwork() {
+  const listeners: ((state: Network.NetworkState) => void)[] = [];
+  let removed = 0;
+
+  mockAddNetworkStateListener.mockImplementation((listener) => {
+    listeners.push(listener as (state: Network.NetworkState) => void);
+    return {
+      remove: () => {
+        removed += 1;
+      },
+    } as ReturnType<typeof Network.addNetworkStateListener>;
+  });
+  mockGetNetworkStateAsync.mockResolvedValue(CONNECTED);
+
+  return {
+    listenerCount: () => listeners.length,
+    removeCount: () => removed,
+    async emit(state: Network.NetworkState): Promise<void> {
+      if (listeners.length === 0) throw new Error("SyncProvider registered no network listener");
+      await act(async () => {
+        for (const listener of listeners) listener(state);
+      });
+    },
+  };
+}
 
 const PROFILE_ID = "profile-1";
 const SUPABASE_USER_ID = "user-1";
@@ -161,10 +217,12 @@ async function renderProvider(repository: FakeRepository) {
 
 describe("SyncProvider with cloud sync enabled", () => {
   let repository: FakeRepository;
+  let network: ReturnType<typeof createFakeNetwork>;
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockEnginePasses.reset();
+    network = createFakeNetwork();
     repository = createFakeRepository();
     mockUseAuth.mockReturnValue({
       session: { userId: SUPABASE_USER_ID, email: "learner@example.com" },
@@ -240,5 +298,83 @@ describe("SyncProvider with cloud sync enabled", () => {
     expect(screen.getByTestId("last-success")).toHaveTextContent("null");
     expect(repository.getLastSyncSuccessAt).not.toHaveBeenCalled();
     expect(mockEnginePasses.calls).toEqual([]);
+  });
+
+  test("turns a lost network into the offline status", async () => {
+    await renderProvider(repository);
+    await mockEnginePasses.resolveNext(makeResult(0));
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("up-to-date"));
+
+    await network.emit(DISCONNECTED);
+
+    expect(screen.getByTestId("status")).toHaveTextContent("offline");
+  });
+
+  test("syncs the moment the network returns, without waiting on any timer", async () => {
+    await renderProvider(repository);
+    await mockEnginePasses.resolveNext(makeResult(0));
+    await network.emit(DISCONNECTED);
+    expect(mockEnginePasses.calls).toHaveLength(1);
+
+    await network.emit(CONNECTED);
+
+    // Synchronously after the listener fired, with real timers untouched: the shortest backoff step is
+    // two seconds, so a scheduler that waited on one could not possibly have got here yet.
+    expect(mockEnginePasses.calls).toHaveLength(2);
+    expect(screen.getByTestId("status")).toHaveTextContent("syncing");
+  });
+
+  test("keeps the queued count truthful while offline, which is when it matters most", async () => {
+    await renderProvider(repository);
+    await mockEnginePasses.resolveNext(makeResult(0));
+    await network.emit(DISCONNECTED);
+
+    // Airplane mode, three lessons completed: each is queued locally and none can be sent.
+    repository.getPendingMutations.mockResolvedValue([
+      mutation("m-1"),
+      mutation("m-2"),
+      mutation("m-3"),
+    ]);
+    await repository.notifyChange();
+
+    await waitFor(() => expect(screen.getByTestId("pending")).toHaveTextContent("3"));
+    expect(screen.getByTestId("status")).toHaveTextContent("offline");
+    // Still nothing sent — the outbox is what changed, not the network.
+    expect(mockEnginePasses.calls).toHaveLength(1);
+  });
+
+  test("treats an unknown reachability as reachable rather than as offline", async () => {
+    await renderProvider(repository);
+    await mockEnginePasses.resolveNext(makeResult(0));
+
+    // Android can report a connection whose internet reachability it has not established, and every
+    // field of `NetworkState` is optional. Refusing to sync on that would strand such a device forever.
+    await network.emit({
+      isConnected: true,
+      isInternetReachable: undefined,
+      type: Network.NetworkStateType.UNKNOWN,
+    });
+
+    expect(screen.getByTestId("status")).toHaveTextContent("up-to-date");
+
+    // And it is genuinely treated as online, not merely left alone: a foreground-style trigger still
+    // reaches the engine.
+    await network.emit(DISCONNECTED);
+    await network.emit({ isConnected: true, type: Network.NetworkStateType.UNKNOWN });
+    expect(mockEnginePasses.calls).toHaveLength(2);
+  });
+
+  test("registers exactly one network listener and removes it on unmount", async () => {
+    const view = await renderProvider(repository);
+    await mockEnginePasses.resolveNext(makeResult(0));
+
+    expect(network.listenerCount()).toBe(1);
+    expect(mockGetNetworkStateAsync).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      view.unmount();
+    });
+
+    expect(network.removeCount()).toBe(1);
   });
 });

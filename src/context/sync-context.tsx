@@ -9,12 +9,18 @@ import {
   type PropsWithChildren,
 } from "react";
 import { AppState } from "react-native";
+import * as Network from "expo-network";
 
 import type { ProgressSyncRepository } from "../data/progress/progress-repository";
 import type { ProgressRemoteErrorKind } from "../data/sync/progress-remote";
 import { ProgressSyncEngine } from "../data/sync/progress-sync-engine";
 import { createSupabaseProgressRemote } from "../data/sync/supabase-progress-remote";
-import { SyncScheduler, type SyncSchedulerState, type SyncStatus } from "../data/sync/sync-scheduler";
+import {
+  SyncScheduler,
+  type SyncConnectivityMonitor,
+  type SyncSchedulerState,
+  type SyncStatus,
+} from "../data/sync/sync-scheduler";
 import { getSupabaseClient, isCloudSyncEnabled } from "../data/supabase/client";
 import { useAuth } from "./auth-context";
 import { useData } from "./data-context";
@@ -44,12 +50,27 @@ type SyncContextValue = {
   retrySync: () => void;
 };
 
-const INITIAL_STATE: SyncSchedulerState = { status: "offline", pending: 0, errorKind: null };
+const INITIAL_STATE: SyncSchedulerState = { status: "signed-out", errorKind: null };
 
 /** What {@link SyncProvider} reads out of SQLite rather than out of the scheduler's own state. */
 type DurableSyncFacts = { pending: number; lastSuccessAt: string | null };
 
 const NO_DURABLE_FACTS: DurableSyncFacts = { pending: 0, lastSuccessAt: null };
+
+/**
+ * Whether a reported network state is worth attempting a sync over.
+ *
+ * Every field of `NetworkState` is optional, and `isInternetReachable` is `undefined` on platforms that
+ * do not probe — so only an explicit negative counts as offline. Treating "unknown" as offline would
+ * stop syncing outright on any device with an ambiguous state, which is far worse than making one
+ * request that fails and reports itself.
+ */
+function isConsideredOnline(state: Network.NetworkState): boolean {
+  if (state.type === Network.NetworkStateType.NONE) return false;
+  if (state.isConnected === false) return false;
+  if (state.isInternetReachable === false) return false;
+  return true;
+}
 
 const SyncContext = createContext<SyncContextValue | null>(null);
 
@@ -58,13 +79,14 @@ const SyncContext = createContext<SyncContextValue | null>(null);
  * it, without ever making local learning wait on any of it.
  *
  * Nothing here runs when `isCloudSyncEnabled()` is false, or before `DataProvider` is `ready`: no
- * Supabase client, no `AppState` listener, no scheduler, no timer — every effect below is gated on
- * both. `AuthProvider`'s *activated* session (not the raw one) drives the scheduler, so a profile
- * switch here always trails the matching switch in `auth-context.tsx`, never races it.
+ * Supabase client, no `AppState` listener, no `expo-network` listener, no scheduler, no timer — every
+ * effect below is gated on both. `AuthProvider`'s *activated* session (not the raw one) drives the
+ * scheduler, so a profile switch here always trails the matching switch in `auth-context.tsx`, never
+ * races it.
  *
- * `AppState` and the local progress repository's own change notifications are read here and turned
- * into scheduler calls; `SyncScheduler` itself never imports either, which is what makes it testable
- * without React Native at all (see `src/data/sync/__tests__/sync-scheduler.test.ts`).
+ * `AppState`, `expo-network`, and the local progress repository's own change notifications are read here
+ * and turned into scheduler input; `SyncScheduler` itself never imports any of them, which is what makes
+ * it testable without React Native at all (see `src/data/sync/__tests__/sync-scheduler.test.ts`).
  */
 export function SyncProvider({ children }: PropsWithChildren) {
   const data = useData();
@@ -75,6 +97,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<SyncSchedulerState>(INITIAL_STATE);
   const [durableFacts, setDurableFacts] = useState<DurableSyncFacts>(NO_DURABLE_FACTS);
   const schedulerRef = useRef<SyncScheduler | null>(null);
+  const connectivity = useConnectivityMonitor(enabled);
 
   // Builds the engine and scheduler once cloud sync is enabled and a repository exists, and rebuilds
   // them if the repository is ever replaced (e.g. `DataProvider.retry()` after a startup failure),
@@ -87,7 +110,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
       remote,
       progressRepository as unknown as ProgressSyncRepository,
     );
-    const scheduler = new SyncScheduler(engine);
+    const scheduler = new SyncScheduler(engine, { connectivity });
     schedulerRef.current = scheduler;
 
     // A freshly constructed scheduler's state always matches `INITIAL_STATE` (below), which is what
@@ -101,7 +124,9 @@ export function SyncProvider({ children }: PropsWithChildren) {
       schedulerRef.current = null;
       setState(INITIAL_STATE);
     };
-  }, [enabled, progressRepository]);
+    // `connectivity` is a stable object for this provider's whole life (see `useConnectivityMonitor`),
+    // so it never causes a rebuild here.
+  }, [enabled, progressRepository, connectivity]);
 
   // Drives the authenticated profile into the scheduler. `auth.session` is the *activated* session —
   // see `auth-context.tsx` — so this never fires ahead of the profile switch it depends on.
@@ -200,6 +225,66 @@ export function SyncProvider({ children }: PropsWithChildren) {
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
+}
+
+/**
+ * The one place `expo-network` is read, turned into the framework-free {@link SyncConnectivityMonitor}
+ * the scheduler takes — the same shape as the `AppState` listener above, and for the same reason.
+ *
+ * The monitor object is stable for the provider's whole life, and the *value* behind it lives in a ref,
+ * so `isOnline()` always answers with the newest reading without a re-render standing between the
+ * network changing and the scheduler being able to see it.
+ *
+ * Nothing is registered or queried when `enabled` is false: a local-only build must not so much as ask
+ * the platform about the network. Until the first reading lands the answer is "online", because an
+ * unknown network has to be tried rather than assumed away (see {@link isConsideredOnline}).
+ */
+function useConnectivityMonitor(enabled: boolean): SyncConnectivityMonitor {
+  const onlineRef = useRef(true);
+  const listenersRef = useRef(new Set<(online: boolean) => void>());
+
+  const monitor = useMemo<SyncConnectivityMonitor>(
+    () => ({
+      isOnline: () => onlineRef.current,
+      subscribe: (listener) => {
+        listenersRef.current.add(listener);
+        return () => {
+          listenersRef.current.delete(listener);
+        };
+      },
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+
+    let cancelled = false;
+    const apply = (networkState: Network.NetworkState) => {
+      const online = isConsideredOnline(networkState);
+      // Only real transitions are published: a listener that fired for a change the scheduler does not
+      // care about (a Wi-Fi-to-cellular hop, say) must not read as the network having come back and
+      // trigger a pass.
+      if (cancelled || online === onlineRef.current) return;
+      onlineRef.current = online;
+      for (const listener of [...listenersRef.current]) listener(online);
+    };
+
+    const subscription = Network.addNetworkStateListener(apply);
+    // Subscribed first, then read: a change arriving between the two is seen either way, where the
+    // reverse order could miss one entirely.
+    void Network.getNetworkStateAsync().then(apply, () => {
+      // A platform that will not answer is not a platform that is offline; leave the assumption alone
+      // and let the next attempt find out.
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, [enabled]);
+
+  return monitor;
 }
 
 export function useSyncStatus(): SyncContextValue {
