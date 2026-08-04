@@ -1,6 +1,7 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
 import type { DatabaseDriver, SqlValue } from "../driver";
+import { TransactionQueue } from "../transaction-queue";
 
 function toNodeValues(params: readonly SqlValue[]): SQLInputValue[] {
   return params.map((value) => value);
@@ -8,6 +9,7 @@ function toNodeValues(params: readonly SqlValue[]): SQLInputValue[] {
 
 export class NodeSqliteDriver implements DatabaseDriver {
   private readonly database: DatabaseSync;
+  private readonly transactions = new TransactionQueue();
 
   constructor(path: string) {
     this.database = new DatabaseSync(path);
@@ -38,15 +40,17 @@ export class NodeSqliteDriver implements DatabaseDriver {
   }
 
   async transaction<T>(work: () => Promise<T>): Promise<T> {
-    this.database.exec("BEGIN");
-    try {
-      const result = await work();
-      this.database.exec("COMMIT");
-      return result;
-    } catch (error) {
-      this.database.exec("ROLLBACK");
-      throw error;
-    }
+    return this.transactions.run(async () => {
+      this.database.exec("BEGIN");
+      try {
+        const result = await work();
+        this.database.exec("COMMIT");
+        return result;
+      } catch (error) {
+        this.database.exec("ROLLBACK");
+        throw error;
+      }
+    });
   }
 
   async close(): Promise<void> {

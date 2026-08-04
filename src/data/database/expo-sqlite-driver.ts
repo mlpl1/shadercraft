@@ -1,8 +1,11 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import type { DatabaseDriver, SqlValue } from "./driver";
+import { TransactionQueue } from "./transaction-queue";
 
 export class ExpoSqliteDriver implements DatabaseDriver {
+  private readonly transactions = new TransactionQueue();
+
   constructor(private readonly database: SQLiteDatabase) {}
 
   async exec(sql: string): Promise<void> {
@@ -25,11 +28,13 @@ export class ExpoSqliteDriver implements DatabaseDriver {
   }
 
   async transaction<T>(work: () => Promise<T>): Promise<T> {
-    let result: T | undefined;
-    await this.database.withTransactionAsync(async () => {
-      result = await work();
+    return this.transactions.run(async () => {
+      let result: T | undefined;
+      await this.database.withTransactionAsync(async () => {
+        result = await work();
+      });
+      return result as T;
     });
-    return result as T;
   }
 
   async close(): Promise<void> {
