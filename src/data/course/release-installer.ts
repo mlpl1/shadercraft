@@ -20,10 +20,21 @@ export const ACTIVE_RELEASE_KEY = "active_release_id";
 export const PREVIOUS_ACTIVE_RELEASE_KEY = "previous_active_release_id";
 
 export type ReleaseInstallOutcome = {
-  /** `unchanged` when the release was already installed *and* already active. */
+  /** `unchanged` when nothing was written: no rows inserted and the active pointer left alone. */
   status: "activated" | "unchanged";
   releaseId: string;
 };
+
+/**
+ * When an install is allowed to move `app_metadata.active_release_id`.
+ *
+ * - `always` — downloaded releases: the point of installing one is to make it active.
+ * - `only-when-none-active` — the bundled seed, which runs on *every* cold start. An already
+ *   installed bundled release must never claim the pointer back from a newer downloaded release the
+ *   learner already has; it activates only on genuine first launch, or to repair a database whose
+ *   pointer is missing or names a release that is not installed.
+ */
+export type ReleaseActivationPolicy = "always" | "only-when-none-active";
 
 export type StageAndActivateOptions = {
   /**
@@ -37,6 +48,8 @@ export type StageAndActivateOptions = {
    * `npm run content:check` and the asset ships inside the signed application bundle.
    */
   verifyChecksum?: boolean;
+  /** See {@link ReleaseActivationPolicy}. Defaults to `always`. */
+  activation?: ReleaseActivationPolicy;
 };
 
 /**
@@ -107,7 +120,11 @@ export class ReleaseInstaller {
 
   async stageAndActivate(
     payload: unknown,
-    { manifestChecksum, verifyChecksum = true }: StageAndActivateOptions = {},
+    {
+      manifestChecksum,
+      verifyChecksum = true,
+      activation = "always",
+    }: StageAndActivateOptions = {},
   ): Promise<ReleaseInstallOutcome> {
     // Validate and verify outside the transaction: see the class doc's rule 1.
     const release = parseCourseRelease(payload);
@@ -137,7 +154,7 @@ export class ReleaseInstaller {
           )
         )?.value ?? null;
 
-      if (installed && activeReleaseId === release.id) {
+      if (installed && (await this.keepsActiveRelease(activation, activeReleaseId, release.id))) {
         return { status: "unchanged", releaseId: release.id };
       }
 
@@ -162,6 +179,34 @@ export class ReleaseInstaller {
   }
 
   /**
+   * Whether an already installed release should leave the active pointer exactly as it is.
+   *
+   * Under `always` that is only true when this release is already the active one. Under
+   * `only-when-none-active` it is true whenever *any* usable release is active — which is what stops
+   * the bundled seed, running on every cold start, from silently reverting a learner who has a newer
+   * downloaded release. "Usable" means the pointer names a release whose rows are actually
+   * installed: a dangling or missing pointer leaves the app with no readable curriculum, so the
+   * bundled release must step in and repair it.
+   */
+  private async keepsActiveRelease(
+    activation: ReleaseActivationPolicy,
+    activeReleaseId: string | null,
+    releaseId: string,
+  ): Promise<boolean> {
+    if (activeReleaseId === releaseId) {
+      return true;
+    }
+    if (activation === "always" || activeReleaseId === null) {
+      return false;
+    }
+    return (
+      (await this.driver.first<{ id: string }>("SELECT id FROM content_releases WHERE id = ?", [
+        activeReleaseId,
+      ])) !== null
+    );
+  }
+
+  /**
    * Deletes downloaded releases that are no longer needed, returning the ids removed.
    *
    * Retains, unconditionally:
@@ -173,9 +218,26 @@ export class ReleaseInstaller {
    * Never called from inside the activation transaction — reclaiming disk is not part of making a
    * release usable, and mixing the two would put unrelated deletes at risk of rolling back an
    * activation (and vice versa).
+   *
+   * Rejects unless `bundledReleaseId` names an installed release. The bundled id is the one input
+   * here that protects a release from deletion, so a caller passing a stale or wrong id would not
+   * fail visibly — it would quietly delete the real bundled release whenever that release happened
+   * to be neither active nor the rollback target. Failing loudly keeps a caller bug from costing a
+   * learner their offline fallback.
    */
   async deleteSupersededReleases(bundledReleaseId: string): Promise<string[]> {
     return this.driver.transaction(async () => {
+      const bundled = await this.driver.first<{ id: string }>(
+        "SELECT id FROM content_releases WHERE id = ?",
+        [bundledReleaseId],
+      );
+      if (!bundled) {
+        throw new Error(
+          `Refusing to clean up releases: ${JSON.stringify(bundledReleaseId)} is not an installed ` +
+            `release, so it cannot be the bundled release to retain`,
+        );
+      }
+
       const retained = new Set(
         [
           bundledReleaseId,

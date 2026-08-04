@@ -6,6 +6,7 @@ import { calculateNodeReleaseChecksum } from "../../../../scripts/content/node-c
 import type { SqlValue } from "../../database/driver";
 import type { ReleaseLike } from "../canonicalize";
 import { migrateDatabase } from "../../database/migrations";
+import { installBundledRelease } from "../../database/seed";
 import { NodeSqliteDriver } from "../../database/testing/node-sqlite-driver";
 import {
   ACTIVE_RELEASE_KEY,
@@ -389,6 +390,109 @@ describe("release installer", () => {
   });
 });
 
+/**
+ * `installBundledRelease` runs on every cold start, so what it does when a *downloaded* release is
+ * already active is the difference between "the learner keeps their curriculum" and "relaunching
+ * silently reverts them to the shipped one".
+ */
+describe("bundled seed on relaunch", () => {
+  let driver: NodeSqliteDriver;
+  let repository: SqliteCourseRepository;
+  let installer: ReleaseInstaller;
+  let notifications: number;
+
+  beforeEach(async () => {
+    driver = new NodeSqliteDriver(":memory:");
+    await migrateDatabase(driver);
+    repository = new SqliteCourseRepository(driver);
+    notifications = 0;
+    repository.subscribe(() => {
+      notifications += 1;
+    });
+    installer = new ReleaseInstaller(driver, repository);
+  });
+
+  afterEach(async () => {
+    await driver.close();
+  });
+
+  test("leaves an active downloaded release alone when the bundled release is reinstalled", async () => {
+    await installBundledRelease(driver, bundledCourse);
+    await installer.stageAndActivate(derivedRelease("remote-1"));
+    notifications = 0;
+
+    // The production wrapper, and the same install through an observer-carrying installer so the
+    // "no notification" assertion below cannot pass merely because nothing was subscribed.
+    await installBundledRelease(driver, bundledCourse);
+    await expect(
+      installer.stageAndActivate(bundledCourse, {
+        activation: "only-when-none-active",
+        verifyChecksum: false,
+      }),
+    ).resolves.toEqual({ status: "unchanged", releaseId: bundledRelease.id });
+
+    await expect(readMetadata(driver, ACTIVE_RELEASE_KEY)).resolves.toBe("remote-1");
+    await expect(readMetadata(driver, PREVIOUS_ACTIVE_RELEASE_KEY)).resolves.toBe(
+      bundledRelease.id,
+    );
+    await expect(repository.getActiveRelease()).resolves.toMatchObject({ id: "remote-1" });
+    expect(notifications).toBe(0);
+  });
+
+  test("survives repeated relaunches without ever reclaiming the pointer", async () => {
+    await installBundledRelease(driver, bundledCourse);
+    await installer.stageAndActivate(derivedRelease("remote-1"));
+
+    for (let relaunch = 0; relaunch < 3; relaunch += 1) {
+      await installBundledRelease(driver, bundledCourse);
+    }
+
+    await expect(readMetadata(driver, ACTIVE_RELEASE_KEY)).resolves.toBe("remote-1");
+    await expect(readMetadata(driver, PREVIOUS_ACTIVE_RELEASE_KEY)).resolves.toBe(
+      bundledRelease.id,
+    );
+  });
+
+  test("activates the bundled release on genuine first launch", async () => {
+    await installBundledRelease(driver, bundledCourse);
+
+    await expect(readMetadata(driver, ACTIVE_RELEASE_KEY)).resolves.toBe(bundledRelease.id);
+    await expect(readMetadata(driver, PREVIOUS_ACTIVE_RELEASE_KEY)).resolves.toBeNull();
+    await expect(repository.getActiveRelease()).resolves.toMatchObject({ id: bundledRelease.id });
+  });
+
+  test("repairs a database holding the bundled rows with no active pointer", async () => {
+    await installBundledRelease(driver, bundledCourse);
+    await driver.run("DELETE FROM app_metadata WHERE key = ?", [ACTIVE_RELEASE_KEY]);
+    notifications = 0;
+
+    await expect(
+      installer.stageAndActivate(bundledCourse, {
+        activation: "only-when-none-active",
+        verifyChecksum: false,
+      }),
+    ).resolves.toEqual({ status: "activated", releaseId: bundledRelease.id });
+
+    await expect(readMetadata(driver, ACTIVE_RELEASE_KEY)).resolves.toBe(bundledRelease.id);
+    // Repairing a missing pointer *is* an active-release change, so subscribers must hear about it.
+    expect(notifications).toBe(1);
+    await expect(repository.getActiveRelease()).resolves.toMatchObject({ id: bundledRelease.id });
+  });
+
+  test("repairs an active pointer naming a release that is not installed", async () => {
+    await installBundledRelease(driver, bundledCourse);
+    await driver.run("UPDATE app_metadata SET value = ? WHERE key = ?", [
+      "remote-vanished",
+      ACTIVE_RELEASE_KEY,
+    ]);
+
+    await installBundledRelease(driver, bundledCourse);
+
+    await expect(readMetadata(driver, ACTIVE_RELEASE_KEY)).resolves.toBe(bundledRelease.id);
+    await expect(repository.getActiveRelease()).resolves.toMatchObject({ id: bundledRelease.id });
+  });
+});
+
 describe("superseded release cleanup", () => {
   let driver: NodeSqliteDriver;
   let installer: ReleaseInstaller;
@@ -418,6 +522,65 @@ describe("superseded release cleanup", () => {
     ).resolves.toEqual([{ id: bundledRelease.id }, { id: "remote-2" }, { id: "remote-3" }]);
     await expect(countRows(driver, "remote-1")).resolves.toBe(0);
     await expect(countRows(driver, "remote-3")).resolves.toBeGreaterThan(0);
+  });
+
+  test("refuses to run when the bundled release ID names nothing installed", async () => {
+    await installer.stageAndActivate(derivedRelease("remote-1"));
+    await installer.stageAndActivate(derivedRelease("remote-2"));
+    await installer.stageAndActivate(derivedRelease("remote-3"));
+
+    // A stale or mistyped bundled id would otherwise delete the real bundled release, silently.
+    await expect(installer.deleteSupersededReleases("bundled-2026-01-01")).rejects.toThrow(
+      /is not an installed release/,
+    );
+    await expect(
+      driver.all<{ id: string }>("SELECT id FROM content_releases ORDER BY id"),
+    ).resolves.toEqual([
+      { id: bundledRelease.id },
+      { id: "remote-1" },
+      { id: "remote-2" },
+      { id: "remote-3" },
+    ]);
+    await expect(countRows(driver, bundledRelease.id)).resolves.toBeGreaterThan(0);
+  });
+
+  test("keeps the right retention set at every step of download, download, relaunch", async () => {
+    // Step 1 — first launch: only the bundled release exists and nothing is superseded.
+    await expect(installer.deleteSupersededReleases(bundledRelease.id)).resolves.toEqual([]);
+    await expect(readMetadata(driver, ACTIVE_RELEASE_KEY)).resolves.toBe(bundledRelease.id);
+    await expect(readMetadata(driver, PREVIOUS_ACTIVE_RELEASE_KEY)).resolves.toBeNull();
+
+    // Step 2 — download A: bundled becomes the rollback target.
+    await installer.stageAndActivate(derivedRelease("remote-a"));
+    await expect(readMetadata(driver, PREVIOUS_ACTIVE_RELEASE_KEY)).resolves.toBe(
+      bundledRelease.id,
+    );
+    await expect(installer.deleteSupersededReleases(bundledRelease.id)).resolves.toEqual([]);
+
+    // Step 3 — download B: A becomes the rollback target; bundled is now superseded but retained.
+    await installer.stageAndActivate(derivedRelease("remote-b"));
+    await expect(readMetadata(driver, PREVIOUS_ACTIVE_RELEASE_KEY)).resolves.toBe("remote-a");
+    await expect(installer.deleteSupersededReleases(bundledRelease.id)).resolves.toEqual([]);
+
+    // Step 4 — relaunch: the bundled seed must not disturb either pointer, so the retention set is
+    // unchanged and cleanup still deletes nothing.
+    await installBundledRelease(driver, bundledCourse);
+    await expect(readMetadata(driver, ACTIVE_RELEASE_KEY)).resolves.toBe("remote-b");
+    await expect(readMetadata(driver, PREVIOUS_ACTIVE_RELEASE_KEY)).resolves.toBe("remote-a");
+    await expect(installer.deleteSupersededReleases(bundledRelease.id)).resolves.toEqual([]);
+    await expect(
+      driver.all<{ id: string }>("SELECT id FROM content_releases ORDER BY id"),
+    ).resolves.toEqual([
+      { id: bundledRelease.id },
+      { id: "remote-a" },
+      { id: "remote-b" },
+    ]);
+
+    // Step 5 — download C: A is finally collectable, and only A.
+    await installer.stageAndActivate(derivedRelease("remote-c"));
+    await expect(installer.deleteSupersededReleases(bundledRelease.id)).resolves.toEqual([
+      "remote-a",
+    ]);
   });
 
   test("removes child rows without relying on ON DELETE CASCADE", async () => {
