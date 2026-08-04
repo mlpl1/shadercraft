@@ -46,6 +46,10 @@ export interface LearnerProfileRepository {
    * (new IDs, the target's own base revisions), marking the source's mutations merged so they can
    * never upload or be re-imported, and recording the merge target on the source profile.
    *
+   * Every claimed lesson enters the target's outbox, including one whose cached value in the target
+   * already matches: that cached value may be stale, and only an outbox mutation can make the guest's
+   * explicit action win through the normal revision flow rather than be overwritten by the next pull.
+   *
    * Idempotent: repeating a merge that already happened changes nothing, and a source holding
    * nothing to claim is left unmerged and reusable. Merging a source into a second, different target
    * is refused rather than silently moving progress between accounts, and so is merging into a
@@ -68,7 +72,13 @@ export interface LearnerProfileRepository {
  * called from inside another transaction — see `../database/transaction-queue`.
  */
 export interface ProgressSyncRepository {
-  /** Unmerged outbox mutations for `profileId`, oldest first. Creation order is upload order. */
+  /**
+   * Unmerged outbox mutations for `profileId`, in the order they were queued — which is the order they
+   * must be uploaded in, since the server treats the last action it accepts for a lesson as
+   * authoritative. Implementations must derive that order from something monotonic per insert, never
+   * from `createdAt`: device clocks tie and can move backwards, and either would hand authority to the
+   * older of two actions.
+   */
   getPendingMutations(profileId: string): Promise<ProgressMutation[]>;
   /**
    * Records that the server accepted `mutationId`: drops the outbox row and stamps the resulting
@@ -117,7 +127,7 @@ export interface ProgressRepository {
   getCompletedLessonIds(): Promise<string[]>;
   isLessonCompleted(lessonId: string): Promise<boolean>;
   setLessonCompleted(lessonId: string, completed: boolean): Promise<void>;
-  /** Unmerged outbox mutations for the active profile, oldest first. */
+  /** Unmerged outbox mutations for the active profile, in the order they were queued. */
   getPendingMutations(): Promise<ProgressMutation[]>;
   /**
    * Atomically inserts one completed progress row (and its outbox mutation) per given lesson ID

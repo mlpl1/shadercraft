@@ -235,6 +235,13 @@ export class SqliteProgressRepository
           targetProfileId,
           row.lesson_id,
           row.completed === 1,
+          // Every claimed row is queued, even where the target's row already reads the same. The
+          // target's `completed` value is a *cached* server value, and agreeing with the cache is not
+          // agreeing with the server: another device may have moved that lesson since this one last
+          // pulled, in which case dropping the mutation here would let the newer server value
+          // overwrite the guest's explicit action on the very next pull, with nothing queued to answer
+          // it. A redundant mutation costs one idempotent round trip; a dropped one is unrecoverable.
+          { queueEvenIfUnchanged: true },
         );
         anyChanged = anyChanged || rowChanged;
       }
@@ -325,16 +332,28 @@ export class SqliteProgressRepository
   }
 
   /**
-   * Inserts or updates the single `lesson_progress` row for `lessonId` and, only if the explicit
-   * completion state actually changed, appends the matching `sync_outbox` mutation. Must be called
-   * from within a `driver.transaction`; the driver implementations here do not support nesting
-   * transactions, so callers that need this atomic with other writes (e.g.
-   * `importLegacyCompletions`) share one transaction rather than opening their own per call.
+   * Inserts or updates the single `lesson_progress` row for `lessonId` and appends the matching
+   * `sync_outbox` mutation. Must be called from within a `driver.transaction`; the driver
+   * implementations here do not support nesting transactions, so callers that need this atomic with
+   * other writes (e.g. `importLegacyCompletions`) share one transaction rather than opening their own
+   * per call.
+   *
+   * Returns whether the row's own explicit state changed — which is a *separate* question from whether
+   * a mutation was queued, and the two are decided independently on purpose:
+   *
+   * - By default, a write that restates the value already stored does nothing at all. That is what
+   *   keeps re-tapping a completed lesson from queueing a second identical upload, and what
+   *   `setLessonCompleted` uses to decide whether any screen needs redrawing.
+   * - With `queueEvenIfUnchanged`, the mutation is queued regardless. Used by
+   *   {@link mergeAnonymousProfile}, where the stored value is a cached server value and agreeing with
+   *   it says nothing about whether the *server* still agrees. The row itself is still left untouched
+   *   in that case: there is nothing to change, and no subscriber to notify.
    */
   private async upsertLessonCompletion(
     profileId: string,
     lessonId: string,
     completed: boolean,
+    options: { queueEvenIfUnchanged?: boolean } = {},
   ): Promise<boolean> {
     const completedValue = completed ? 1 : 0;
 
@@ -343,21 +362,24 @@ export class SqliteProgressRepository
        WHERE profile_id = ? AND lesson_id = ?`,
       [profileId, lessonId],
     );
+    const unchanged = existing?.completed === completedValue;
 
-    if (existing?.completed === completedValue) {
+    if (unchanged && !options.queueEvenIfUnchanged) {
       return false;
     }
 
     const timestamp = this.now();
-    await this.driver.run(
-      `INSERT INTO lesson_progress
-        (profile_id, lesson_id, completed, server_revision, locally_modified_at, server_updated_at)
-       VALUES (?, ?, ?, 0, ?, NULL)
-       ON CONFLICT(profile_id, lesson_id) DO UPDATE SET
-         completed = excluded.completed,
-         locally_modified_at = excluded.locally_modified_at`,
-      [profileId, lessonId, completedValue, timestamp],
-    );
+    if (!unchanged) {
+      await this.driver.run(
+        `INSERT INTO lesson_progress
+          (profile_id, lesson_id, completed, server_revision, locally_modified_at, server_updated_at)
+         VALUES (?, ?, ?, 0, ?, NULL)
+         ON CONFLICT(profile_id, lesson_id) DO UPDATE SET
+           completed = excluded.completed,
+           locally_modified_at = excluded.locally_modified_at`,
+        [profileId, lessonId, completedValue, timestamp],
+      );
+    }
 
     await this.driver.run(
       `INSERT INTO sync_outbox
@@ -374,12 +396,21 @@ export class SqliteProgressRepository
       ],
     );
 
-    return true;
+    return !unchanged;
   }
 
   /**
    * Satisfies both {@link ProgressRepository.getPendingMutations} (the active profile, for app code)
    * and {@link ProgressSyncRepository.getPendingMutations} (an explicit profile, for the sync engine).
+   *
+   * Ordered by `rowid`, which SQLite advances on every insert into this table, and *not* by
+   * `created_at`. Upload order decides which of two actions on the same lesson the server accepts
+   * last and therefore treats as authoritative, so it has to come from something monotonic. A device
+   * clock is not: two taps inside the same millisecond would be separated only by a random UUID, and a
+   * clock corrected backwards would order them wrongly outright — either way the *earlier* action
+   * would be accepted last, and the device would then be pinned to a stale value at a matching
+   * `server_revision` that the guard in {@link acknowledgeMutation} can never move off. `sync_outbox`
+   * is a regular rowid table (see `../database/migrations.ts`), so this needs no column of its own.
    */
   async getPendingMutations(profileId?: string): Promise<ProgressMutation[]> {
     const targetProfileId = profileId ?? (await this.getActiveProfileId());
@@ -387,7 +418,7 @@ export class SqliteProgressRepository
       `SELECT profile_id, mutation_id, entity_id, base_revision, attempts, created_at, payload_json
        FROM sync_outbox
        WHERE profile_id = ? AND merged_at IS NULL
-       ORDER BY created_at, mutation_id`,
+       ORDER BY rowid`,
       [targetProfileId],
     );
 

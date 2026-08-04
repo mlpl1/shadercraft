@@ -37,6 +37,40 @@ describe("TransactionQueue", () => {
     await expect(following).resolves.toBe("recovered");
   });
 
+  it("keeps the next body waiting for a timed-out predecessor's real work", async () => {
+    const queue = new TransactionQueue();
+    const events: string[] = [];
+    let releaseFirst = () => {};
+    const firstMayFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    const first = queue.run(async () => {
+      events.push("first:start");
+      await firstMayFinish;
+      events.push("first:end");
+    });
+    // Gives up while the first body is still open. Its transaction is *not* closed by that — so a queue
+    // that released on the timeout would let the next body open a second one alongside the first,
+    // abandoning serialization exactly when something has already gone wrong.
+    const timedOut = queue.run(async () => {
+      events.push("timed-out:body");
+    }, 10);
+    await expect(timedOut).rejects.toThrow(/cannot be opened from inside another transaction/i);
+
+    const third = queue.run(async () => {
+      events.push("third:start");
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(events).toEqual(["first:start"]);
+
+    releaseFirst();
+    await Promise.all([first, third]);
+    expect(events).toEqual(["first:start", "first:end", "third:start"]);
+  });
+
   it("rejects with an explanation instead of hanging when work is opened from inside work", async () => {
     const queue = new TransactionQueue();
 

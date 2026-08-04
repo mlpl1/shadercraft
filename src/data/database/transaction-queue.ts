@@ -36,11 +36,14 @@ export class TransactionQueue {
       return work();
     })();
 
-    // Swallow the outcome so one failed transaction never rejects the next caller's wait.
-    this.tail = result.then(
-      () => undefined,
-      () => undefined,
-    );
+    // The next caller waits for the predecessor *and* this call, not just this call. Giving up on the
+    // wait above does not close the transaction that is holding the connection: `result` rejects while
+    // the predecessor's body is very much still running, so a tail chained on `result` alone would
+    // release the queue early and let the next body open a second transaction alongside the first —
+    // abandoning serialization at exactly the moment something has already gone wrong. Both are
+    // settled rather than raced, and their outcomes are swallowed so one failed transaction never
+    // rejects the next caller's wait.
+    this.tail = Promise.allSettled([previous, result]);
 
     return result;
   }

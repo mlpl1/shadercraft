@@ -195,10 +195,13 @@ describe("SQLite progress repository learner profiles", () => {
     ).resolves.toEqual({ server_revision: 7 });
   });
 
-  test("queues no mutation for a lesson the target profile already agrees on", async () => {
+  test("still queues a mutation when the target profile's cached value already agrees", async () => {
     const anonymousId = await repository.getActiveProfileId();
     await repository.setLessonCompleted("color-mixing", true);
     const target = await repository.createAuthenticatedProfile("supabase-user-1");
+    // The account's *cached* value happens to agree. It is a snapshot of revision 4, though, and
+    // another device may have moved the lesson since — in which case the next pull would apply that
+    // newer revision and quietly undo the guest's explicit action, with nothing queued to answer it.
     await driver.run(
       `INSERT INTO lesson_progress
         (profile_id, lesson_id, completed, server_revision, locally_modified_at, server_updated_at)
@@ -208,8 +211,24 @@ describe("SQLite progress repository learner profiles", () => {
 
     await repository.mergeAnonymousProfile(anonymousId, target.id);
 
-    await expect(readOutbox(target.id)).resolves.toEqual([]);
+    // The action enters the outbox and wins through the normal revision flow. Redundant if the server
+    // does still agree — one idempotent round trip — and the only recoverable option if it does not.
+    const mutations = await readOutbox(target.id);
+    expect(mutations).toHaveLength(1);
+    expect(mutations[0].entity_id).toBe("color-mixing");
+    expect(mutations[0].base_revision).toBe(4);
+    expect(JSON.parse(mutations[0].payload_json)).toEqual({
+      lessonId: "color-mixing",
+      completed: true,
+    });
+    // Nothing about the row itself changed, so it keeps its cached revision untouched.
     expect(await readCompletionState(target.id)).toEqual({ "color-mixing": true });
+    await expect(
+      driver.first<{ server_revision: number }>(
+        `SELECT server_revision FROM lesson_progress WHERE profile_id = ? AND lesson_id = ?`,
+        [target.id, "color-mixing"],
+      ),
+    ).resolves.toEqual({ server_revision: 4 });
   });
 
   test("is idempotent when the same merge is repeated", async () => {
@@ -378,6 +397,35 @@ describe("SQLite progress repository sync primitives", () => {
       [profileId, lessonId],
     );
   }
+
+  test("uploads two same-instant mutations for one lesson in the order they were queued", async () => {
+    // Production mints a random UUID per mutation and reads a wall clock that can tie or run
+    // backwards, so `(created_at, mutation_id)` is not an ordering at all. Here the clock is frozen and
+    // the IDs descend, which is exactly the case that reverses under that ordering: the *earlier* tap
+    // would be accepted by the server last and become authoritative, pinning this device to a stale
+    // value at a matching server revision it could never move off.
+    let nextId = 9;
+    const context = await createProgressRepositoryTestContext({
+      generateId: () => `descending-${nextId--}`,
+      now: () => "2026-08-03T00:00:00.000Z",
+    });
+
+    try {
+      await context.repository.setLessonCompleted("color-mixing", true);
+      await context.repository.setLessonCompleted("color-mixing", false);
+
+      const profileId = await context.repository.getActiveProfileId();
+      const mutations = await context.repository.getPendingMutations(profileId);
+
+      expect(mutations.map((mutation) => mutation.completed)).toEqual([true, false]);
+      // Guards the setup itself: if the IDs happened to ascend, the assertion above would hold no
+      // matter what the query ordered by.
+      expect(mutations[0].mutationId > mutations[1].mutationId).toBe(true);
+      expect(mutations[0].createdAt).toBe(mutations[1].createdAt);
+    } finally {
+      await context.driver.close();
+    }
+  });
 
   test("starts a profile that has never pulled at cursor zero", async () => {
     const profileId = await repository.getActiveProfileId();
