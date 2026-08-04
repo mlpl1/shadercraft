@@ -17,10 +17,13 @@ The project is currently an early working prototype built with Expo and React Na
 - Module unlocking derived from the shared progress state
 - Reversible completion for accidentally completed lessons
 - Guided completion summary with review and course-navigation actions
+- Fully offline curriculum and progress, backed by an on-device SQLite database seeded from a
+  checksummed, version-controlled content release
 
-Modules 01 and 02 each contain five interactive lessons; Module 03 contains four. Every module
-concludes with a layered shader challenge. Completing Shape Synthesis unlocks Color & Light, and
-finishing its lighting challenge unlocks Module 04, Procedural Textures.
+Modules 01, 02, and 03 are published and contain 14 interactive lessons in total (five, five,
+and four respectively). Every published module concludes with a layered shader challenge.
+Completing Shape Synthesis unlocks Color & Light. Module 04, Procedural Textures, is currently
+`planned`: it shows a five-topic roadmap card and stays unopenable until it ships real lessons.
 
 ## Technology
 
@@ -28,7 +31,11 @@ finishing its lighting challenge unlocks Module 04, Procedural Textures.
 - React Native 0.86 and React 19.2
 - [Expo Router](https://docs.expo.dev/versions/v57.0.0/sdk/router/) for file-based navigation
 - [Expo GLView](https://docs.expo.dev/versions/v57.0.0/sdk/gl-view/) for live shader rendering
-- AsyncStorage for local progress persistence
+- [`expo-sqlite`](https://docs.expo.dev/versions/v57.0.0/sdk/sqlite/) for the local curriculum
+  and progress database, the only runtime data source screens read from
+- Zod-validated JSON content, compiled into a checksummed bundled release (see
+  [`docs/data/local-curriculum.md`](docs/data/local-curriculum.md))
+- AsyncStorage, only to migrate a device's pre-SQLite legacy completions on first launch
 - TypeScript and the React Compiler
 
 ## Requirements
@@ -72,6 +79,8 @@ the installed application.
 | `npm run android` | Build and run the native Android application |
 | `npm run ios` | Build and run the native iOS application |
 | `npm run web` | Start the web version |
+| `npm run content:build` | Regenerate `assets/course/bundled-course.json` from `content/module-*.json` |
+| `npm run content:check` | Fail if the tracked bundled course is stale |
 | `npx tsc --noEmit` | Run the TypeScript check without emitting files |
 
 ## Project structure
@@ -81,8 +90,9 @@ src/
 ├── app/          Expo Router screens and root layout
 ├── components/   Navigation, course, lesson, and shader UI
 ├── constants/    Shared visual theme
-├── context/      Application-wide progress state
-└── lib/          Progress persistence and curriculum helpers
+├── context/      React providers exposing the course and progress repositories
+├── data/         SQLite lifecycle, course/progress repositories, and content schema
+└── shaders/      The preview capability registry and GLSL previews
 ```
 
 The Android native project is stored in `android/`. Static images and app icons are stored in
@@ -90,14 +100,22 @@ The Android native project is stored in `android/`. Static images and app icons 
 
 ## Progress behavior
 
-Lesson completion is stored locally on the device. Completing a lesson updates Home and Course
-immediately and unlocks the next lesson in its module. Module 02 becomes available only after all
-five foundation lessons are complete, Module 03 unlocks after all five Shape Synthesis lessons, and
-Module 04 unlocks after all four Color & Light lessons.
-A completed lesson can be marked incomplete after confirmation without deleting completion
-records for later lessons.
+Lesson completion is stored locally on the device in SQLite. Completing a lesson updates Home and
+Course immediately and unlocks the next lesson in its module. A module unlocks once every module
+ahead of it is fully complete; the first module is always unlocked. A completed lesson can be
+marked incomplete after confirmation without deleting completion records for later lessons.
+Progress survives app restarts and, on a device upgrading from an older release with no SQLite
+database, migrates automatically from its legacy AsyncStorage record on first launch.
 
 Progress does not currently sync between devices or GitHub accounts.
+
+## Curriculum content
+
+The lesson content (copy, GLSL snippets, and preview wiring) is authored as JSON under
+`content/`, one file per module, and compiled into the SQLite seed the app installs on first
+launch. See [`docs/data/local-curriculum.md`](docs/data/local-curriculum.md) for the full
+authoring workflow: which files to edit, the `content:build` / `content:check` commands, what
+the schema validates, and the constraints around preview capabilities and release checksums.
 
 ## Roadmap
 
@@ -111,5 +129,11 @@ Issues and focused pull requests are welcome while the curriculum and interactio
 still evolving. Before submitting a change, run:
 
 ```bash
+npm run content:check
+npm test -- --runInBand
 npx tsc --noEmit
 ```
+
+If you edited any `content/module-*.json` file, run `npm run content:build` first and commit the
+regenerated `assets/course/bundled-course.json` alongside your change — see
+[`docs/data/local-curriculum.md`](docs/data/local-curriculum.md).
