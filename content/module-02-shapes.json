@@ -18,6 +18,7 @@
       "conceptLede": "A shape appears when a distance field crosses a threshold.",
       "tryHint": "Compare four ways to reveal a distance",
       "takeaway": "Keep distance and visibility separate: first calculate d, then convert d into a fill, outline, or soft edge. One distance field can support many visual treatments.",
+      "previewCaption": "Shape field",
       "presets": [
         {
           "id": "edge-hard",
@@ -120,6 +121,7 @@
       "conceptLede": "Small functions turn coordinates into scalable, composable geometry.",
       "tryHint": "Swap the primitive while keeping the edge code",
       "takeaway": "Write primitives as functions that return signed distance, not color. That keeps size, position, edge treatment, and later boolean operations independent.",
+      "previewCaption": "Shape field",
       "presets": [
         {
           "id": "primitive-circle",
@@ -226,6 +228,7 @@
       "conceptLede": "Boolean-looking operations emerge directly from distance fields.",
       "tryHint": "Apply four operations to the same two fields",
       "takeaway": "For signed fields: min unites, max intersects, and negating a field swaps inside with outside. Combine distances first and apply smoothstep only once at the final boundary.",
+      "previewCaption": "Shape field",
       "presets": [
         {
           "id": "boolean-union",
@@ -332,6 +335,7 @@
       "conceptLede": "Coordinate folding replaces duplicated drawing code.",
       "tryHint": "Build complexity from a single repeated cell",
       "takeaway": "Repeat coordinates, not drawing calls. Keep local cell coordinates and integer cell IDs so geometry stays reusable while variation remains deterministic.",
+      "previewCaption": "Shape field",
       "presets": [
         {
           "id": "repeat-grid",
@@ -437,6 +441,7 @@
       "conceptLede": "Complex icons are deliberate compositions of simple fields.",
       "tryHint": "Deconstruct four finished procedural marks",
       "takeaway": "A finished procedural mark is a hierarchy: coordinates feed primitives, primitives combine into one field, the field becomes masks, and masks receive color and motion. Debug the hierarchy one layer at a time.",
+      "previewCaption": "Shape field",
       "presets": [
         {
           "id": "synthesis-badge",

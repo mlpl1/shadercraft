@@ -18,6 +18,7 @@
       "conceptLede": "Understand how raw pixels become stable coordinates you can reuse across every screen size.",
       "tryHint": "Change the coordinate range",
       "takeaway": "The center of normalized UV space is always (0.5, 0.5). After centering it becomes (0.0, 0.0). Correct the x-axis before measuring distance so circles remain circular.",
+      "previewCaption": "UV preview",
       "presets": [
         {
           "id": "normalized",
@@ -132,6 +133,7 @@
       "conceptLede": "Learn how fragment output combines channels, opacity, and interpolation into visible color.",
       "tryHint": "Change the color expression",
       "takeaway": "vec3 stores red, green, and blue. vec4 adds alpha. Use coordinate-driven gradients to inspect your UVs, then mix colors to build intentional palettes.",
+      "previewCaption": "Fragment color",
       "presets": [
         {
           "id": "rgb-gradient",
@@ -242,6 +244,8 @@
       "conceptLede": "Connect app state to GLSL and create animation from elapsed seconds.",
       "tryHint": "Change how time flows",
       "takeaway": "Uniforms are shared inputs, not per-pixel variables. Derive motion from elapsed seconds, then multiply time to control speed without tying animation to frame rate.",
+      "previewCaption": "Time animation",
+      "defaultPresetId": "time-play",
       "presets": [
         {
           "id": "time-static",
@@ -249,7 +253,8 @@
           "label": "Static",
           "previewKey": "time-static",
           "previewParameters": {
-            "restartable": true
+            "restartable": true,
+            "animated": false
           },
           "value": "u_time = 0",
           "filename": "static_uniform.glsl",
@@ -357,6 +362,7 @@
       "conceptLede": "Apply translation, scale, rotation, and repetition to UVs before evaluating a reusable shape.",
       "tryHint": "Transform the space before drawing",
       "takeaway": "Transform coordinates before drawing. Center them before scaling or rotation, remember that coordinate transforms feel inverse to object transforms, and use fract to fold space into repeatable cells.",
+      "previewCaption": "Transformed shape",
       "presets": [
         {
           "id": "transform-translate",
@@ -466,6 +472,8 @@
       "conceptLede": "Deconstruct a finished shader into coordinate, mask, motion, and color layers.",
       "tryHint": "Inspect one layer at a time",
       "takeaway": "Complex shaders are compositions of simple masks. Build and inspect each layer independently, share one aspect-correct coordinate system, then combine colors in a deliberate order.",
+      "previewCaption": "Foundation composition",
+      "defaultPresetId": "challenge-final",
       "presets": [
         {
           "id": "challenge-grid",

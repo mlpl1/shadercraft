@@ -39,6 +39,8 @@ const CREATE_INITIAL_SCHEMA = `
     concept_lede TEXT NOT NULL,
     try_hint TEXT NOT NULL,
     takeaway TEXT NOT NULL,
+    preview_caption TEXT NOT NULL,
+    default_preset_id TEXT,
     PRIMARY KEY (release_id, id),
     FOREIGN KEY (release_id, module_id)
       REFERENCES modules(release_id, id) ON DELETE CASCADE

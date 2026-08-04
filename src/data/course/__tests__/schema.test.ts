@@ -21,13 +21,14 @@ const validModules = [
         conceptLede: "Normalize fragment coordinates before drawing.",
         tryHint: "Change the divisor.",
         takeaway: "Coordinates can be normalized.",
+        previewCaption: "UV preview",
         presets: [
           {
             id: "normalized-default",
             position: 1,
             label: "Default",
             previewKey: "normalized",
-            previewParameters: { showGrid: true, scale: 1 },
+            previewParameters: { animated: false, restartable: true },
             value: "vec2 uv = gl_FragCoord.xy / u_resolution.xy;",
             filename: "normalized.frag",
             codeLines: [
@@ -75,6 +76,44 @@ describe("curriculum authoring schema", () => {
     duplicateLessonIds[0].lessons.push({ ...duplicateLessonIds[0].lessons[0], position: 2 });
 
     expect(() => parseAuthoredModules(duplicateLessonIds)).toThrow(/duplicate lesson id/i);
+  });
+
+  it("accepts every preview parameter the installed app supports", () => {
+    const supportedParameters = copyModules();
+    supportedParameters[0].lessons[0].presets[0].previewParameters = {
+      animated: true,
+      restartable: false,
+    };
+
+    expect(() => parseAuthoredModules(supportedParameters)).not.toThrow();
+  });
+
+  it("rejects preview parameters the installed app does not implement", () => {
+    const unknownParameter = copyModules();
+    unknownParameter[0].lessons[0].presets[0].previewParameters = { showGrid: true, scale: 1 };
+
+    expect(() => parseAuthoredModules(unknownParameter)).toThrow(/preview parameter/i);
+  });
+
+  it("rejects a supported preview parameter authored with the wrong type", () => {
+    const wronglyTypedParameter = copyModules();
+    wronglyTypedParameter[0].lessons[0].presets[0].previewParameters = { restartable: "yes" };
+
+    expect(() => parseAuthoredModules(wronglyTypedParameter)).toThrow(/boolean/i);
+  });
+
+  it("accepts a default preset that names one of the lesson's own presets", () => {
+    const authoredDefault = copyModules();
+    authoredDefault[0].lessons[0].defaultPresetId = "normalized-default";
+
+    expect(() => parseAuthoredModules(authoredDefault)).not.toThrow();
+  });
+
+  it("rejects a default preset that does not exist in the lesson", () => {
+    const unknownDefault = copyModules();
+    unknownDefault[0].lessons[0].defaultPresetId = "not-a-preset";
+
+    expect(() => parseAuthoredModules(unknownDefault)).toThrow(/default preset/i);
   });
 
   it("rejects unknown preview keys", () => {

@@ -61,8 +61,9 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
       await driver.run(
         `INSERT INTO lessons
           (release_id, id, module_id, position, title, short_title, intro,
-           concept_title, concept_lede, try_hint, takeaway)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           concept_title, concept_lede, try_hint, takeaway, preview_caption,
+           default_preset_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           release.id,
           lesson.id,
@@ -75,6 +76,8 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
           lesson.conceptLede,
           lesson.tryHint,
           lesson.takeaway,
+          lesson.previewCaption,
+          lesson.defaultPresetId ?? null,
         ],
       );
 

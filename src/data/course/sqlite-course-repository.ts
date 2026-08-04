@@ -37,6 +37,8 @@ type LessonRow = {
   concept_lede: string;
   try_hint: string;
   takeaway: string;
+  preview_caption: string;
+  default_preset_id: string | null;
 };
 
 type PresetRow = {
@@ -89,7 +91,7 @@ export class SqliteCourseRepository implements CourseRepository {
       ),
       this.driver.all<LessonRow>(
         `SELECT id, module_id, position, title, short_title, intro, concept_title,
-                concept_lede, try_hint, takeaway
+                concept_lede, try_hint, takeaway, preview_caption, default_preset_id
          FROM lessons
          WHERE release_id = ?
          ORDER BY module_id, position`,
@@ -185,6 +187,11 @@ function toLesson(
     conceptLede: lesson.concept_lede,
     tryHint: lesson.try_hint,
     takeaway: lesson.takeaway,
+    previewCaption: lesson.preview_caption,
+    // An unauthored default preset is absent rather than null, matching the authored release shape.
+    ...(lesson.default_preset_id === null
+      ? {}
+      : { defaultPresetId: lesson.default_preset_id }),
     presets: (presetsByLesson.get(lesson.id) ?? []).map((preset) => ({
       id: preset.id,
       position: preset.position,

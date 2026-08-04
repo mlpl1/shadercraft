@@ -66,3 +66,26 @@ export type ShaderPreviewKey = keyof typeof SHADER_PREVIEW_MODE_VALUES;
 export function isPreviewKey(value: string): value is ShaderPreviewKey {
   return Object.hasOwn(SHADER_PREVIEW_MODE_VALUES, value);
 }
+
+/**
+ * The preview parameters this build of the app knows how to act on, with the type each one must be
+ * authored as. Content may choose which of these a preset opts into, but authoring a name that is
+ * absent here fails validation: a release can widen the supported set only by shipping an app that
+ * implements the behavior, never by naming preview behavior the installed app cannot execute.
+ */
+export const SHADER_PREVIEW_PARAMETER_TYPES = {
+  /** Whether the preview advances its timeline. `false` presents the preset as paused. */
+  animated: "boolean",
+  /** Whether the workspace offers a control that restarts the preview timeline. */
+  restartable: "boolean",
+} as const;
+
+export type ShaderPreviewParameterName = keyof typeof SHADER_PREVIEW_PARAMETER_TYPES;
+
+export function getPreviewParameterType(
+  name: string,
+): (typeof SHADER_PREVIEW_PARAMETER_TYPES)[ShaderPreviewParameterName] | undefined {
+  return Object.hasOwn(SHADER_PREVIEW_PARAMETER_TYPES, name)
+    ? SHADER_PREVIEW_PARAMETER_TYPES[name as ShaderPreviewParameterName]
+    : undefined;
+}

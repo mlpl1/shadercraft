@@ -48,7 +48,18 @@ describe("SQLite course repository", () => {
     await expect(repository.getLesson("color-mixing")).resolves.toMatchObject({
       moduleId: "color-light",
       presets: expect.any(Array),
+      previewCaption: "Color field",
     });
+  });
+
+  test("round-trips the authored presentation fields of a lesson", async () => {
+    await expect(repository.getLesson("uniforms-time")).resolves.toMatchObject({
+      defaultPresetId: "time-play",
+      previewCaption: "Time animation",
+    });
+    await expect(repository.getLesson("transforming-uvs")).resolves.not.toHaveProperty(
+      "defaultPresetId",
+    );
   });
 
   test("returns null for a lesson outside the active release", async () => {

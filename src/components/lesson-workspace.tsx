@@ -11,6 +11,8 @@ import type { CourseLesson, LessonPreset } from "../data/course/types";
 export type LessonWorkspaceProps = {
   lesson: CourseLesson;
   moduleTitle: string;
+  /** 1-based curriculum position of the lesson's module, shown as the zero-padded header numeral. */
+  modulePosition: number;
   lessonIndex: number;
   lessonCount: number;
   completed: boolean;
@@ -33,12 +35,12 @@ type WorkspaceState = {
   isCompletionVisible: boolean;
 };
 
-function freshState(lessonId: string): WorkspaceState {
+function freshState(lesson: CourseLesson): WorkspaceState {
   return {
     failedAction: null,
     isCompletionVisible: false,
-    lessonId,
-    presetIndex: 0,
+    lessonId: lesson.id,
+    presetIndex: defaultPresetIndex(lesson),
     restartToken: 0,
   };
 }
@@ -47,9 +49,22 @@ function byPosition<T extends { position: number }>(items: readonly T[]): T[] {
   return [...items].sort((left, right) => left.position - right.position);
 }
 
+/** The lesson's authored opening preset, falling back to its lowest-positioned one. */
+function defaultPresetIndex(lesson: CourseLesson): number {
+  const index = byPosition(lesson.presets).findIndex(
+    (preset) => preset.id === lesson.defaultPresetId,
+  );
+  return index >= 0 ? index : 0;
+}
+
 /** Only an explicit boolean `true` enables the restart control; other values are ignored. */
 function isRestartable(preset: LessonPreset): boolean {
   return preset.previewParameters.restartable === true;
+}
+
+/** Presets animate unless authored otherwise, so content without the parameter keeps running. */
+function isAnimated(preset: LessonPreset): boolean {
+  return preset.previewParameters.animated !== false;
 }
 
 /**
@@ -64,6 +79,7 @@ export function LessonWorkspace({
   lesson,
   lessonCount,
   lessonIndex,
+  modulePosition,
   moduleTitle,
   onBack,
   onComplete,
@@ -71,12 +87,12 @@ export function LessonWorkspace({
   onUndo,
   progressPercent,
 }: LessonWorkspaceProps) {
-  const [state, setState] = useState<WorkspaceState>(() => freshState(lesson.id));
-  const workspace = state.lessonId === lesson.id ? state : freshState(lesson.id);
+  const [state, setState] = useState<WorkspaceState>(() => freshState(lesson));
+  const workspace = state.lessonId === lesson.id ? state : freshState(lesson);
 
   const update = (patch: Partial<WorkspaceState>) => {
     setState((previous) => ({
-      ...(previous.lessonId === lesson.id ? previous : freshState(lesson.id)),
+      ...(previous.lessonId === lesson.id ? previous : freshState(lesson)),
       ...patch,
     }));
   };
@@ -84,6 +100,7 @@ export function LessonWorkspace({
   const presets = byPosition(lesson.presets);
   const sections = byPosition(lesson.sections);
   const preset = presets[workspace.presetIndex] ?? presets[0];
+  const moduleNumeral = `Module ${String(modulePosition).padStart(2, "0")}`;
   const isFinalLesson = lessonIndex >= lessonCount - 1;
   const lessonProgressWidth = `${((lessonIndex + 1) / Math.max(lessonCount, 1)) * 100}%` as const;
 
@@ -143,7 +160,7 @@ export function LessonWorkspace({
               />
             </Pressable>
             <View style={styles.headerCopy}>
-              <Text style={styles.moduleLabel}>{moduleTitle}</Text>
+              <Text style={styles.moduleLabel}>{moduleNumeral}</Text>
               <Text style={styles.headerTitle}>{lesson.shortTitle}</Text>
             </View>
             <Text style={styles.stepLabel}>
@@ -174,7 +191,7 @@ export function LessonWorkspace({
                 </View>
                 <View style={styles.liveBadge}>
                   <View style={styles.liveDot} />
-                  <Text style={styles.liveLabel}>Running</Text>
+                  <Text style={styles.liveLabel}>{isAnimated(preset) ? "Running" : "Paused"}</Text>
                 </View>
               </View>
 
@@ -184,7 +201,7 @@ export function LessonWorkspace({
                   restartToken={workspace.restartToken}
                 />
                 <View style={styles.previewFooter}>
-                  <Text style={styles.previewLabel}>Preview output</Text>
+                  <Text style={styles.previewLabel}>{lesson.previewCaption}</Text>
                   <Text style={styles.previewValue}>
                     {preset.label} · {preset.value}
                   </Text>

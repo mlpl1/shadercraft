@@ -25,6 +25,10 @@ export type CourseLesson = {
   conceptLede: string;
   tryHint: string;
   takeaway: string;
+  /** Footer caption for the live preview, authored per lesson. */
+  previewCaption: string;
+  /** Preset the lesson opens on; the lowest-positioned preset when absent. */
+  defaultPresetId?: string;
   presets: LessonPreset[];
   sections: { id: string; position: number; title: string; body: string }[];
 };

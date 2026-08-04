@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { isPreviewKey } from "../../shaders/preview-registry";
+import { getPreviewParameterType, isPreviewKey } from "../../shaders/preview-registry";
 import type { CourseModule, CourseRelease } from "./types";
 
 const idPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -40,6 +40,8 @@ const courseLessonSchema = z
     conceptLede: z.string(),
     tryHint: z.string(),
     takeaway: z.string(),
+    previewCaption: z.string().min(1),
+    defaultPresetId: z.string().optional(),
     presets: z.array(lessonPresetSchema).min(1),
     sections: z.array(lessonSectionSchema).min(1),
   })
@@ -101,6 +103,26 @@ function validateContiguousPositions(
   }
 }
 
+/**
+ * Rejects authored preview parameters the installed app cannot act on. Content controls which
+ * supported parameters a preset opts into; it can never introduce a preview behavior this build
+ * does not implement, nor author a supported one as the wrong type.
+ */
+function validatePreviewParameters(
+  presetId: string,
+  previewParameters: Record<string, boolean | number | string>,
+): void {
+  for (const [name, value] of Object.entries(previewParameters)) {
+    const expectedType = getPreviewParameterType(name);
+    if (!expectedType) {
+      fail(`Unsupported preview parameter ${name} on preset ${presetId}`);
+    }
+    if (typeof value !== expectedType) {
+      fail(`Preview parameter ${name} on preset ${presetId} must be a ${expectedType}`);
+    }
+  }
+}
+
 function validateModules(modules: CourseModule[]): void {
   const moduleIds = new Set<string>();
   const lessonIds = new Set<string>();
@@ -142,11 +164,19 @@ function validateModules(modules: CourseModule[]): void {
         if (!isPreviewKey(preset.previewKey)) {
           fail(`Invalid preview key: ${preset.previewKey}`);
         }
+        validatePreviewParameters(preset.id, preset.previewParameters);
         for (const highlightedLine of preset.highlightedLines) {
           if (highlightedLine < 1 || highlightedLine > preset.codeLines.length) {
             fail(`Highlighted line must be between 1 and ${preset.codeLines.length}`);
           }
         }
+      }
+
+      if (
+        lesson.defaultPresetId !== undefined &&
+        !lesson.presets.some((preset) => preset.id === lesson.defaultPresetId)
+      ) {
+        fail(`Unknown default preset ${lesson.defaultPresetId} for lesson ${lesson.id}`);
       }
 
       for (const section of lesson.sections) {

@@ -29,6 +29,7 @@ function buildLesson(id: string, moduleId: string, position: number): CourseLess
     conceptLede: "",
     tryHint: "",
     takeaway: "",
+    previewCaption: "Preview",
     presets: [],
     sections: [],
   };

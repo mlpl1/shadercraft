@@ -69,9 +69,11 @@ function findLesson(lessonId: string): CourseLesson {
   return lesson;
 }
 
+const coordinateFoundations = findModule("coordinate-foundations");
 const colorLight = findModule("color-light");
 const challengeLesson = findLesson("color-light-challenge");
 const timeLesson = findLesson("uniforms-time");
+const foundationChallengeLesson = findLesson("foundation-challenge");
 
 const publishedLessonIds = release.modules
   .filter((module) => module.status === "published")
@@ -99,6 +101,7 @@ async function renderWorkspace(overrides: Partial<LessonWorkspaceProps> = {}) {
     lesson: challengeLesson,
     lessonCount: colorLight.lessons.length,
     lessonIndex: colorLight.lessons.length - 1,
+    modulePosition: colorLight.position,
     moduleTitle: colorLight.title,
     onBack: jest.fn(),
     onComplete: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
@@ -113,6 +116,17 @@ async function renderWorkspace(overrides: Partial<LessonWorkspaceProps> = {}) {
   return { props, view };
 }
 
+/** Module 1 props for a lesson at `lessonIndex`, so its authored presentation stays observable. */
+function moduleOneProps(lesson: CourseLesson, lessonIndex: number): Partial<LessonWorkspaceProps> {
+  return {
+    lesson,
+    lessonCount: coordinateFoundations.lessons.length,
+    lessonIndex,
+    modulePosition: coordinateFoundations.position,
+    moduleTitle: coordinateFoundations.title,
+  };
+}
+
 describe("lesson workspace", () => {
   test("renders the lesson, its module context, and the first preset", async () => {
     await renderWorkspace();
@@ -120,10 +134,64 @@ describe("lesson workspace", () => {
     expect(screen.getByText(challengeLesson.title)).toBeTruthy();
     expect(screen.getByText(challengeLesson.intro)).toBeTruthy();
     expect(screen.getByText(challengeLesson.shortTitle)).toBeTruthy();
-    expect(screen.getByText(colorLight.title)).toBeTruthy();
+    expect(screen.getByText("Module 03")).toBeTruthy();
     expect(screen.getByText("4 of 4")).toBeTruthy();
     expect(screen.getByText("Palette albedo")).toBeTruthy();
     expect(previewLabel()).toBe("lighting-albedo#0");
+  });
+
+  test("zero-pads the module numeral in the header", async () => {
+    await renderWorkspace(moduleOneProps(timeLesson, 2));
+
+    expect(screen.getByText("Module 01")).toBeTruthy();
+    expect(screen.queryByText(coordinateFoundations.title)).toBeNull();
+  });
+
+  test("renders the authored preview caption for the lesson", async () => {
+    await renderWorkspace();
+
+    expect(screen.getByText("Color field")).toBeTruthy();
+    expect(screen.queryByText("Preview output")).toBeNull();
+  });
+
+  test("renders a Module 1 lesson's own preview caption", async () => {
+    await renderWorkspace(moduleOneProps(timeLesson, 2));
+
+    expect(screen.getByText("Time animation")).toBeTruthy();
+  });
+
+  test("opens on the preset a lesson authors as its default", async () => {
+    await renderWorkspace(moduleOneProps(timeLesson, 2));
+
+    expect(previewLabel()).toBe("time-play#0");
+  });
+
+  test("opens on the authored default preset of the foundation challenge", async () => {
+    await renderWorkspace(moduleOneProps(foundationChallengeLesson, 4));
+
+    expect(previewLabel()).toBe("challenge-final#0");
+  });
+
+  test("opens on the first preset when the lesson authors no default", async () => {
+    await renderWorkspace(moduleOneProps(findLesson("transforming-uvs"), 3));
+
+    expect(previewLabel()).toBe("transform-translate#0");
+  });
+
+  test("reports a preset authored as not animated as paused rather than running", async () => {
+    await renderWorkspace(moduleOneProps(timeLesson, 2));
+
+    expect(screen.getByText("Running")).toBeTruthy();
+
+    await fireEvent.press(screen.getByText("Static"));
+
+    expect(screen.getByText("Paused")).toBeTruthy();
+    expect(screen.queryByText("Running")).toBeNull();
+
+    await fireEvent.press(screen.getByText("Half speed"));
+
+    expect(screen.getByText("Running")).toBeTruthy();
+    expect(screen.queryByText("Paused")).toBeNull();
   });
 
   test("renders every concept section and the takeaway", async () => {
@@ -177,18 +245,13 @@ describe("lesson workspace", () => {
   });
 
   test("restarts the preview timeline for a restartable preset", async () => {
-    await renderWorkspace({
-      lesson: timeLesson,
-      lessonCount: 5,
-      lessonIndex: 2,
-      moduleTitle: "Coordinate Foundations",
-    });
+    await renderWorkspace(moduleOneProps(timeLesson, 2));
 
-    expect(previewLabel()).toBe("time-static#0");
+    expect(previewLabel()).toBe("time-play#0");
 
     await fireEvent.press(screen.getByText("Restart timeline"));
 
-    expect(previewLabel()).toBe("time-static#1");
+    expect(previewLabel()).toBe("time-play#1");
   });
 
   test("hides the restart control when no preview parameter requests it", async () => {
@@ -197,13 +260,8 @@ describe("lesson workspace", () => {
     expect(screen.queryByText("Restart timeline")).toBeNull();
   });
 
-  test("resets the selected preset when the workspace switches lesson", async () => {
-    const { props, view } = await renderWorkspace({
-      lesson: timeLesson,
-      lessonCount: 5,
-      lessonIndex: 2,
-      moduleTitle: "Coordinate Foundations",
-    });
+  test("resets the selected preset to the new lesson's default when the lesson switches", async () => {
+    const { props, view } = await renderWorkspace(moduleOneProps(timeLesson, 2));
 
     await fireEvent.press(screen.getByText("Double speed"));
     expect(previewLabel()).toBe("time-fast#0");
@@ -211,6 +269,10 @@ describe("lesson workspace", () => {
     await view.rerender(<LessonWorkspace {...props} lesson={challengeLesson} />);
 
     expect(previewLabel()).toBe("lighting-albedo#0");
+
+    await view.rerender(<LessonWorkspace {...props} lesson={foundationChallengeLesson} />);
+
+    expect(previewLabel()).toBe("challenge-final#0");
   });
 
   test("shows the completion sheet after a successful completion", async () => {
@@ -439,7 +501,8 @@ describe("lesson route", () => {
 
     expect(screen.getByText("Colors & Fragment Output")).toBeTruthy();
     expect(screen.getByText("2 of 5")).toBeTruthy();
-    expect(screen.getByText("Coordinate Foundations")).toBeTruthy();
+    expect(screen.getByText("Module 01")).toBeTruthy();
+    expect(screen.getByText("Fragment color")).toBeTruthy();
   });
 
   test("falls back to the current unlocked lesson for a locked deep link", async () => {
@@ -461,7 +524,8 @@ describe("lesson route", () => {
 
     expect(screen.getByText("Circles & Boxes")).toBeTruthy();
     expect(screen.getByText("2 of 5")).toBeTruthy();
-    expect(screen.getByText("Shape Synthesis")).toBeTruthy();
+    expect(screen.getByText("Module 02")).toBeTruthy();
+    expect(screen.getByText("Shape field")).toBeTruthy();
   });
 
   test("replaces the route with the next lesson after a completion", async () => {

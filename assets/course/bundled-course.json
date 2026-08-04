@@ -1,5 +1,5 @@
 {
-  "checksum": "358da86224dc9555bd558eb00d7cbd8a2b0c3ea1589523ef4a627447543a33c4",
+  "checksum": "c7f9301b2140b2843ee05fbcb63628a7c9ce7154ca8c69c7ac1b9bb5a7ea699f",
   "id": "bundled-2026-08-04",
   "minimumAppVersion": "1.0.0",
   "modules": [
@@ -96,6 +96,7 @@
               "value": "Aspect aware"
             }
           ],
+          "previewCaption": "UV preview",
           "sections": [
             {
               "body": "gl_FragCoord.xy contains the current pixel position in framebuffer pixels. Its values depend on the viewport, so a 1080-pixel-wide screen produces very different numbers from a 390-pixel-wide phone.",
@@ -206,6 +207,7 @@
               "value": "r · g · b"
             }
           ],
+          "previewCaption": "Fragment color",
           "sections": [
             {
               "body": "A color is data. Red, green, and blue are three independent values, usually between 0.0 and 1.0. Changing one channel changes one ingredient of the final pixel.",
@@ -234,6 +236,7 @@
         {
           "conceptLede": "Connect app state to GLSL and create animation from elapsed seconds.",
           "conceptTitle": "Uniforms in motion",
+          "defaultPresetId": "time-play",
           "id": "uniforms-time",
           "intro": "Uniforms let the app send shared values into every fragment. Use elapsed time to create smooth, frame-rate-independent motion.",
           "moduleId": "coordinate-foundations",
@@ -255,6 +258,7 @@
               "position": 1,
               "previewKey": "time-static",
               "previewParameters": {
+                "animated": false,
                 "restartable": true
               },
               "value": "u_time = 0"
@@ -321,6 +325,7 @@
               "value": "u_time × 2.0"
             }
           ],
+          "previewCaption": "Time animation",
           "sections": [
             {
               "body": "A uniform is a read-only value supplied by the app to every fragment invocation. Resolution, pointer position, and elapsed time are common uniforms because they describe shared frame state.",
@@ -430,6 +435,7 @@
               "value": "fract(p × 3)"
             }
           ],
+          "previewCaption": "Transformed shape",
           "sections": [
             {
               "body": "A shader has no movable object to transform. Instead, subtract an offset from the coordinates before evaluating the shape. Moving the coordinate system left makes the rendered shape appear to move right.",
@@ -458,6 +464,7 @@
         {
           "conceptLede": "Deconstruct a finished shader into coordinate, mask, motion, and color layers.",
           "conceptTitle": "Assemble the foundation",
+          "defaultPresetId": "challenge-final",
           "id": "foundation-challenge",
           "intro": "Combine coordinates, color, time, and transforms into one layered composition. Isolate each ingredient, then study how they work together.",
           "moduleId": "coordinate-foundations",
@@ -538,6 +545,7 @@
               "value": "all layers"
             }
           ],
+          "previewCaption": "Foundation composition",
           "sections": [
             {
               "body": "Start with a moving grid, then create rings and an orbiting point as separate masks. Small, testable layers make a complex shader easier to reason about than one long expression.",
@@ -651,6 +659,7 @@
               "value": "radius + sin(time)"
             }
           ],
+          "previewCaption": "Shape field",
           "sections": [
             {
               "body": "A distance field stores how far each fragment is from a boundary. Negative values are inside, zero is exactly on the edge, and positive values are outside. Keeping this measurement continuous makes the same field reusable.",
@@ -757,6 +766,7 @@
               "value": "two independent masks"
             }
           ],
+          "previewCaption": "Shape field",
           "sections": [
             {
               "body": "length(p) measures radial distance from the origin. Subtracting a radius moves the zero boundary outward, producing a signed field that is negative inside the circle.",
@@ -863,6 +873,7 @@
               "value": "inside one only"
             }
           ],
+          "previewCaption": "Shape field",
           "sections": [
             {
               "body": "At every fragment, min(a, b) selects whichever shape has the smaller signed distance. If either field is negative, the union is inside, so both silhouettes become one field.",
@@ -968,6 +979,7 @@
               "value": "angle + u_time"
             }
           ],
+          "previewCaption": "Shape field",
           "sections": [
             {
               "body": "Scale normalized coordinates, apply fract, and subtract 0.5. Every fragment is now expressed relative to the center of a repeating cell, so one primitive appears many times.",
@@ -1083,6 +1095,7 @@
               "value": "animated composition"
             }
           ],
+          "previewCaption": "Shape field",
           "sections": [
             {
               "body": "Choose a small vocabulary: one outer frame, one dominant filled form, and one contrasting cutout or detail. Assign each element a distance field before thinking about color.",
@@ -1205,6 +1218,7 @@
               "value": "mix(a, b, length(p))"
             }
           ],
+          "previewCaption": "Color field",
           "sections": [
             {
               "body": "For colors a and b, mix(a, b, t) computes a * (1 - t) + b * t for red, green, and blue independently. A t of 0 returns a, 1 returns b, and values between them trace a straight path through RGB space.",
@@ -1311,6 +1325,7 @@
               "value": "1.0 - exp(-rgb * 1.7)"
             }
           ],
+          "previewCaption": "Color field",
           "sections": [
             {
               "body": "The Rec. 709 luma weights assign the most influence to green, less to red, and very little to blue. The dot product turns those three weighted contributions into a single brightness estimate you can reuse as a mask or control value.",
@@ -1419,6 +1434,7 @@
               "value": "t = radius - time*.12"
             }
           ],
+          "previewCaption": "Color field",
           "sections": [
             {
               "body": "Parameter a is the palette's center color, while b controls how far each channel swings above and below it. Starting both near 0.5 tends to keep the result inside displayable 0–1 values.",
@@ -1528,6 +1544,7 @@
               "value": "diffuse + rim + specular"
             }
           ],
+          "previewCaption": "Color field",
           "sections": [
             {
               "body": "Inside a circle of radius r, the missing z coordinate of a sphere is sqrt(r² - x² - y²). Combining p.x, p.y, and z produces a normal that turns a flat circle into a surface whose orientation changes across every fragment.",

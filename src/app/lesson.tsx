@@ -116,6 +116,7 @@ export default function LessonScreen() {
       lesson={lesson}
       lessonCount={lessonCount}
       lessonIndex={lessonIndex}
+      modulePosition={module.position}
       moduleTitle={module.title}
       onBack={() => router.back()}
       onComplete={() => completeLesson(lesson.id)}
