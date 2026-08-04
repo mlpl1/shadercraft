@@ -440,6 +440,25 @@ describe("SQLite progress repository sync primitives", () => {
     });
   });
 
+  test("no-ops acknowledging a mutation that was never queued instead of throwing", async () => {
+    const profileId = await repository.getActiveProfileId();
+    await repository.setLessonCompleted("color-mixing", true);
+
+    await expect(
+      repository.acknowledgeMutation(profileId, "never-queued", {
+        completed: true,
+        revision: 1,
+        changeId: 1,
+      }),
+    ).resolves.toBeUndefined();
+
+    await expect(repository.getPendingMutations(profileId)).resolves.toHaveLength(1);
+    await expect(readProgressRow(profileId, "color-mixing")).resolves.toEqual({
+      completed: 1,
+      server_revision: 0,
+    });
+  });
+
   test("notifies subscribers only when a pulled change alters visible completion", async () => {
     const profileId = await repository.getActiveProfileId();
     const listener = jest.fn();

@@ -6,10 +6,12 @@ import {
 } from "./progress-remote";
 
 /**
- * What one sync pass did. `pushed` and `pulled` count mutations acknowledged and remote changes
- * consumed; `pending` is how many mutations are still queued afterwards, which is the signal a
- * caller uses to show a non-blocking attention state; `lastCursor` is the durable pull cursor the
- * next pass will resume from.
+ * What one sync pass did. `pushed` counts mutations acknowledged; `pulled` counts remote changes
+ * actually *applied* locally — a change skipped because a pending local mutation for the same lesson
+ * outranks it, or because the row already holds that revision, is received but not counted here.
+ * `pending` is how many mutations are still queued afterwards, which is the signal a caller uses to
+ * show a non-blocking attention state; `lastCursor` is the durable pull cursor the next pass will
+ * resume from.
  */
 export type SyncResult = {
   pushed: number;
@@ -37,10 +39,16 @@ export type ProgressSyncEngineOptions = {
   pullBatchSize?: number;
 };
 
-type PushOutcome = {
-  pushed: number;
-  /** False when the pass abandoned a mutation, which is what stops the pull from running. */
-  complete: boolean;
+type PullOutcome = {
+  /** Remote changes actually applied — see {@link SyncResult}. */
+  pulled: number;
+  /**
+   * Remote changes received across every batch this pass, applied or not. Used only to decide
+   * whether {@link ProgressSyncEngine.runOnce} needs to record a successful pass itself, because an
+   * empty batch never reaches `applyRemoteChanges` (which would otherwise record it).
+   */
+  received: number;
+  cursor: number;
 };
 
 /**
@@ -83,6 +91,12 @@ export class ProgressSyncEngine {
    * second one, since two passes would send the same mutations and race over the same cursor.
    *
    * Not `async`, so the in-flight entry is registered before the caller can interleave.
+   *
+   * This guard is per `ProgressSyncEngine` instance: it assumes exactly one engine instance ever runs
+   * against a given profile at a time, which is the app's current shape (one engine, one process).
+   * Two engine instances over the same profile — e.g. two processes, or a future background-task
+   * engine alongside the foreground one — would each believe they had exclusivity and could both
+   * push at once.
    */
   sync(profileId: string): Promise<SyncResult> {
     const inFlight = this.runs.get(profileId);
@@ -98,27 +112,37 @@ export class ProgressSyncEngine {
   }
 
   private async runOnce(profileId: string): Promise<SyncResult> {
-    const push = await this.push(profileId);
+    const pushed = await this.push(profileId);
+    const pull = await this.pull(profileId);
 
-    // An incomplete push leaves a lesson whose authoritative state is still only local. Pulling now
-    // would be safe (the repository skips lessons with pending mutations) but pointless: the next
-    // pass has to run anyway, and keeping "push fully, then pull" absolute is what makes the
-    // ordering easy to reason about.
-    const pull = push.complete
-      ? await this.pull(profileId)
-      : { pulled: 0, cursor: await this.repository.getPullCursor(profileId) };
+    // `applyRemoteChanges` stamps a successful pass's timestamp itself, but only runs when a batch is
+    // non-empty. A pass that pushed something yet received nothing to pull (an idle server) would
+    // otherwise record no success at all, even though real work happened. A genuinely idle pass —
+    // nothing queued, nothing received — deliberately still writes nothing, so a profile that has
+    // never done anything does not get a `sync_state` row just for asking.
+    if (pushed > 0 && pull.received === 0) {
+      await this.repository.recordSyncSuccess(profileId, pull.cursor);
+    }
 
     const pending = await this.repository.getPendingMutations(profileId);
 
     return {
-      pushed: push.pushed,
+      pushed,
       pulled: pull.pulled,
       pending: pending.length,
       lastCursor: pull.cursor,
     };
   }
 
-  private async push(profileId: string): Promise<PushOutcome> {
+  /**
+   * Sends every queued mutation, in creation order, and returns how many were accepted. A mutation
+   * that exhausts {@link MAX_CONFLICTS_PER_MUTATION} is abandoned *on its own* — the loop moves on to
+   * the next queued mutation rather than returning, because lessons are independent: another device
+   * fighting over one lesson says nothing about lessons nobody else is touching, and must not stall
+   * their uploads or the pull that follows. The abandoned row is kept, rebased onto the newest
+   * revision the server reported, and picked up again by the next pass.
+   */
+  private async push(profileId: string): Promise<number> {
     const mutations = await this.repository.getPendingMutations(profileId);
     /** The newest revision this pass has had accepted per lesson, i.e. the next mutation's base. */
     const acceptedRevisions = new Map<string, number>();
@@ -153,12 +177,12 @@ export class ProgressSyncEngine {
             mutation.mutationId,
             `Gave up after ${conflicts} revision conflicts in one sync pass.`,
           );
-          return { pushed, complete: false };
+          break;
         }
       }
     }
 
-    return { pushed, complete: true };
+    return pushed;
   }
 
   /**
@@ -185,17 +209,22 @@ export class ProgressSyncEngine {
     }
   }
 
-  private async pull(profileId: string): Promise<{ pulled: number; cursor: number }> {
+  private async pull(profileId: string): Promise<PullOutcome> {
     let cursor = await this.repository.getPullCursor(profileId);
     let pulled = 0;
+    let received = 0;
 
     for (;;) {
       const changes = await this.remote.pullAfter(cursor, this.pullBatchSize);
       if (changes.length === 0) {
         break;
       }
+      received += changes.length;
 
-      const nextCursor = changes[changes.length - 1].changeId;
+      // The maximum, not the last element: trusting the batch to arrive in ascending order would
+      // silently misbehave against a reordered or misbehaving response instead of failing the guard
+      // below.
+      const nextCursor = changes.reduce((max, change) => Math.max(max, change.changeId), cursor);
       // The protocol only ever returns changes after the cursor. Trusting that blindly would turn a
       // misbehaving server into an endless loop of identical batches.
       if (nextCursor <= cursor) {
@@ -205,9 +234,8 @@ export class ProgressSyncEngine {
         );
       }
 
-      await this.repository.applyRemoteChanges(profileId, changes, nextCursor);
+      pulled += await this.repository.applyRemoteChanges(profileId, changes, nextCursor);
       cursor = nextCursor;
-      pulled += changes.length;
 
       // A short batch means the server has nothing left; another request would be wasted.
       if (changes.length < this.pullBatchSize) {
@@ -215,6 +243,6 @@ export class ProgressSyncEngine {
       }
     }
 
-    return { pulled, cursor };
+    return { pulled, received, cursor };
   }
 }

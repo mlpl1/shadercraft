@@ -88,19 +88,28 @@ export interface ProgressSyncRepository {
   recordMutationFailure(profileId: string, mutationId: string, error: string): Promise<void>;
   /**
    * Applies one batch of server changes and advances the pull cursor to `cursor` in a single
-   * transaction, so a crash can never leave the cursor ahead of the rows it accounts for.
+   * transaction, so a crash can never leave the cursor ahead of the rows it accounts for. Also
+   * stamps this as a successful sync moment. Returns how many of `changes` were actually applied.
    *
    * A lesson that still has a pending local mutation is left alone: that mutation is about to be
    * pushed and become authoritative, so the server's older value must not overwrite it. So is a
-   * lesson already at or ahead of the incoming revision.
+   * lesson already at or ahead of the incoming revision. Neither counts toward the returned total,
+   * so a caller cannot mistake a skipped change for one that actually landed.
    */
   applyRemoteChanges(
     profileId: string,
     changes: readonly RemoteProgressChange[],
     cursor: number,
-  ): Promise<void>;
+  ): Promise<number>;
   /** The last change ID this profile has applied, or `0` when it has never pulled. */
   getPullCursor(profileId: string): Promise<number>;
+  /**
+   * Records that a sync pass completed successfully, independent of whether it had anything new to
+   * pull. `applyRemoteChanges` already records this moment when a pull batch is non-empty; this is
+   * for the pass that pushed real work but received nothing to pull, which would otherwise leave
+   * `sync_state.last_success_at` stale even though the device is working.
+   */
+  recordSyncSuccess(profileId: string, cursor: number): Promise<void>;
 }
 
 export interface ProgressRepository {

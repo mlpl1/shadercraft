@@ -415,6 +415,13 @@ export class SqliteProgressRepository
    * learner's newest choice, which may be a later queued action. And the result's `changeId` never
    * touches the pull cursor — it belongs to one global sequence, so adopting it would skip every
    * other device's changes that landed between the current cursor and this one.
+   *
+   * Unlike {@link rebaseMutation} and {@link recordMutationFailure}, the lookup and delete below do
+   * not filter on `merged_at IS NULL`. That is deliberate, not an oversight: a mutation can be marked
+   * merged by {@link mergeAnonymousProfile} while it is still in flight to the server (mid-push), and
+   * the server's eventual answer for it must still be settled here so the row does not leak forever —
+   * `getPendingMutations` already excludes merged rows from ever being *sent* again, so filtering here
+   * too would only stop them from ever being *cleaned up*.
    */
   async acknowledgeMutation(
     profileId: string,
@@ -466,14 +473,15 @@ export class SqliteProgressRepository
     profileId: string,
     changes: readonly RemoteProgressChange[],
     cursor: number,
-  ): Promise<void> {
-    const didChange = await this.driver.transaction(async () => {
+  ): Promise<number> {
+    const outcome = await this.driver.transaction<ApplyRemoteChangesOutcome>(async () => {
       const pendingRows = await this.driver.all<{ entity_id: string }>(
         `SELECT DISTINCT entity_id FROM sync_outbox WHERE profile_id = ? AND merged_at IS NULL`,
         [profileId],
       );
       const lessonsWithPendingMutation = new Set(pendingRows.map((row) => row.entity_id));
 
+      let appliedCount = 0;
       let anyChanged = false;
       for (const change of changes) {
         if (lessonsWithPendingMutation.has(change.lessonId)) {
@@ -504,6 +512,7 @@ export class SqliteProgressRepository
           [profileId, change.lessonId, completedValue, change.revision, timestamp, timestamp],
         );
 
+        appliedCount += 1;
         // Compared against the *effective* previous state — a missing row reads as not completed —
         // so a first server row confirming "not completed" is not reported as a visible change.
         anyChanged = anyChanged || (existing?.completed === 1) !== change.completed;
@@ -518,13 +527,14 @@ export class SqliteProgressRepository
         [profileId, PROGRESS_SYNC_RESOURCE, String(cursor), this.now()],
       );
 
-      return anyChanged;
+      return { appliedCount, anyChanged };
     });
 
     // Only the active profile's rows are on screen; see `mergeAnonymousProfile` for the same rule.
-    if (didChange && this.cachedProfile?.id === profileId) {
+    if (outcome.anyChanged && this.cachedProfile?.id === profileId) {
       this.notifySubscribers();
     }
+    return outcome.appliedCount;
   }
 
   /** See {@link ProgressSyncRepository.getPullCursor}. */
@@ -545,6 +555,22 @@ export class SqliteProgressRepository
       );
     }
     return cursor;
+  }
+
+  /**
+   * See {@link ProgressSyncRepository.recordSyncSuccess}. One statement: unlike
+   * {@link applyRemoteChanges}, there is no batch of rows to commit alongside it, so no transaction
+   * is needed. Deliberately leaves `pull_cursor` alone on an existing row rather than rewriting it
+   * with the same value the caller already read — `cursor` is only used to seed a fresh row for a
+   * profile that has pushed but never yet pulled.
+   */
+  async recordSyncSuccess(profileId: string, cursor: number): Promise<void> {
+    await this.driver.run(
+      `INSERT INTO sync_state (profile_id, resource, pull_cursor, last_success_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(profile_id, resource) DO UPDATE SET last_success_at = excluded.last_success_at`,
+      [profileId, PROGRESS_SYNC_RESOURCE, String(cursor), this.now()],
+    );
   }
 
   subscribe(listener: () => void): () => void {
@@ -750,6 +776,13 @@ type MergeOutcome = {
   merged: boolean;
   /** Whether any target progress row actually changed, and so whether subscribers must be told. */
   changedProgress: boolean;
+};
+
+type ApplyRemoteChangesOutcome = {
+  /** How many changes were actually written — excludes those skipped, per {@link applyRemoteChanges}. */
+  appliedCount: number;
+  /** Whether any applied change altered visible completion, and so whether subscribers must be told. */
+  anyChanged: boolean;
 };
 
 function toLearnerProfile(row: LearnerProfileRow): LearnerProfile {

@@ -18,6 +18,7 @@ import { ProgressSyncEngine } from "../progress-sync-engine";
 const LESSON_A = "coordinate-systems-uv-space";
 const LESSON_B = "colors-fragment-output";
 const LESSON_C = "color-mixing";
+const LESSON_D = "uniforms-time";
 
 type ServerRow = { completed: boolean; revision: number; changeId: number };
 
@@ -459,8 +460,51 @@ describe("ProgressSyncEngine push", () => {
     expect(row.base_revision).toBe(server.stateOf(LESSON_A)?.revision);
     expect(row.attempts).toBe(1);
     expect(row.last_error).not.toBeNull();
-    // An unfinished push must not be followed by a pull.
-    expect(device.remote.pullCalls).toHaveLength(0);
+    // Abandoning this mutation does not cancel the pull: nothing else queued needed the lesson's
+    // authoritative state to still be local, so the pass pulls anyway.
+    expect(device.remote.pullCalls).toHaveLength(1);
+  });
+
+  test("keeps pushing later mutations and still pulls when one lesson is permanently contended", async () => {
+    server.write(LESSON_A, false);
+    await device.repository.setLessonCompleted(LESSON_A, true);
+    await device.repository.setLessonCompleted(LESSON_B, true);
+    await device.repository.setLessonCompleted(LESSON_C, true);
+    // Another device writes LESSON_A just before each of this device's attempts, exactly like the
+    // "stops after three consecutive conflicts" test above — but this time two more mutations for
+    // different lessons are queued behind it, and an independent remote change is waiting to be
+    // pulled.
+    device.remote.beforeApply = (mutation) => {
+      if (mutation.lessonId === LESSON_A) {
+        server.write(LESSON_A, false);
+      }
+    };
+    server.write(LESSON_D, true);
+
+    const result = await device.engine.sync(device.profileId);
+
+    // LESSON_A is retried three times and never accepted; B and C are neither delayed nor blocked by
+    // it.
+    expect(device.remote.applyCalls.map((call) => call.lessonId)).toEqual([
+      LESSON_A,
+      LESSON_A,
+      LESSON_A,
+      LESSON_B,
+      LESSON_C,
+    ]);
+    expect(result.pushed).toBe(2);
+    expect(result.pending).toBe(1);
+    const [row] = await device.readOutbox();
+    expect(row.entity_id).toBe(LESSON_A);
+    // The pull still ran (once) and applied the unrelated remote change, despite the contended
+    // lesson.
+    expect(device.remote.pullCalls).toHaveLength(1);
+    await expect(device.repository.isLessonCompleted(LESSON_D)).resolves.toBe(true);
+    // The batch also carries back this device's own just-accepted B and C changes (changeIds 6 and
+    // 7, after the three contended writes to A and D's own write): the cursor is the batch maximum,
+    // not merely D's own changeId (2).
+    expect(result.lastCursor).toBe(7);
+    await expect(device.readCursor()).resolves.toBe("7");
   });
 
   test("does not resend an acknowledged mutation on the next run", async () => {
@@ -548,8 +592,37 @@ describe("ProgressSyncEngine pull", () => {
     const [row] = await device.readProgress();
     expect(row.server_revision).toBe(0);
     expect(result.pending).toBe(1);
+    // The change was received but skipped, not applied — it must not be reported as pulled.
+    expect(result.pulled).toBe(0);
     // The change was still consumed, so the cursor moves on.
     await expect(device.readCursor()).resolves.toBe("1");
+  });
+
+  test("resolves a lesson skipped mid-pull once the following pass pushes its pending mutation", async () => {
+    // Pins the coupling `applyRemoteChanges` relies on: skipping a lesson with a pending mutation
+    // (`leaves a lesson alone...` above) is only safe because that mutation is later pushed and
+    // becomes authoritative. If a future change dropped the outbox row without pushing it, this
+    // would strand the server's change forever with nothing to reconcile it.
+    server.write(LESSON_A, true);
+    device.remote.beforePull = async () => {
+      device.remote.beforePull = null;
+      await device.repository.setLessonCompleted(LESSON_A, false);
+    };
+
+    const firstResult = await device.engine.sync(device.profileId);
+    expect(firstResult.pending).toBe(1);
+    await expect(device.repository.isLessonCompleted(LESSON_A)).resolves.toBe(false);
+
+    const secondResult = await device.engine.sync(device.profileId);
+
+    expect(secondResult.pending).toBe(0);
+    await expect(device.readOutbox()).resolves.toEqual([]);
+    // The device's own later action is what the server now holds too — the skipped change never
+    // stuck around unreconciled.
+    expect(server.stateOf(LESSON_A)).toMatchObject({ completed: false });
+    await expect(device.repository.isLessonCompleted(LESSON_A)).resolves.toBe(false);
+    const [row] = await device.readProgress();
+    expect(row.server_revision).toBe(server.stateOf(LESSON_A)?.revision);
   });
 
   test("rewrites no progress row when the pull returns the change this device just pushed", async () => {
