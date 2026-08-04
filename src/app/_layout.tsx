@@ -2,9 +2,11 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 
 import { Colors } from "../constants/theme";
+import { AuthProvider } from "../context/auth-context";
 import { CourseProvider } from "../context/course-context";
 import { DataProvider } from "../context/data-context";
 import { ProgressProvider } from "../context/progress-context";
+import { SyncProvider } from "../context/sync-context";
 
 const screenOptions = {
   contentStyle: { backgroundColor: Colors.background },
@@ -14,12 +16,16 @@ const screenOptions = {
 export default function RootLayout() {
   return (
     <DataProvider>
-      <CourseProvider>
-        <ProgressProvider>
-          <StatusBar style="light" />
-          <Stack screenOptions={screenOptions} />
-        </ProgressProvider>
-      </CourseProvider>
+      <AuthProvider>
+        <SyncProvider>
+          <CourseProvider>
+            <ProgressProvider>
+              <StatusBar style="light" />
+              <Stack screenOptions={screenOptions} />
+            </ProgressProvider>
+          </CourseProvider>
+        </SyncProvider>
+      </AuthProvider>
     </DataProvider>
   );
 }
