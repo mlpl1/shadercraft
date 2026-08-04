@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -30,10 +30,17 @@ function validateCredentials(email: string, password: string): string | null {
   return null;
 }
 
-function syncStatusLabel(status: SyncStatus): string {
+/** "1 change" / "3 changes" — the count is a learner-facing sentence fragment, never a bare number. */
+function describeQueuedChanges(queued: number): string {
+  return `${queued} ${queued === 1 ? "change" : "changes"}`;
+}
+
+function syncStatusLabel(status: SyncStatus, queued: number): string {
   switch (status) {
     case "idle":
-      return "Up to date";
+      // Never "Up to date" while the outbox still holds something: a queued change is precisely what
+      // has *not* reached the server yet, and saying otherwise is what made a working sync look broken.
+      return queued > 0 ? `${describeQueuedChanges(queued)} waiting to sync` : "Up to date";
     case "syncing":
       return "Syncing…";
     case "attention":
@@ -41,6 +48,19 @@ function syncStatusLabel(status: SyncStatus): string {
     case "offline":
       return "Waiting to retry";
   }
+}
+
+/**
+ * The durable `sync_state.last_success_at`, as a local date *and* time: it can name a pass from days
+ * ago (or from before this launch), so a bare time would be ambiguous.
+ *
+ * `null` means no pass has ever moved anything — including for a brand-new account whose first pass had
+ * nothing to send — so the copy says "not yet", never anything that reads as a failure.
+ */
+function formatLastSuccessfulSync(lastSuccessAt: string | null): string {
+  if (!lastSuccessAt) return "Not yet";
+  const at = new Date(lastSuccessAt);
+  return Number.isNaN(at.getTime()) ? "Unknown" : at.toLocaleString();
 }
 
 /** A safe, pre-classified description — never the raw Supabase/network payload behind it. */
@@ -68,17 +88,6 @@ export default function AccountScreen() {
   const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
-  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
-
-  // Tracks only the *transition* into "idle", so a fresh mount that happens to already be idle (no
-  // pass has run this session) reads as "not yet", not as a fabricated sync that never happened.
-  const previousSyncStatusRef = useRef(sync.status);
-  useEffect(() => {
-    if (previousSyncStatusRef.current !== "idle" && sync.status === "idle") {
-      setLastSyncedAt(new Date());
-    }
-    previousSyncStatusRef.current = sync.status;
-  }, [sync.status]);
 
   const isBusy = pendingAction !== null;
 
@@ -180,7 +189,6 @@ export default function AccountScreen() {
             <AuthenticatedPanel
               email={auth.session.email}
               isSigningOut={pendingAction === "sign-out"}
-              lastSyncedAt={lastSyncedAt}
               onRetrySync={sync.retrySync}
               onSignOut={confirmSignOut}
               signOutError={signOutError}
@@ -234,17 +242,21 @@ function LocalOnlyPanel() {
 type AuthenticatedPanelProps = {
   email: string;
   isSigningOut: boolean;
-  lastSyncedAt: Date | null;
   onRetrySync: () => void;
   onSignOut: () => void;
   signOutError: string | null;
-  sync: { status: SyncStatus; pending: number; errorKind: ProgressRemoteErrorKind | null };
+  sync: {
+    status: SyncStatus;
+    /** Queued outbox mutations, read from SQLite by `SyncProvider` — see `useSyncStatus`. */
+    pending: number;
+    errorKind: ProgressRemoteErrorKind | null;
+    lastSuccessAt: string | null;
+  };
 };
 
 function AuthenticatedPanel({
   email,
   isSigningOut,
-  lastSyncedAt,
   onRetrySync,
   onSignOut,
   signOutError,
@@ -258,7 +270,7 @@ function AuthenticatedPanel({
       <View style={styles.syncCard}>
         <View style={styles.syncRow}>
           <Text style={styles.syncLabel}>Status</Text>
-          <Text style={styles.syncValue}>{syncStatusLabel(sync.status)}</Text>
+          <Text style={styles.syncValue}>{syncStatusLabel(sync.status, sync.pending)}</Text>
         </View>
         <View style={styles.syncRow}>
           <Text style={styles.syncLabel}>Pending changes</Text>
@@ -266,9 +278,7 @@ function AuthenticatedPanel({
         </View>
         <View style={styles.syncRow}>
           <Text style={styles.syncLabel}>Last successful sync</Text>
-          <Text style={styles.syncValue}>
-            {lastSyncedAt ? lastSyncedAt.toLocaleTimeString() : "Not yet this session"}
-          </Text>
+          <Text style={styles.syncValue}>{formatLastSuccessfulSync(sync.lastSuccessAt)}</Text>
         </View>
 
         {sync.errorKind && sync.status !== "idle" ? (

@@ -21,13 +21,35 @@ import { useData } from "./data-context";
 
 export type { SyncStatus, ProgressRemoteErrorKind };
 
-type SyncContextValue = SyncSchedulerState & {
+type SyncContextValue = {
+  status: SyncStatus;
+  /** The safe classification of the most recent failure, or `null` when nothing has failed. */
+  errorKind: ProgressRemoteErrorKind | null;
+  /**
+   * How many of this profile's local changes are still queued for the server, read from the outbox in
+   * SQLite rather than taken from the last pass's `SyncResult`. It has to be the durable count: the
+   * states where the number matters most — a device with no network, or one that queued a change while
+   * a pass was already reading the outbox — are exactly the ones where no pass has reported since.
+   */
+  pending: number;
+  /**
+   * When a pass last moved this profile's progress (ISO), or `null` if none ever has. Read from
+   * `sync_state.last_success_at`, so it survives relaunches instead of describing only what this
+   * screen happened to watch happen. `null` is "nothing has been synced yet", never "sync is broken" —
+   * see `ProgressSyncRepository.getLastSyncSuccessAt`.
+   */
+  lastSuccessAt: string | null;
   /** An explicit, learner-initiated retry. Bypasses any backoff wait in progress. No-op when there is
    *  nothing to sync (cloud sync disabled, or no authenticated session). */
   retrySync: () => void;
 };
 
 const INITIAL_STATE: SyncSchedulerState = { status: "offline", pending: 0, errorKind: null };
+
+/** What {@link SyncProvider} reads out of SQLite rather than out of the scheduler's own state. */
+type DurableSyncFacts = { pending: number; lastSuccessAt: string | null };
+
+const NO_DURABLE_FACTS: DurableSyncFacts = { pending: 0, lastSuccessAt: null };
 
 const SyncContext = createContext<SyncContextValue | null>(null);
 
@@ -51,6 +73,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
   const enabled = isCloudSyncEnabled();
 
   const [state, setState] = useState<SyncSchedulerState>(INITIAL_STATE);
+  const [durableFacts, setDurableFacts] = useState<DurableSyncFacts>(NO_DURABLE_FACTS);
   const schedulerRef = useRef<SyncScheduler | null>(null);
 
   // Builds the engine and scheduler once cloud sync is enabled and a repository exists, and rebuilds
@@ -120,11 +143,61 @@ export function SyncProvider({ children }: PropsWithChildren) {
     });
   }, [enabled, progressRepository]);
 
+  // Reads the two facts the screen needs that no scheduler state can carry truthfully: how many
+  // changes are queued right now, and when a pass last moved anything. Both come from SQLite, and both
+  // are re-read on every scheduler transition (a pass just settled, so the outbox may be shorter and
+  // the stamp newer) and on every local write (a lesson just queued one). Purely informational: a
+  // failed read leaves the last values in place and never surfaces as an error, because nothing about
+  // learning depends on it.
+  useEffect(() => {
+    const profileId = auth.session ? auth.profileId : null;
+    if (!enabled || !progressRepository || !profileId) {
+      // A guest's queue belongs to a profile no pass will ever push, and there is no account to report
+      // a last sync for.
+      setDurableFacts(NO_DURABLE_FACTS);
+      return undefined;
+    }
+
+    const syncRepository = progressRepository as unknown as ProgressSyncRepository;
+    let cancelled = false;
+    const refresh = () => {
+      void Promise.all([
+        progressRepository.getPendingMutations(),
+        syncRepository.getLastSyncSuccessAt(profileId),
+      ]).then(
+        ([mutations, lastSuccessAt]) => {
+          if (cancelled) return;
+          setDurableFacts({ pending: mutations.length, lastSuccessAt });
+        },
+        () => {
+          // Deliberately silent — see above.
+        },
+      );
+    };
+
+    refresh();
+    const unsubscribe = progressRepository.subscribe(refresh);
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [enabled, progressRepository, auth.session, auth.profileId, state.status]);
+
   const retrySync = useCallback(() => {
     schedulerRef.current?.retry();
   }, []);
 
-  const value = useMemo<SyncContextValue>(() => ({ ...state, retrySync }), [state, retrySync]);
+  const value = useMemo<SyncContextValue>(
+    () => ({
+      status: state.status,
+      errorKind: state.errorKind,
+      pending: durableFacts.pending,
+      lastSuccessAt: durableFacts.lastSuccessAt,
+      retrySync,
+    }),
+    [state.status, state.errorKind, durableFacts, retrySync],
+  );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }

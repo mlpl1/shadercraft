@@ -57,6 +57,7 @@ function buildSync(overrides: SyncOverrides = {}): ReturnType<typeof useSyncStat
     status: "idle",
     pending: 0,
     errorKind: null,
+    lastSuccessAt: null,
     retrySync: jest.fn(),
     ...overrides,
   };
@@ -213,7 +214,7 @@ describe("AccountScreen", () => {
     expect(screen.queryByText("Invalid login credentials")).toBeNull();
   });
 
-  test("shows the signed-in email, pending count, and no sign-in fields once authenticated", async () => {
+  test("shows the signed-in email, queued count, and no sign-in fields once authenticated", async () => {
     mockUseAuth.mockReturnValue(
       buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
     );
@@ -225,33 +226,56 @@ describe("AccountScreen", () => {
     expect(screen.getByText("3")).toBeTruthy();
     expect(screen.queryByLabelText("Email")).toBeNull();
     expect(screen.queryByRole("button", { name: "Retry sync" })).toBeNull();
-    // No pass has completed within this screen's lifetime, so this must read as "not yet", not as a
-    // fabricated timestamp for a sync that never happened.
-    expect(screen.getByText("Not yet this session")).toBeTruthy();
   });
 
-  test("records a last-successful-sync readout only once a pass actually completes this session", async () => {
+  test("reads the last successful sync from the durable timestamp rather than a status transition", async () => {
+    const lastSuccessAt = "2026-08-04T09:30:00.000Z";
     mockUseAuth.mockReturnValue(
       buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
     );
-    mockUseSyncStatus.mockReturnValue(buildSync({ status: "syncing", pending: 1 }));
+    // Mid-pass, and nothing has transitioned while this screen has been open: the stored timestamp is
+    // still the answer, because it describes every earlier pass including ones from before this launch.
+    mockUseSyncStatus.mockReturnValue(buildSync({ status: "syncing", pending: 1, lastSuccessAt }));
 
-    const { rerender } = await renderAccountScreen();
+    await renderAccountScreen();
 
     await waitFor(() => expect(screen.getByText("Syncing…")).toBeTruthy());
-    expect(screen.getByText("Not yet this session")).toBeTruthy();
+    expect(screen.getByText(new Date(lastSuccessAt).toLocaleString())).toBeTruthy();
+    expect(screen.queryByText("Not yet")).toBeNull();
+  });
 
+  test("says a sync has never happened when nothing has ever been synced", async () => {
+    mockUseAuth.mockReturnValue(
+      buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
+    );
+    mockUseSyncStatus.mockReturnValue(buildSync({ status: "idle", lastSuccessAt: null }));
+
+    await renderAccountScreen();
+
+    await waitFor(() => expect(screen.getByText("Not yet")).toBeTruthy());
+  });
+
+  test("does not claim to be up to date while local changes are still queued", async () => {
+    mockUseAuth.mockReturnValue(
+      buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
+    );
+    mockUseSyncStatus.mockReturnValue(buildSync({ status: "idle", pending: 2 }));
+
+    await renderAccountScreen();
+
+    await waitFor(() => expect(screen.getByText("2 changes waiting to sync")).toBeTruthy());
+    expect(screen.queryByText("Up to date")).toBeNull();
+  });
+
+  test("says it is up to date only once nothing is queued", async () => {
+    mockUseAuth.mockReturnValue(
+      buildAuth({ session: { userId: "user-1", email: "learner@example.com" } }),
+    );
     mockUseSyncStatus.mockReturnValue(buildSync({ status: "idle", pending: 0 }));
-    await act(async () => {
-      rerender(
-        <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-          <AccountScreen />
-        </SafeAreaProvider>,
-      );
-    });
 
-    await waitFor(() => expect(screen.queryByText("Not yet this session")).toBeNull());
-    expect(screen.getByText("Up to date")).toBeTruthy();
+    await renderAccountScreen();
+
+    await waitFor(() => expect(screen.getByText("Up to date")).toBeTruthy());
   });
 
   test("shows a syncing indicator with no retry affordance while a pass is in flight", async () => {
