@@ -90,11 +90,13 @@ export function LessonWorkspace({
   const [state, setState] = useState<WorkspaceState>(() => freshState(lesson));
   const workspace = state.lessonId === lesson.id ? state : freshState(lesson);
 
-  const update = (patch: Partial<WorkspaceState>) => {
-    setState((previous) => ({
-      ...(previous.lessonId === lesson.id ? previous : freshState(lesson)),
-      ...patch,
-    }));
+  const update = (
+    patch: Partial<WorkspaceState> | ((previous: WorkspaceState) => Partial<WorkspaceState>),
+  ) => {
+    setState((previous) => {
+      const base = previous.lessonId === lesson.id ? previous : freshState(lesson);
+      return { ...base, ...(typeof patch === "function" ? patch(base) : patch) };
+    });
   };
 
   const presets = byPosition(lesson.presets);
@@ -178,7 +180,7 @@ export function LessonWorkspace({
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.intro}>
-              <Text style={styles.eyebrow}>Concept</Text>
+              <Text style={styles.eyebrow}>{lesson.introEyebrow ?? "Concept"}</Text>
               <Text style={styles.title}>{lesson.title}</Text>
               <Text style={styles.lede}>{lesson.intro}</Text>
             </View>
@@ -203,7 +205,7 @@ export function LessonWorkspace({
                 <View style={styles.previewFooter}>
                   <Text style={styles.previewLabel}>{lesson.previewCaption}</Text>
                   <Text style={styles.previewValue}>
-                    {preset.label} · {preset.value}
+                    {preset.previewValueLabel ?? `${preset.label} · ${preset.value}`}
                   </Text>
                 </View>
               </View>
@@ -241,7 +243,9 @@ export function LessonWorkspace({
                   <Pressable
                     accessibilityLabel="Restart animation timeline"
                     accessibilityRole="button"
-                    onPress={() => update({ restartToken: workspace.restartToken + 1 })}
+                    onPress={() =>
+                      update((previous) => ({ restartToken: previous.restartToken + 1 }))
+                    }
                     style={({ pressed }) => [styles.restartButton, pressed && styles.pressed]}
                   >
                     <AppIcon

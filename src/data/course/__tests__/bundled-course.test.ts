@@ -64,3 +64,51 @@ it("pauses only the static preset of Uniforms & Time", () => {
 
   expect(pausedPresetIds).toEqual(["time-static"]);
 });
+
+it("labels the bespoke preview footer of every Coordinate Systems & UV Space preset", () => {
+  const lesson = publishedLessons.find(
+    (candidate) => candidate.id === "coordinate-systems-uv-space",
+  );
+
+  expect(
+    Object.fromEntries(
+      (lesson?.presets ?? []).map((preset) => [preset.id, preset.previewValueLabel]),
+    ),
+  ).toEqual({
+    normalized: "0.0 → 1.0 · screen space",
+    centered: "−1.0 → 1.0 · centered",
+    "pixel-space": "0 → resolution · pixel coordinates",
+    "aspect-aware": "−aspect → aspect · corrected",
+  });
+});
+
+it("authors no other preset with a bespoke preview footer", () => {
+  const otherLessonPresetIds = publishedLessons
+    .filter((lesson) => lesson.id !== "coordinate-systems-uv-space")
+    .flatMap((lesson) => lesson.presets)
+    .filter((preset) => preset.previewValueLabel !== undefined)
+    .map((preset) => preset.id);
+
+  expect(otherLessonPresetIds).toEqual([]);
+});
+
+it("labels the intro eyebrow of Module 2 and Module 3 lessons, leaving Module 1 on the default", () => {
+  expect(
+    Object.fromEntries(publishedLessons.map((lesson) => [lesson.id, lesson.introEyebrow])),
+  ).toEqual({
+    "coordinate-systems-uv-space": undefined,
+    "colors-fragment-output": undefined,
+    "uniforms-time": undefined,
+    "transforming-uvs": undefined,
+    "foundation-challenge": undefined,
+    "step-and-smoothstep": "Shape synthesis",
+    "circles-and-boxes": "Shape synthesis",
+    "boolean-shape-operations": "Shape synthesis",
+    "shape-repetition-composition": "Shape synthesis",
+    "shape-synthesis-challenge": "Shape synthesis",
+    "color-mixing": "Color & light",
+    "luma-and-contrast": "Color & light",
+    "procedural-palettes": "Color & light",
+    "color-light-challenge": "Color & light",
+  });
+});

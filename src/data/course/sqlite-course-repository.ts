@@ -39,6 +39,7 @@ type LessonRow = {
   takeaway: string;
   preview_caption: string;
   default_preset_id: string | null;
+  intro_eyebrow: string | null;
 };
 
 type PresetRow = {
@@ -49,6 +50,7 @@ type PresetRow = {
   preview_key: LessonPreset["previewKey"];
   preview_parameters_json: string;
   value: string;
+  preview_value_label: string | null;
   filename: string;
   code_lines_json: string;
   highlighted_lines_json: string;
@@ -91,7 +93,8 @@ export class SqliteCourseRepository implements CourseRepository {
       ),
       this.driver.all<LessonRow>(
         `SELECT id, module_id, position, title, short_title, intro, concept_title,
-                concept_lede, try_hint, takeaway, preview_caption, default_preset_id
+                concept_lede, try_hint, takeaway, preview_caption, default_preset_id,
+                intro_eyebrow
          FROM lessons
          WHERE release_id = ?
          ORDER BY module_id, position`,
@@ -99,7 +102,7 @@ export class SqliteCourseRepository implements CourseRepository {
       ),
       this.driver.all<PresetRow>(
         `SELECT id, lesson_id, position, label, preview_key,
-                preview_parameters_json, value, filename, code_lines_json,
+                preview_parameters_json, value, preview_value_label, filename, code_lines_json,
                 highlighted_lines_json
          FROM lesson_presets
          WHERE release_id = ?
@@ -192,6 +195,7 @@ function toLesson(
     ...(lesson.default_preset_id === null
       ? {}
       : { defaultPresetId: lesson.default_preset_id }),
+    ...(lesson.intro_eyebrow === null ? {} : { introEyebrow: lesson.intro_eyebrow }),
     presets: (presetsByLesson.get(lesson.id) ?? []).map((preset) => ({
       id: preset.id,
       position: preset.position,
@@ -201,6 +205,9 @@ function toLesson(
         preset.preview_parameters_json,
       ),
       value: preset.value,
+      ...(preset.preview_value_label === null
+        ? {}
+        : { previewValueLabel: preset.preview_value_label }),
       filename: preset.filename,
       codeLines: parseJson<string[]>(preset.code_lines_json),
       highlightedLines: parseJson<number[]>(preset.highlighted_lines_json),

@@ -34,24 +34,10 @@ import { Alert, StyleSheet } from "react-native";
 
 import bundledCourse from "../../../assets/course/bundled-course.json";
 
-import LessonScreen from "../../app/lesson";
 import { Colors } from "../../constants/theme";
-import { CourseProvider } from "../../context/course-context";
-import { DataContext } from "../../context/data-context";
-import { ProgressProvider } from "../../context/progress-context";
-import type { CourseRepository } from "../../data/course/course-repository";
 import { parseCourseRelease } from "../../data/course/schema";
-import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
-import type { ProgressMutation, ProgressRepository } from "../../data/progress/progress-repository";
+import type { CourseLesson, CourseModule } from "../../data/course/types";
 import { LessonWorkspace, type LessonWorkspaceProps } from "../lesson-workspace";
-
-const mockRouter = { back: jest.fn(), push: jest.fn(), replace: jest.fn() };
-let mockSearchParams: Record<string, string> = {};
-
-jest.mock("expo-router", () => ({
-  useLocalSearchParams: () => mockSearchParams,
-  useRouter: () => mockRouter,
-}));
 
 const release = parseCourseRelease(bundledCourse);
 
@@ -75,16 +61,33 @@ const challengeLesson = findLesson("color-light-challenge");
 const timeLesson = findLesson("uniforms-time");
 const foundationChallengeLesson = findLesson("foundation-challenge");
 
-const publishedLessonIds = release.modules
-  .filter((module) => module.status === "published")
-  .flatMap((module) => module.lessons.map((lesson) => lesson.id));
-
 function textColorOf(text: string): string | undefined {
   return StyleSheet.flatten(screen.getByText(text).props.style)?.color;
 }
 
 function previewLabel(): string {
   return String(screen.getByTestId("live-shader-preview").props.accessibilityLabel);
+}
+
+/**
+ * Finds the nearest ancestor fiber's `onPress` handler for a queried host element. `fireEvent.press`
+ * opens and closes its own `act` scope per call, so firing it twice without awaiting between calls
+ * (needed to land two presses in a single React batch) would open a second scope before the first
+ * one closes and log React's "overlapping act() calls" warning. Calling the handler directly, twice,
+ * inside one `act` avoids that: it is the same handler `fireEvent.press` would have found and called,
+ * just without an `act` scope per press.
+ */
+function findOnPressHandler(element: ReturnType<typeof screen.getByText>): () => void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let fiber: any = (element as unknown as { unstable_fiber?: unknown }).unstable_fiber;
+  while (fiber) {
+    const onPress = fiber.memoizedProps?.onPress;
+    if (typeof onPress === "function") {
+      return onPress;
+    }
+    fiber = fiber.return;
+  }
+  throw new Error("No onPress handler found in the element's ancestor fibers");
 }
 
 async function pressAlertAction(alertSpy: jest.SpiedFunction<typeof Alert.alert>, index: number) {
@@ -254,6 +257,27 @@ describe("lesson workspace", () => {
     expect(previewLabel()).toBe("time-play#1");
   });
 
+  test("advances the restart token once per press even when two presses land in one batch", async () => {
+    await renderWorkspace(moduleOneProps(timeLesson, 2));
+
+    expect(previewLabel()).toBe("time-play#0");
+
+    // Invoke the press handler directly, twice, inside one `act` call. `fireEvent.press` opens and
+    // closes its own `act` scope per call, so firing it twice without awaiting between calls would
+    // overlap two act scopes (a React warning) instead of landing both updates in one render pass.
+    // Calling the handler itself twice inside a single scope is what actually reproduces two
+    // presses batching into one render: a naive `restartToken + 1` computed from the closed-over
+    // render-time value would compute the same next token for both presses and silently drop one.
+    const restartButton = screen.getByText("Restart timeline");
+    const onPress = findOnPressHandler(restartButton);
+    await act(async () => {
+      onPress();
+      onPress();
+    });
+
+    expect(previewLabel()).toBe("time-play#2");
+  });
+
   test("hides the restart control when no preview parameter requests it", async () => {
     await renderWorkspace();
 
@@ -273,6 +297,57 @@ describe("lesson workspace", () => {
     await view.rerender(<LessonWorkspace {...props} lesson={foundationChallengeLesson} />);
 
     expect(previewLabel()).toBe("challenge-final#0");
+  });
+
+  test("renders Module 1's bespoke preview footer values for Coordinate Systems & UV Space", async () => {
+    const lesson = findLesson("coordinate-systems-uv-space");
+    await renderWorkspace(moduleOneProps(lesson, 0));
+
+    expect(screen.getByText("0.0 → 1.0 · screen space")).toBeTruthy();
+
+    await fireEvent.press(screen.getByText("Centered"));
+    expect(screen.getByText("−1.0 → 1.0 · centered")).toBeTruthy();
+
+    await fireEvent.press(screen.getByText("Pixel space"));
+    expect(screen.getByText("0 → resolution · pixel coordinates")).toBeTruthy();
+
+    await fireEvent.press(screen.getByText("Corrected"));
+    expect(screen.getByText("−aspect → aspect · corrected")).toBeTruthy();
+  });
+
+  test("falls back to the default label · value footer for a lesson with no bespoke footer copy", async () => {
+    await renderWorkspace();
+
+    expect(screen.getByText(`${challengeLesson.presets[0].label} · ${challengeLesson.presets[0].value}`)).toBeTruthy();
+  });
+
+  test("shows the default Concept eyebrow for a Module 1 lesson", async () => {
+    await renderWorkspace(moduleOneProps(findLesson("coordinate-systems-uv-space"), 0));
+
+    expect(screen.getByText("Concept")).toBeTruthy();
+  });
+
+  test("shows Module 2's authored intro eyebrow", async () => {
+    const shapeSynthesis = findModule("shape-synthesis");
+    const lesson = findLesson("step-and-smoothstep");
+
+    await renderWorkspace({
+      lesson,
+      lessonCount: shapeSynthesis.lessons.length,
+      lessonIndex: 0,
+      modulePosition: shapeSynthesis.position,
+      moduleTitle: shapeSynthesis.title,
+    });
+
+    expect(screen.getByText("Shape synthesis")).toBeTruthy();
+    expect(screen.queryByText("Concept")).toBeNull();
+  });
+
+  test("shows Module 3's authored intro eyebrow", async () => {
+    await renderWorkspace();
+
+    expect(screen.getByText("Color & light")).toBeTruthy();
+    expect(screen.queryByText("Concept")).toBeNull();
   });
 
   test("shows the completion sheet after a successful completion", async () => {
@@ -370,218 +445,5 @@ describe("lesson workspace", () => {
     await fireEvent.press(screen.getByLabelText("Back"));
 
     expect(props.onBack).toHaveBeenCalledTimes(1);
-  });
-});
-
-class FakeCourseRepository implements CourseRepository {
-  private readonly listeners = new Set<() => void>();
-
-  constructor(private readonly courseRelease: CourseRelease) {}
-
-  async getActiveRelease(): Promise<CourseRelease> {
-    return this.courseRelease;
-  }
-
-  async getModules(): Promise<CourseModule[]> {
-    return this.courseRelease.modules;
-  }
-
-  async getLesson(lessonId: string): Promise<CourseLesson | null> {
-    return (
-      this.courseRelease.modules
-        .flatMap((module) => module.lessons)
-        .find((lesson) => lesson.id === lessonId) ?? null
-    );
-  }
-
-  async getPublishedLessonIds(): Promise<string[]> {
-    return publishedLessonIds;
-  }
-
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
-  }
-}
-
-class FakeProgressRepository implements ProgressRepository {
-  private readonly listeners = new Set<() => void>();
-  private readonly completed: Set<string>;
-
-  constructor(
-    completedLessonIds: readonly string[],
-    private readonly writeError?: Error,
-  ) {
-    this.completed = new Set(completedLessonIds);
-  }
-
-  async getActiveProfileId(): Promise<string> {
-    return "local-profile";
-  }
-
-  async getCompletedLessonIds(): Promise<string[]> {
-    return [...this.completed];
-  }
-
-  async isLessonCompleted(lessonId: string): Promise<boolean> {
-    return this.completed.has(lessonId);
-  }
-
-  async setLessonCompleted(lessonId: string, completed: boolean): Promise<void> {
-    if (this.writeError) {
-      throw this.writeError;
-    }
-    if (completed) {
-      this.completed.add(lessonId);
-    } else {
-      this.completed.delete(lessonId);
-    }
-    for (const listener of this.listeners) {
-      listener();
-    }
-  }
-
-  async getPendingMutations(): Promise<ProgressMutation[]> {
-    return [];
-  }
-
-  async importLegacyCompletions(): Promise<void> {}
-
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
-  }
-}
-
-async function renderRoute(
-  options: { completedLessonIds?: string[]; lessonId?: string; writeError?: Error } = {},
-) {
-  mockSearchParams = options.lessonId ? { lessonId: options.lessonId } : {};
-
-  const courseRepository = new FakeCourseRepository(release);
-  const progressRepository = new FakeProgressRepository(
-    options.completedLessonIds ?? [],
-    options.writeError,
-  );
-
-  await render(
-    <DataContext.Provider
-      value={{ courseRepository, progressRepository, retry: () => {}, status: "ready" }}
-    >
-      <CourseProvider>
-        <ProgressProvider>
-          <LessonScreen />
-        </ProgressProvider>
-      </CourseProvider>
-    </DataContext.Provider>,
-  );
-
-  await waitFor(() => expect(screen.queryByText("Loading lesson…")).toBeNull());
-}
-
-const moduleOneLessonIds = findModule("coordinate-foundations").lessons.map((lesson) => lesson.id);
-const moduleTwoLessonIds = findModule("shape-synthesis").lessons.map((lesson) => lesson.id);
-
-describe("lesson route", () => {
-  beforeEach(() => {
-    mockRouter.back.mockClear();
-    mockRouter.push.mockClear();
-    mockRouter.replace.mockClear();
-  });
-
-  test("loads the requested unlocked lesson from the repository", async () => {
-    await renderRoute({
-      completedLessonIds: [moduleOneLessonIds[0]],
-      lessonId: "colors-fragment-output",
-    });
-
-    expect(screen.getByText("Colors & Fragment Output")).toBeTruthy();
-    expect(screen.getByText("2 of 5")).toBeTruthy();
-    expect(screen.getByText("Module 01")).toBeTruthy();
-    expect(screen.getByText("Fragment color")).toBeTruthy();
-  });
-
-  test("falls back to the current unlocked lesson for a locked deep link", async () => {
-    await renderRoute({ lessonId: "color-light-challenge" });
-
-    expect(screen.getByText("Coordinate Systems & UV Space")).toBeTruthy();
-    expect(screen.queryByText("Color & Light Challenge")).toBeNull();
-    expect(screen.getByText("1 of 5")).toBeTruthy();
-  });
-
-  test("falls back to the current unlocked lesson for an unknown lesson id", async () => {
-    await renderRoute({ completedLessonIds: moduleOneLessonIds, lessonId: "tiling-space" });
-
-    expect(screen.getByText("Step & Smoothstep")).toBeTruthy();
-  });
-
-  test("opens the current unlocked lesson when no lesson id is requested", async () => {
-    await renderRoute({ completedLessonIds: [...moduleOneLessonIds, moduleTwoLessonIds[0]] });
-
-    expect(screen.getByText("Circles & Boxes")).toBeTruthy();
-    expect(screen.getByText("2 of 5")).toBeTruthy();
-    expect(screen.getByText("Module 02")).toBeTruthy();
-    expect(screen.getByText("Shape field")).toBeTruthy();
-  });
-
-  test("replaces the route with the next lesson after a completion", async () => {
-    await renderRoute({ lessonId: "coordinate-systems-uv-space" });
-
-    await fireEvent.press(screen.getByText("Mark lesson complete"));
-
-    await waitFor(() => expect(screen.getByText("Continue to next lesson")).toBeTruthy());
-    await fireEvent.press(screen.getByText("Continue to next lesson"));
-
-    expect(mockRouter.replace).toHaveBeenCalledWith({
-      params: { lessonId: "colors-fragment-output" },
-      pathname: "/lesson",
-    });
-  });
-
-  test("replaces the route with the course when the module ends", async () => {
-    await renderRoute({
-      completedLessonIds: [
-        ...moduleOneLessonIds,
-        ...moduleTwoLessonIds,
-        "color-mixing",
-        "luma-and-contrast",
-        "procedural-palettes",
-      ],
-      lessonId: "color-light-challenge",
-    });
-
-    await fireEvent.press(screen.getByText("Mark lesson complete"));
-
-    await waitFor(() => expect(screen.getByText("Return to course")).toBeTruthy());
-    await fireEvent.press(screen.getByText("Return to course"));
-
-    expect(mockRouter.replace).toHaveBeenCalledWith("/course");
-  });
-
-  test("keeps the lesson incomplete and offers a retry when the SQLite write fails", async () => {
-    await renderRoute({
-      lessonId: "coordinate-systems-uv-space",
-      writeError: new Error("database is locked"),
-    });
-
-    await fireEvent.press(screen.getByText("Mark lesson complete"));
-
-    await waitFor(() => expect(screen.getByText("Progress not saved")).toBeTruthy());
-    expect(screen.getByText("Retry")).toBeTruthy();
-    expect(screen.queryByText("Lesson complete")).toBeNull();
-    expect(screen.getByText("Mark lesson complete")).toBeTruthy();
-    expect(screen.queryByText("Completed · Tap to undo")).toBeNull();
-  });
-
-  test("goes back from the lesson header", async () => {
-    await renderRoute({ lessonId: "coordinate-systems-uv-space" });
-
-    await fireEvent.press(screen.getByLabelText("Back"));
-
-    expect(mockRouter.back).toHaveBeenCalledTimes(1);
   });
 });

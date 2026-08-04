@@ -9,6 +9,12 @@ export type LessonPreset = {
   previewKey: ShaderPreviewKey;
   previewParameters: Record<string, boolean | number | string>;
   value: string;
+  /**
+   * Overrides the preview footer's value line when present, falling back to the default
+   * `label · value` composition when absent. Lets a preset author bespoke footer copy without
+   * changing `value`, which is also rendered on the preset's own chip.
+   */
+  previewValueLabel?: string;
   filename: string;
   codeLines: string[];
   highlightedLines: number[];
@@ -29,6 +35,8 @@ export type CourseLesson = {
   previewCaption: string;
   /** Preset the lesson opens on; the lowest-positioned preset when absent. */
   defaultPresetId?: string;
+  /** Overrides the lesson intro's eyebrow label; falls back to "Concept" when absent. */
+  introEyebrow?: string;
   presets: LessonPreset[];
   sections: { id: string; position: number; title: string; body: string }[];
 };

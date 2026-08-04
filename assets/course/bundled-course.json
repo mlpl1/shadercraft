@@ -1,5 +1,5 @@
 {
-  "checksum": "c7f9301b2140b2843ee05fbcb63628a7c9ce7154ca8c69c7ac1b9bb5a7ea699f",
+  "checksum": "77b4e9d6c3f7c689f262796747c69e40ed17bcd85f1f9cc3e47e0b81986b2cbe",
   "id": "bundled-2026-08-04",
   "minimumAppVersion": "1.0.0",
   "modules": [
@@ -31,6 +31,7 @@
               "position": 1,
               "previewKey": "normalized",
               "previewParameters": {},
+              "previewValueLabel": "0.0 → 1.0 · screen space",
               "value": "0 → 1"
             },
             {
@@ -55,6 +56,7 @@
               "position": 2,
               "previewKey": "centered",
               "previewParameters": {},
+              "previewValueLabel": "−1.0 → 1.0 · centered",
               "value": "−1 → 1"
             },
             {
@@ -73,6 +75,7 @@
               "position": 3,
               "previewKey": "pixel-space",
               "previewParameters": {},
+              "previewValueLabel": "0 → resolution · pixel coordinates",
               "value": "0 → resolution"
             },
             {
@@ -93,6 +96,7 @@
               "position": 4,
               "previewKey": "aspect-aware",
               "previewParameters": {},
+              "previewValueLabel": "−aspect → aspect · corrected",
               "value": "Aspect aware"
             }
           ],
@@ -587,6 +591,7 @@
           "conceptTitle": "Turn distance into an edge",
           "id": "step-and-smoothstep",
           "intro": "Threshold functions turn continuous measurements into visible boundaries. Compare a hard decision with a controllable, anti-aliased transition.",
+          "introEyebrow": "Shape synthesis",
           "moduleId": "shape-synthesis",
           "position": 1,
           "presets": [
@@ -690,6 +695,7 @@
           "conceptTitle": "Primitive shapes from distance",
           "id": "circles-and-boxes",
           "intro": "Signed distance functions describe reusable geometric primitives. Build circles, boxes, and rounded rectangles from compact mathematical measurements.",
+          "introEyebrow": "Shape synthesis",
           "moduleId": "shape-synthesis",
           "position": 2,
           "presets": [
@@ -797,6 +803,7 @@
           "conceptTitle": "Sculpt with min and max",
           "id": "boolean-shape-operations",
           "intro": "Signed distances can be combined like solid geometry. Use min and max to unite, intersect, subtract, and compare shapes without branches.",
+          "introEyebrow": "Shape synthesis",
           "moduleId": "shape-synthesis",
           "position": 3,
           "presets": [
@@ -904,6 +911,7 @@
           "conceptTitle": "One shape, many instances",
           "id": "shape-repetition-composition",
           "intro": "Repeat coordinate space before evaluating a primitive, then layer multiple masks and transformations into patterns that remain compact and controllable.",
+          "introEyebrow": "Shape synthesis",
           "moduleId": "shape-synthesis",
           "position": 4,
           "presets": [
@@ -1010,6 +1018,7 @@
           "conceptTitle": "Synthesize a visual system",
           "id": "shape-synthesis-challenge",
           "intro": "Combine edges, primitives, boolean operations, repetition, and motion into recognizable procedural marks built entirely from distance fields.",
+          "introEyebrow": "Shape synthesis",
           "moduleId": "shape-synthesis",
           "position": 5,
           "presets": [
@@ -1137,6 +1146,7 @@
           "conceptTitle": "Treat color as a field",
           "id": "color-mixing",
           "intro": "Color is another signal you can shape with coordinates. Learn to interpolate two or more colors, control the transition curve, and turn spatial measurements into deliberate palettes.",
+          "introEyebrow": "Color & light",
           "moduleId": "color-light",
           "position": 1,
           "presets": [
@@ -1249,6 +1259,7 @@
           "conceptTitle": "Read the light inside a color",
           "id": "luma-and-contrast",
           "intro": "Brightness is not the average of red, green, and blue. Convert color to perceptual luma, then use that scalar signal to adjust contrast, isolate value bands, and manage exposure.",
+          "introEyebrow": "Color & light",
           "moduleId": "color-light",
           "position": 2,
           "presets": [
@@ -1356,6 +1367,7 @@
           "conceptTitle": "Compose color with cosine",
           "id": "procedural-palettes",
           "intro": "A palette can be a function instead of a list. Use offset, amplitude, frequency, and phase to generate smooth families of colors from one scalar input.",
+          "introEyebrow": "Color & light",
           "moduleId": "color-light",
           "position": 3,
           "presets": [
@@ -1465,6 +1477,7 @@
           "conceptTitle": "Make a flat field feel illuminated",
           "id": "color-light-challenge",
           "intro": "Combine Module 3 into a luminous procedural orb. Build its albedo from a palette, recover a surface normal, add diffuse and rim light, then animate a polished final composition.",
+          "introEyebrow": "Color & light",
           "moduleId": "color-light",
           "position": 4,
           "presets": [

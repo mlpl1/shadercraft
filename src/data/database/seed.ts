@@ -62,8 +62,8 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
         `INSERT INTO lessons
           (release_id, id, module_id, position, title, short_title, intro,
            concept_title, concept_lede, try_hint, takeaway, preview_caption,
-           default_preset_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           default_preset_id, intro_eyebrow)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           release.id,
           lesson.id,
@@ -78,6 +78,7 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
           lesson.takeaway,
           lesson.previewCaption,
           lesson.defaultPresetId ?? null,
+          lesson.introEyebrow ?? null,
         ],
       );
 
@@ -85,9 +86,9 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
         await driver.run(
           `INSERT INTO lesson_presets
             (release_id, id, lesson_id, position, label, preview_key,
-             preview_parameters_json, value, filename, code_lines_json,
+             preview_parameters_json, value, preview_value_label, filename, code_lines_json,
              highlighted_lines_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             release.id,
             preset.id,
@@ -97,6 +98,7 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
             preset.previewKey,
             JSON.stringify(preset.previewParameters),
             preset.value,
+            preset.previewValueLabel ?? null,
             preset.filename,
             JSON.stringify(preset.codeLines),
             JSON.stringify(preset.highlightedLines),

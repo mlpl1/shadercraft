@@ -13,6 +13,7 @@ const lessonPresetSchema = z
     previewKey: z.string(),
     previewParameters: z.record(z.string(), z.union([z.boolean(), z.number(), z.string()])),
     value: z.string(),
+    previewValueLabel: z.string().optional(),
     filename: z.string(),
     codeLines: z.array(z.string()),
     highlightedLines: z.array(z.number().int()),
@@ -42,6 +43,7 @@ const courseLessonSchema = z
     takeaway: z.string(),
     previewCaption: z.string().min(1),
     defaultPresetId: z.string().optional(),
+    introEyebrow: z.string().min(1).optional(),
     presets: z.array(lessonPresetSchema).min(1),
     sections: z.array(lessonSectionSchema).min(1),
   })

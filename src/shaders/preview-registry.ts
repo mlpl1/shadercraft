@@ -74,7 +74,11 @@ export function isPreviewKey(value: string): value is ShaderPreviewKey {
  * implements the behavior, never by naming preview behavior the installed app cannot execute.
  */
 export const SHADER_PREVIEW_PARAMETER_TYPES = {
-  /** Whether the preview advances its timeline. `false` presents the preset as paused. */
+  /**
+   * Whether the workspace's live badge presents the preview as running or paused. `false` shows
+   * "Paused"; this is purely a presentation label and does not gate the preview's render loop, nor
+   * is it cross-validated against the shader behind `previewKey`.
+   */
   animated: "boolean",
   /** Whether the workspace offers a control that restarts the preview timeline. */
   restartable: "boolean",

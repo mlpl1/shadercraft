@@ -41,6 +41,7 @@ const CREATE_INITIAL_SCHEMA = `
     takeaway TEXT NOT NULL,
     preview_caption TEXT NOT NULL,
     default_preset_id TEXT,
+    intro_eyebrow TEXT,
     PRIMARY KEY (release_id, id),
     FOREIGN KEY (release_id, module_id)
       REFERENCES modules(release_id, id) ON DELETE CASCADE
@@ -55,6 +56,7 @@ const CREATE_INITIAL_SCHEMA = `
     preview_key TEXT NOT NULL,
     preview_parameters_json TEXT NOT NULL,
     value TEXT NOT NULL,
+    preview_value_label TEXT,
     filename TEXT NOT NULL,
     code_lines_json TEXT NOT NULL,
     highlighted_lines_json TEXT NOT NULL,

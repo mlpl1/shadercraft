@@ -62,6 +62,29 @@ describe("SQLite course repository", () => {
     );
   });
 
+  test("round-trips the bespoke preview footer of a preset", async () => {
+    const lesson = await repository.getLesson("coordinate-systems-uv-space");
+
+    expect(lesson?.presets.find((preset) => preset.id === "normalized")).toMatchObject({
+      previewValueLabel: "0.0 → 1.0 · screen space",
+    });
+    expect(lesson?.presets.find((preset) => preset.id === "rgb-gradient")).toBeUndefined();
+
+    const colorsLesson = await repository.getLesson("colors-fragment-output");
+    expect(colorsLesson?.presets.find((preset) => preset.id === "rgb-gradient")).not.toHaveProperty(
+      "previewValueLabel",
+    );
+  });
+
+  test("round-trips the intro eyebrow of a lesson, absent rather than null when unauthored", async () => {
+    await expect(repository.getLesson("step-and-smoothstep")).resolves.toMatchObject({
+      introEyebrow: "Shape synthesis",
+    });
+    await expect(
+      repository.getLesson("coordinate-systems-uv-space"),
+    ).resolves.not.toHaveProperty("introEyebrow");
+  });
+
   test("returns null for a lesson outside the active release", async () => {
     await expect(repository.getLesson("missing")).resolves.toBeNull();
   });

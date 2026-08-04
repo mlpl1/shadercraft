@@ -19,6 +19,7 @@
       "tryHint": "Compare four spatial color-mixing strategies",
       "takeaway": "Color mixing becomes procedural when the blend factor comes from the image itself. First choose the endpoints, then design the scalar field that travels between them.",
       "previewCaption": "Color field",
+      "introEyebrow": "Color & light",
       "presets": [
         {
           "id": "light-mix-linear",
@@ -131,6 +132,7 @@
       "tryHint": "Inspect and reshape the brightness signal",
       "takeaway": "Luma converts color into structure. Once brightness is a scalar field, the same threshold, remapping, and easing tools used for shapes can art-direct the light in an image.",
       "previewCaption": "Color field",
+      "introEyebrow": "Color & light",
       "presets": [
         {
           "id": "light-luma",
@@ -238,6 +240,7 @@
       "tryHint": "Change how one palette function travels through color",
       "takeaway": "A procedural palette separates color design from spatial design. Tune the four color parameters once, then reuse the function with any scalar field your shader produces.",
       "previewCaption": "Color field",
+      "introEyebrow": "Color & light",
       "presets": [
         {
           "id": "palette-cosine",
@@ -347,6 +350,7 @@
       "tryHint": "Assemble the final material one lighting layer at a time",
       "takeaway": "Convincing procedural light is a controlled sum of readable cues. Preserve the base palette, add each lighting term for a reason, and animate the light direction instead of rebuilding the material.",
       "previewCaption": "Color field",
+      "introEyebrow": "Color & light",
       "presets": [
         {
           "id": "lighting-albedo",

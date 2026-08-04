@@ -19,6 +19,7 @@
       "tryHint": "Compare four ways to reveal a distance",
       "takeaway": "Keep distance and visibility separate: first calculate d, then convert d into a fill, outline, or soft edge. One distance field can support many visual treatments.",
       "previewCaption": "Shape field",
+      "introEyebrow": "Shape synthesis",
       "presets": [
         {
           "id": "edge-hard",
@@ -122,6 +123,7 @@
       "tryHint": "Swap the primitive while keeping the edge code",
       "takeaway": "Write primitives as functions that return signed distance, not color. That keeps size, position, edge treatment, and later boolean operations independent.",
       "previewCaption": "Shape field",
+      "introEyebrow": "Shape synthesis",
       "presets": [
         {
           "id": "primitive-circle",
@@ -229,6 +231,7 @@
       "tryHint": "Apply four operations to the same two fields",
       "takeaway": "For signed fields: min unites, max intersects, and negating a field swaps inside with outside. Combine distances first and apply smoothstep only once at the final boundary.",
       "previewCaption": "Shape field",
+      "introEyebrow": "Shape synthesis",
       "presets": [
         {
           "id": "boolean-union",
@@ -336,6 +339,7 @@
       "tryHint": "Build complexity from a single repeated cell",
       "takeaway": "Repeat coordinates, not drawing calls. Keep local cell coordinates and integer cell IDs so geometry stays reusable while variation remains deterministic.",
       "previewCaption": "Shape field",
+      "introEyebrow": "Shape synthesis",
       "presets": [
         {
           "id": "repeat-grid",
@@ -442,6 +446,7 @@
       "tryHint": "Deconstruct four finished procedural marks",
       "takeaway": "A finished procedural mark is a hierarchy: coordinates feed primitives, primitives combine into one field, the field becomes masks, and masks receive color and motion. Debug the hierarchy one layer at a time.",
       "previewCaption": "Shape field",
+      "introEyebrow": "Shape synthesis",
       "presets": [
         {
           "id": "synthesis-badge",

@@ -27,6 +27,7 @@
           "previewKey": "normalized",
           "previewParameters": {},
           "value": "0 → 1",
+          "previewValueLabel": "0.0 → 1.0 · screen space",
           "filename": "normalized_uv.glsl",
           "codeLines": [
             "vec2 uv = fragCoord / resolution.xy;",
@@ -45,6 +46,7 @@
           "previewKey": "centered",
           "previewParameters": {},
           "value": "−1 → 1",
+          "previewValueLabel": "−1.0 → 1.0 · centered",
           "filename": "centered_uv.glsl",
           "codeLines": [
             "vec2 uv = fragCoord / resolution.xy;",
@@ -69,6 +71,7 @@
           "previewKey": "pixel-space",
           "previewParameters": {},
           "value": "0 → resolution",
+          "previewValueLabel": "0 → resolution · pixel coordinates",
           "filename": "pixel_space.glsl",
           "codeLines": [
             "vec2 pixel = fragCoord;",
@@ -87,6 +90,7 @@
           "previewKey": "aspect-aware",
           "previewParameters": {},
           "value": "Aspect aware",
+          "previewValueLabel": "−aspect → aspect · corrected",
           "filename": "aspect_aware.glsl",
           "codeLines": [
             "vec2 uv = fragCoord / resolution.xy;",
