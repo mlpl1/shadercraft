@@ -17,7 +17,7 @@ jest.mock("react-native-safe-area-context", () =>
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-context";
 
-import CourseScreen from "../course";
+import HomeScreen from "../index";
 import { CourseProvider } from "../../context/course-context";
 import { DataContext, type DataContextValue } from "../../context/data-context";
 import { ProgressProvider } from "../../context/progress-context";
@@ -25,10 +25,8 @@ import type { CourseRepository } from "../../data/course/course-repository";
 import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
 import type { ProgressRepository } from "../../data/progress/progress-repository";
 
-const mockRouter = { back: jest.fn(), push: jest.fn(), replace: jest.fn() };
-
 jest.mock("expo-router", () => ({
-  useRouter: () => mockRouter,
+  useRouter: () => ({ back: jest.fn(), push: jest.fn(), replace: jest.fn() }),
 }));
 
 function buildLesson(id: string, moduleId: string, position: number, title: string): CourseLesson {
@@ -57,24 +55,10 @@ const module1: CourseModule = {
   description: "Module one",
   plannedLessonCount: 0,
   plannedTopics: [],
-  lessons: [
-    buildLesson("lesson-1a", "module-1", 0, "Coordinate spaces"),
-    buildLesson("lesson-1b", "module-1", 1, "Aspect ratio correction"),
-  ],
+  lessons: [buildLesson("lesson-1a", "module-1", 0, "Coordinate spaces")],
 };
 
-const module2: CourseModule = {
-  id: "module-2",
-  position: 1,
-  status: "published",
-  title: "Color mixing",
-  description: "Module two",
-  plannedLessonCount: 0,
-  plannedTopics: [],
-  lessons: [buildLesson("lesson-2a", "module-2", 0, "Blending colors")],
-};
-
-const modules: CourseModule[] = [module1, module2];
+const modules: CourseModule[] = [module1];
 
 const activeRelease: CourseRelease = {
   id: "release-1",
@@ -121,22 +105,17 @@ class FakeCourseRepository implements CourseRepository {
 
 class FakeProgressRepository implements ProgressRepository {
   private readonly listeners = new Set<() => void>();
-  private readonly completed: Set<string>;
-
-  constructor(completedLessonIds: readonly string[]) {
-    this.completed = new Set(completedLessonIds);
-  }
 
   async getActiveProfileId(): Promise<string> {
     return "local-profile";
   }
 
   async getCompletedLessonIds(): Promise<string[]> {
-    return [...this.completed];
+    return [];
   }
 
-  async isLessonCompleted(lessonId: string): Promise<boolean> {
-    return this.completed.has(lessonId);
+  async isLessonCompleted(): Promise<boolean> {
+    return false;
   }
 
   async setLessonCompleted(): Promise<void> {
@@ -157,30 +136,24 @@ class FakeProgressRepository implements ProgressRepository {
   }
 }
 
-function buildDataValue(
-  completedLessonIds: readonly string[],
-  courseReadError?: Error,
-): DataContextValue {
+function buildDataValue(courseReadError?: Error): DataContextValue {
   return {
     status: "ready",
     courseRepository: new FakeCourseRepository(courseReadError),
-    progressRepository: new FakeProgressRepository(completedLessonIds),
+    progressRepository: new FakeProgressRepository(),
     retry: jest.fn(),
   };
 }
 
-async function renderCourseScreen(
-  completedLessonIds: readonly string[],
-  courseReadError?: Error,
-) {
-  const dataValue = buildDataValue(completedLessonIds, courseReadError);
+async function renderHomeScreen(courseReadError?: Error) {
+  const dataValue = buildDataValue(courseReadError);
 
   return render(
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <DataContext.Provider value={dataValue}>
         <CourseProvider>
           <ProgressProvider>
-            <CourseScreen />
+            <HomeScreen />
           </ProgressProvider>
         </CourseProvider>
       </DataContext.Provider>
@@ -188,33 +161,11 @@ async function renderCourseScreen(
   );
 }
 
-describe("CourseScreen", () => {
-  beforeEach(() => {
-    mockRouter.push.mockClear();
-  });
-
-  test("tapping a fully complete module's card navigates to its last lesson", async () => {
-    // Module one is fully complete: both of its lessons are in `completedLessonIds`. Before Fix 1,
-    // `currentLessonIndex` was -1 for a complete module, so the card rendered no press target and
-    // this tap was unreachable — the fallback in `openModule` was dead code.
-    await renderCourseScreen(["lesson-1a", "lesson-1b"]);
-
-    await waitFor(() => expect(screen.getByText("Coordinate systems")).toBeTruthy());
-
-    const continueButton = screen.getByRole("button", { name: "Continue Aspect ratio correction" });
-    fireEvent.press(continueButton);
-
-    expect(mockRouter.push).toHaveBeenCalledWith({
-      pathname: "/lesson",
-      params: { lessonId: "lesson-1b" },
-    });
-  });
-
+describe("HomeScreen", () => {
   test("shows a retry affordance instead of hanging on 'Loading curriculum…' when the course read fails", async () => {
-    // Before Fix 2, `refresh()` in CourseProvider was invoked with a bare `void` and no `catch`,
-    // so a rejecting read left `isHydrated` false forever with nothing on screen but the spinner
-    // text — no error, no way to recover short of restarting the app.
-    await renderCourseScreen([], new Error("curriculum read failed"));
+    // Mirrors the CourseScreen regression: before Fix 2, a rejecting `getModules()` left
+    // `isHydrated` false forever with no error and no way to recover.
+    await renderHomeScreen(new Error("curriculum read failed"));
 
     await waitFor(() => expect(screen.getByText("Could not load curriculum")).toBeTruthy());
     expect(screen.getByText("curriculum read failed")).toBeTruthy();
@@ -224,7 +175,7 @@ describe("CourseScreen", () => {
       fireEvent.press(screen.getByRole("button", { name: "Retry" }));
     });
 
-    await waitFor(() => expect(screen.getByText("Coordinate systems")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("Coordinate spaces").length).toBeGreaterThan(0));
     expect(screen.queryByText("Could not load curriculum")).toBeNull();
   });
 });

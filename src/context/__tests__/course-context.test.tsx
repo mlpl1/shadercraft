@@ -77,6 +77,7 @@ type FakeCourseRepository = CourseRepository & {
 };
 type FakeProgressRepository = ProgressRepository & {
   emit: () => void;
+  getCompletedLessonIds: jest.MockedFunction<ProgressRepository["getCompletedLessonIds"]>;
   setLessonCompleted: jest.MockedFunction<ProgressRepository["setLessonCompleted"]>;
 };
 
@@ -274,5 +275,44 @@ describe("course and progress providers", () => {
     await waitFor(() =>
       expect(fakeProgressRepository.getCompletedLessonIds).toHaveBeenCalledTimes(2),
     );
+  });
+
+  test("surfaces an error instead of hanging forever when the course read rejects, and recovers via retry", async () => {
+    // Before Fix 2, `refresh()` was invoked with a bare `void`, so a rejection here left
+    // `isHydrated` false forever with no way for the UI to observe or recover from it.
+    fakeCourseRepository.getModules.mockRejectedValueOnce(new Error("course read failed"));
+
+    const { result } = await renderHook(() => useCourse(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.isHydrated).toBe(false);
+    expect(result.current.error?.message).toBe("course read failed");
+
+    await act(async () => {
+      result.current.retry();
+    });
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    expect(result.current.error).toBeNull();
+    expect(result.current.modules).toHaveLength(4);
+  });
+
+  test("surfaces an error instead of hanging forever when the progress read rejects, and recovers via retry", async () => {
+    fakeProgressRepository.getCompletedLessonIds.mockRejectedValueOnce(
+      new Error("progress read failed"),
+    );
+
+    const { result } = await renderHook(() => useProgress(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.isHydrated).toBe(false);
+    expect(result.current.error?.message).toBe("progress read failed");
+
+    await act(async () => {
+      result.current.retry();
+    });
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    expect(result.current.error).toBeNull();
   });
 });

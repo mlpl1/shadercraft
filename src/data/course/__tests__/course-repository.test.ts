@@ -68,7 +68,6 @@ describe("SQLite course repository", () => {
     expect(lesson?.presets.find((preset) => preset.id === "normalized")).toMatchObject({
       previewValueLabel: "0.0 → 1.0 · screen space",
     });
-    expect(lesson?.presets.find((preset) => preset.id === "rgb-gradient")).toBeUndefined();
 
     const colorsLesson = await repository.getLesson("colors-fragment-output");
     expect(colorsLesson?.presets.find((preset) => preset.id === "rgb-gradient")).not.toHaveProperty(

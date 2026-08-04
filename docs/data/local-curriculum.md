@@ -68,7 +68,7 @@ authored with the right type. Today there are exactly two, both in
 | Name | Type | Effect |
 | --- | --- | --- |
 | `restartable` | boolean | Shows the workspace's restart control. Omitted or `false` hides it. |
-| `animated` | boolean | Selects the live badge's label only ("Live" vs. "Paused"). Presets animate by default; only an explicit `animated: false` shows "Paused". It does **not** pause the actual render loop. |
+| `animated` | boolean | Selects the live badge's label only ("Running" vs. "Paused"). Presets animate by default; only an explicit `animated: false` shows "Paused". It does **not** pause the actual render loop. |
 
 Authoring any other name, or the right name with the wrong type (e.g. `"restartable": "true"`),
 fails validation with `Unsupported preview parameter <name> on preset <id>` or

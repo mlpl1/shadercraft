@@ -1,4 +1,4 @@
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -11,8 +11,14 @@ import { buildNavigationModel } from "../data/course/navigation-model";
 
 export default function CourseScreen() {
   const router = useRouter();
-  const { isHydrated: isCourseHydrated, modules } = useCourse();
-  const { isHydrated: isProgressHydrated, progress, progressPercent } = useProgress();
+  const { error: courseError, isHydrated: isCourseHydrated, modules, retry: retryCourse } = useCourse();
+  const {
+    error: progressError,
+    isHydrated: isProgressHydrated,
+    progress,
+    progressPercent,
+    retry: retryProgress,
+  } = useProgress();
 
   const model = buildNavigationModel(modules, progress.completedLessonIds, isCourseHydrated);
 
@@ -26,7 +32,21 @@ export default function CourseScreen() {
             <Text style={styles.title}>Curriculum</Text>
           </View>
           <View style={styles.loadingState}>
-            <Text style={styles.progressCaption}>Loading curriculum…</Text>
+            {courseError ? (
+              <>
+                <Text style={styles.errorTitle}>Could not load curriculum</Text>
+                <Text style={styles.errorBody}>{courseError.message}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={retryCourse}
+                  style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
+                >
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Text style={styles.progressCaption}>Loading curriculum…</Text>
+            )}
           </View>
           <BottomNavigation activeItem="course" />
         </View>
@@ -77,9 +97,15 @@ export default function CourseScreen() {
                 <Text style={styles.progressEyebrow}>Track progress</Text>
                 <Text style={styles.progressTitle}>Fragment shader fundamentals</Text>
               </View>
-              <Text style={styles.progressValue}>
-                {isProgressHydrated ? `${progressPercent}%` : "—"}
-              </Text>
+              {progressError ? (
+                <Pressable accessibilityRole="button" onPress={retryProgress}>
+                  <Text style={styles.progressRetry}>Retry</Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.progressValue}>
+                  {isProgressHydrated ? `${progressPercent}%` : "—"}
+                </Text>
+              )}
             </View>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: progressWidth }]} />
@@ -171,6 +197,44 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  errorTitle: {
+    color: Colors.coral,
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  errorBody: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  retryButton: {
+    marginTop: Spacing.sm,
+    minHeight: 42,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  retryButtonPressed: {
+    opacity: 0.78,
+  },
+  retryButtonText: {
+    color: Colors.background,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  progressRetry: {
+    color: Colors.coral,
+    fontFamily: "monospace",
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
   },
   content: {
     paddingHorizontal: Spacing.xl,

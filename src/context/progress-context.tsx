@@ -19,10 +19,12 @@ export type ProgressState = {
 
 type ProgressContextValue = {
   completeLesson: (lessonId: string) => Promise<void>;
+  error: Error | null;
   hasCompletedLesson: (lessonId: string) => boolean;
   isHydrated: boolean;
   progress: ProgressState;
   progressPercent: number;
+  retry: () => void;
   uncompleteLesson: (lessonId: string) => Promise<void>;
 };
 
@@ -43,13 +45,24 @@ export function ProgressProvider({ children }: PropsWithChildren) {
 
   const [completedLessonIds, setCompletedLessonIds] = useState<string[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
+  // A rejection here (e.g. a hot-path SQLite read failure) is caught and surfaced through `error`
+  // instead of left unhandled, which would otherwise leave `isHydrated` false forever with no way
+  // for the UI to observe or recover from it. See `CourseProvider.refresh` for the same pattern.
   const refresh = useCallback(async () => {
     if (!progressRepository) return;
 
-    const nextCompletedLessonIds = await progressRepository.getCompletedLessonIds();
-    setCompletedLessonIds(nextCompletedLessonIds);
-    setIsHydrated(true);
+    try {
+      const nextCompletedLessonIds = await progressRepository.getCompletedLessonIds();
+      setCompletedLessonIds(nextCompletedLessonIds);
+      setIsHydrated(true);
+      setError(null);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error ? caughtError : new Error("Failed to load progress"),
+      );
+    }
   }, [progressRepository]);
 
   useEffect(() => {
@@ -115,6 +128,10 @@ export function ProgressProvider({ children }: PropsWithChildren) {
     [setLessonCompletion],
   );
 
+  const retry = useCallback(() => {
+    void refresh();
+  }, [refresh]);
+
   const progress = useMemo<ProgressState>(
     () => ({ completedLessonIds, version: 1 }),
     [completedLessonIds],
@@ -128,13 +145,24 @@ export function ProgressProvider({ children }: PropsWithChildren) {
   const value = useMemo<ProgressContextValue>(
     () => ({
       completeLesson,
+      error,
       hasCompletedLesson,
       isHydrated,
       progress,
       progressPercent,
+      retry,
       uncompleteLesson,
     }),
-    [completeLesson, hasCompletedLesson, isHydrated, progress, progressPercent, uncompleteLesson],
+    [
+      completeLesson,
+      error,
+      hasCompletedLesson,
+      isHydrated,
+      progress,
+      progressPercent,
+      retry,
+      uncompleteLesson,
+    ],
   );
 
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;

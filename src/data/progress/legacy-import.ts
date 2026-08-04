@@ -68,6 +68,14 @@ export async function importLegacyProgress(
 
   const rawValue = await storage.getItem(LEGACY_PROGRESS_STORAGE_KEY);
   const legacyState = parseLegacyProgressState(rawValue);
+
+  // `rawValue` present but unparseable means real historical data is about to be discarded
+  // irreversibly (see `parseLegacyProgressState`/`isLegacyProgressState`) — there is nothing to
+  // salvage without a semantics change, but the loss should at least be observable.
+  if (rawValue !== null && legacyState === null) {
+    console.warn("Shadercraft: discarding malformed legacy progress value", rawValue);
+  }
+
   const uniqueLessonIds = Array.from(new Set(legacyState?.completedLessonIds ?? []));
 
   await repository.importLegacyCompletions(uniqueLessonIds);

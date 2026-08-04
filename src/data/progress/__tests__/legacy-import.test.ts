@@ -45,13 +45,25 @@ describe("importLegacyProgress", () => {
     expect(storage.removeItem).toHaveBeenCalledWith(LEGACY_STORAGE_KEY);
   });
 
-  test("treats malformed legacy JSON as empty and still clears storage", async () => {
-    const storage = createStorage("{not valid json");
+  test("treats malformed legacy JSON as empty, still clears storage, and warns about the discarded value", async () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
 
-    await importLegacyProgress(storage, repository);
+    try {
+      const storage = createStorage("{not valid json");
 
-    expect(await repository.getCompletedLessonIds()).toEqual([]);
-    expect(storage.removeItem).toHaveBeenCalledWith(LEGACY_STORAGE_KEY);
+      await importLegacyProgress(storage, repository);
+
+      expect(await repository.getCompletedLessonIds()).toEqual([]);
+      expect(storage.removeItem).toHaveBeenCalledWith(LEGACY_STORAGE_KEY);
+      // The non-empty malformed value is discarded irreversibly with no salvage attempt (matching
+      // `main`'s `isProgressState` semantics exactly) — this is the only record of that loss.
+      expect(warnSpy).toHaveBeenCalledWith(
+        "Shadercraft: discarding malformed legacy progress value",
+        "{not valid json",
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   test("deduplicates repeated legacy lesson IDs into a single completion", async () => {
@@ -87,7 +99,11 @@ describe("importLegacyProgress", () => {
     await repository.setLessonCompleted("colors-fragment-output", true);
     await repository.markLegacyProgressImported();
 
-    const setLessonCompletedSpy = jest.spyOn(repository, "setLessonCompleted");
+    // `importLegacyProgress` never calls `setLessonCompleted` (it writes rows through
+    // `importLegacyCompletions`), so spying on `setLessonCompleted` here would pass regardless of
+    // whether the marker short-circuit actually works. Spy on the method the early return in
+    // `legacy-import.ts` is meant to skip.
+    const importLegacyCompletionsSpy = jest.spyOn(repository, "importLegacyCompletions");
 
     const storage = createStorage(
       JSON.stringify({
@@ -98,11 +114,46 @@ describe("importLegacyProgress", () => {
 
     await importLegacyProgress(storage, repository);
 
-    expect(setLessonCompletedSpy).not.toHaveBeenCalled();
+    expect(importLegacyCompletionsSpy).not.toHaveBeenCalled();
     expect(await repository.getCompletedLessonIds()).toEqual([
       "coordinate-systems-uv-space",
       "colors-fragment-output",
     ]);
     expect(storage.removeItem).toHaveBeenCalledWith(LEGACY_STORAGE_KEY);
+  });
+
+  test("running the import twice against real storage and the real repository does not resurrect a lesson the learner has since uncompleted", async () => {
+    // The only end-to-end coverage of the restart path for a one-time, irreversible migration.
+    // `storage` never actually loses its value across calls (see `createStorage`), which models
+    // exactly the scenario the marker guards against: the app crashed after step 5 (marker
+    // written) but before step 7 (AsyncStorage cleared), so the legacy value is still present on
+    // restart. Re-running `importLegacyCompletions` against the same lesson IDs is otherwise a
+    // silent no-op (the per-row upsert already skips unchanged rows) — the one thing that *would*
+    // observably differ is a lesson the learner explicitly un-completed in between: without the
+    // marker short-circuit, the resumed import would unconditionally re-mark it completed and
+    // clobber that action. Asserting only "no additional rows" (as an earlier draft of this test
+    // did) can't fail, because the upsert's own idempotency already guarantees that regardless of
+    // the marker; this asserts the one outcome that actually depends on the guard.
+    const storage = createStorage(
+      JSON.stringify({
+        version: 1,
+        completedLessonIds: ["coordinate-systems-uv-space", "colors-fragment-output"],
+      }),
+    );
+
+    await importLegacyProgress(storage, repository);
+    expect(await repository.getCompletedLessonIds()).toEqual([
+      "coordinate-systems-uv-space",
+      "colors-fragment-output",
+    ]);
+
+    await repository.setLessonCompleted("coordinate-systems-uv-space", false);
+    const pendingMutationsBeforeSecondRun = await repository.getPendingMutations();
+
+    await importLegacyProgress(storage, repository);
+
+    expect(await repository.isLessonCompleted("coordinate-systems-uv-space")).toBe(false);
+    expect(await repository.getPendingMutations()).toEqual(pendingMutationsBeforeSecondRun);
+    expect(storage.removeItem).toHaveBeenCalledTimes(2);
   });
 });

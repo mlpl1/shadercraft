@@ -23,8 +23,14 @@ function padTwo(value: number): string {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { isHydrated: isCourseHydrated, modules } = useCourse();
-  const { isHydrated: isProgressHydrated, progress, progressPercent } = useProgress();
+  const { error: courseError, isHydrated: isCourseHydrated, modules, retry: retryCourse } = useCourse();
+  const {
+    error: progressError,
+    isHydrated: isProgressHydrated,
+    progress,
+    progressPercent,
+    retry: retryProgress,
+  } = useProgress();
 
   const model = buildNavigationModel(modules, progress.completedLessonIds, isCourseHydrated);
   const progressWidth = `${progressPercent}%` as `${number}%`;
@@ -40,7 +46,21 @@ export default function HomeScreen() {
             </View>
           </View>
           <View style={styles.loadingState}>
-            <Text style={styles.progressLabel}>Loading curriculum…</Text>
+            {courseError ? (
+              <>
+                <Text style={styles.errorTitle}>Could not load curriculum</Text>
+                <Text style={styles.errorBody}>{courseError.message}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={retryCourse}
+                  style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
+                >
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Text style={styles.progressLabel}>Loading curriculum…</Text>
+            )}
           </View>
           <BottomNavigation activeItem="home" />
         </View>
@@ -66,9 +86,15 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.progressSummary}>
-            <Text style={styles.progressLabel}>
-              {isProgressHydrated ? `${progressPercent}% Complete` : "Loading progress…"}
-            </Text>
+            {progressError ? (
+              <Pressable accessibilityRole="button" onPress={retryProgress}>
+                <Text style={styles.progressRetry}>Retry</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.progressLabel}>
+                {isProgressHydrated ? `${progressPercent}% Complete` : "Loading progress…"}
+              </Text>
+            )}
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: progressWidth }]} />
             </View>
@@ -240,6 +266,43 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  errorTitle: {
+    color: Colors.coral,
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  errorBody: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  retryButton: {
+    marginTop: Spacing.sm,
+    minHeight: 42,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  retryButtonPressed: {
+    opacity: 0.78,
+  },
+  retryButtonText: {
+    color: Colors.background,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  progressRetry: {
+    color: Colors.coral,
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "right",
   },
   progressLabel: {
     color: Colors.textMuted,
