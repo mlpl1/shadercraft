@@ -177,6 +177,17 @@ describe("local profile service", () => {
     await expect(restarted.getCompletedLessonIds()).resolves.toEqual([LESSON_A, LESSON_B]);
   });
 
+  test("refuses to demote a signed-in device to a guest via activateAnonymous", async () => {
+    await profiles.activateAnonymous();
+    const userOne = await profiles.activateAuthenticated("supabase-user-1");
+
+    await expect(profiles.activateAnonymous()).rejects.toThrow();
+
+    // The device stays on its authenticated profile; signOut() is the only way off it.
+    await expect(repository.getActiveProfileId()).resolves.toBe(userOne.id);
+    await expect(repository.getActiveProfile()).resolves.toEqual(userOne);
+  });
+
   test("resumes the anonymous profile that was active before a restart", async () => {
     const guest = await profiles.activateAnonymous();
     await repository.setLessonCompleted(LESSON_A, true);

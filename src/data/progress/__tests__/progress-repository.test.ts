@@ -221,7 +221,15 @@ describe("SQLite progress repository learner profiles", () => {
 
     await repository.mergeAnonymousProfile(anonymousId, target.id);
     const afterFirst = await readOutbox(target.id);
+
+    // The repeat call must take the already-merged early return and touch the database not at
+    // all — not even with a no-op write — because that is the only way to tell "already merged"
+    // apart from "merged again but every write happened to be a no-op", which the collapsed
+    // upserts below would otherwise make indistinguishable.
+    const runSpy = jest.spyOn(driver, "run");
     await repository.mergeAnonymousProfile(anonymousId, target.id);
+    expect(runSpy).not.toHaveBeenCalled();
+    runSpy.mockRestore();
 
     expect(await readOutbox(target.id)).toEqual(afterFirst);
     expect(afterFirst).toHaveLength(2);
@@ -243,6 +251,34 @@ describe("SQLite progress repository learner profiles", () => {
       /already merged/i,
     );
     expect(await readCompletionState(second.id)).toEqual({});
+  });
+
+  test("refuses to merge into a profile that has itself already been merged away", async () => {
+    const anonymousId = await repository.getActiveProfileId();
+    await repository.setLessonCompleted("color-mixing", true);
+    const target = await repository.createAuthenticatedProfile("supabase-user-1");
+    await repository.mergeAnonymousProfile(anonymousId, target.id);
+    // `anonymousId` is now a dead end: its progress lives at `target.id`, and no active profile
+    // can ever resolve back to it.
+
+    const secondGuest = await repository.activateEmptyAnonymousProfile();
+    expect(secondGuest.id).not.toBe(anonymousId);
+    await repository.setLessonCompleted("luma-and-contrast", true);
+
+    await expect(
+      repository.mergeAnonymousProfile(secondGuest.id, anonymousId),
+    ).rejects.toThrow(/merged/i);
+
+    // Nothing was written to the intermediate, now-invisible profile, and the second guest's
+    // progress and mutations are still exactly where they were before the refused merge.
+    expect(await readCompletionState(anonymousId)).toEqual({ "color-mixing": true });
+    await expect(readOutbox(secondGuest.id)).resolves.toHaveLength(1);
+    await expect(
+      driver.first<{ merged_into_profile_id: string | null }>(
+        `SELECT merged_into_profile_id FROM learner_profiles WHERE id = ?`,
+        [secondGuest.id],
+      ),
+    ).resolves.toEqual({ merged_into_profile_id: null });
   });
 
   test("rolls the whole merge back when a statement fails partway", async () => {
@@ -300,6 +336,23 @@ describe("SQLite progress repository learner profiles", () => {
     await expect(repository.isLessonCompleted("color-mixing")).resolves.toBe(false);
     // The unmerged guest rows stay on disk; they are not reconstructible.
     expect(await readCompletionState(anonymousId)).toEqual({ "color-mixing": true });
+  });
+
+  test("an activation wins a race against a concurrent cold-cache profile read", async () => {
+    // A screen reading progress right as a sign-in activates the account: exercises
+    // `settleProfileResolution` (the activation waits out the read rather than racing its
+    // transaction) and the `cachedProfile ?? profile` reconciliation the read's own resolution
+    // falls back to (an activation that lands first must not be clobbered by a stale read).
+    const target = await repository.createAuthenticatedProfile("supabase-user-1");
+    const fresh = createRepository();
+
+    const [read] = await Promise.all([fresh.getActiveProfile(), fresh.setActiveProfile(target.id)]);
+
+    // The read may have observed either profile depending on exactly how the race landed, but the
+    // activation must always be the one left standing afterward.
+    expect(read.id === target.id || read.kind === "anonymous").toBe(true);
+    await expect(fresh.getActiveProfileId()).resolves.toBe(target.id);
+    await expect(fresh.getActiveProfile()).resolves.toEqual(target);
   });
 });
 

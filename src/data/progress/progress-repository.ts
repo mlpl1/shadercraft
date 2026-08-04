@@ -46,7 +46,9 @@ export interface LearnerProfileRepository {
    *
    * Idempotent: repeating a merge that already happened changes nothing, and a source holding
    * nothing to claim is left unmerged and reusable. Merging a source into a second, different target
-   * is refused rather than silently moving progress between accounts.
+   * is refused rather than silently moving progress between accounts, and so is merging into a
+   * target that has itself already been merged away — that profile is a dead end no active profile
+   * can resolve to, so anything written there would be permanently invisible.
    */
   mergeAnonymousProfile(sourceProfileId: string, targetProfileId: string): Promise<void>;
 }

@@ -20,7 +20,12 @@ export type ProfileStore = Pick<
  * with the network absent — signing in must not wait on a server to decide where progress lives.
  */
 export interface ProfileService {
-  /** Ensures a guest profile is active, keeping the current one when it already is one. */
+  /**
+   * Ensures a guest profile is active, keeping the current one when it already is one. Refuses to
+   * run while an authenticated profile is active — `signOut()` is the only way to leave an account —
+   * so this can never demote a signed-in device to a guest and land its session's progress in
+   * whichever account signs in next.
+   */
   activateAnonymous(): Promise<LearnerProfile>;
   /**
    * Activates the profile bound to `userId`, creating it on first sign-in and reopening the cached
@@ -36,6 +41,11 @@ export function createProfileService(store: ProfileStore): ProfileService {
   return {
     async activateAnonymous() {
       const active = await store.getActiveProfile();
+      if (active.kind === "authenticated") {
+        throw new Error(
+          "activateAnonymous() cannot demote a signed-in profile to a guest; call signOut() instead",
+        );
+      }
       if (isUnmergedGuest(active)) {
         return active;
       }

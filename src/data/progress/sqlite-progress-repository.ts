@@ -145,7 +145,7 @@ export class SqliteProgressRepository implements ProgressRepository, LearnerProf
          WHERE kind = 'anonymous'
            AND merged_into_profile_id IS NULL
            AND NOT ${PROFILE_HAS_LOCAL_STATE}
-         ORDER BY created_at ASC
+         ORDER BY created_at ASC, id ASC
          LIMIT 1`,
       );
 
@@ -171,9 +171,9 @@ export class SqliteProgressRepository implements ProgressRepository, LearnerProf
   }
 
   /**
-   * See {@link ProgressRepository.mergeAnonymousProfile}. Everything happens in one transaction so a
-   * crash can only leave the merge entirely undone — never progress half-moved or mutations
-   * duplicated — and the recorded merge target makes a repeat run a no-op.
+   * See {@link LearnerProfileRepository.mergeAnonymousProfile}. Everything happens in one
+   * transaction so a crash can only leave the merge entirely undone — never progress half-moved or
+   * mutations duplicated — and the recorded merge target makes a repeat run a no-op.
    *
    * The collapsed "latest explicit state per lesson" is read from the source's `lesson_progress`
    * rows rather than replayed from its outbox, because those rows *are* that collapsed state and
@@ -185,6 +185,12 @@ export class SqliteProgressRepository implements ProgressRepository, LearnerProf
       const source = await this.requireProfileRow(sourceProfileId);
       const target = await this.requireProfileRow(targetProfileId);
 
+      if (target.merged_into_profile_id !== null) {
+        throw new Error(
+          `Cannot merge into learner profile ${target.id}: it was itself merged into ` +
+            `${target.merged_into_profile_id}`,
+        );
+      }
       if (source.id === target.id) {
         throw new Error(`Cannot merge learner profile ${source.id} into itself`);
       }
@@ -237,7 +243,11 @@ export class SqliteProgressRepository implements ProgressRepository, LearnerProf
     if (outcome.merged && this.cachedProfile?.id === sourceProfileId) {
       this.cachedProfile = { ...this.cachedProfile, mergedIntoProfileId: targetProfileId };
     }
-    if (outcome.changedProgress) {
+    // Only notify when the merge changed progress the app is *currently* reading — i.e. the
+    // target is the active profile. Right after a sign-in, the active profile is still the
+    // source (whose visible progress did not change); that switch gets its own notification from
+    // `adoptActiveProfile` once the caller activates the target.
+    if (outcome.changedProgress && this.cachedProfile?.id === targetProfileId) {
       this.notifySubscribers();
     }
   }
