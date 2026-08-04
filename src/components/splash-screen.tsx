@@ -13,6 +13,7 @@ import {
 import { Colors, Radius, Spacing } from "../constants/theme";
 
 const LOGO = require("../../assets/images/scanline-s.png");
+const GLOW = require("../../assets/images/splash-glow.png");
 
 /** Spacing of the ambient background grid, matching the design's 24px rhythm. */
 const GRID_SIZE = 24;
@@ -133,22 +134,19 @@ export function SplashScreen({
 }
 
 /**
- * Stand-in for the design's radial glow. React Native has no radial gradient and no blur that works
- * on Android without another native dependency, so this stacks many very faint concentric circles:
- * their alpha compounds towards the centre, which reads as a soft falloff. Few/strong rings show
- * their own edges as visible banding, so prefer more rings at lower opacity over fewer at higher.
+ * The design's radial glow. React Native has no radial gradient and no Android-capable blur without
+ * another native dependency, and stacking translucent circles bands visibly — every ring edge is a
+ * step, and at these low opacities each step is only a level or two of 8-bit alpha, which is exactly
+ * where banding shows. So the falloff is a real alpha ramp baked into an asset instead.
+ *
+ * `splash-glow.png` is 512×512 32-bit ARGB, flat accent colour (#C7F464) with
+ * `alpha = (1 - distanceFromCentre) ^ 1.9 * 0.16`, reaching zero at the circle's edge. Regenerate it
+ * with those numbers if the accent ever changes.
  */
-const BLOOM_DIAMETERS = [420, 360, 300, 250, 205, 165, 130, 100];
-
 function Bloom() {
   return (
     <View pointerEvents="none" style={styles.bloomLayer}>
-      {BLOOM_DIAMETERS.map((diameter) => (
-        <View
-          key={diameter}
-          style={[styles.bloom, { borderRadius: diameter / 2, height: diameter, width: diameter }]}
-        />
-      ))}
+      <Image contentFit="contain" source={GLOW} style={styles.bloom} />
     </View>
   );
 }
@@ -265,8 +263,8 @@ const styles = StyleSheet.create({
     width: BAR_WIDTH,
   },
   bloom: {
-    backgroundColor: "rgba(199,244,100,0.022)",
-    position: "absolute",
+    height: 480,
+    width: 480,
   },
   bloomLayer: {
     alignItems: "center",
