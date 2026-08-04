@@ -14,6 +14,13 @@ jest.mock("react-native-safe-area-context", () =>
   require("react-native-safe-area-context/jest/mock").default,
 );
 
+// `CourseScreen` now reads `isCloudSyncEnabled()` directly to decide whether to show the account
+// entry point. Mocked for the same reason `disabled-cloud-sync.test.tsx` and `account.test.tsx` mock
+// it: importing the real module pulls in `react-native-url-polyfill/auto` and
+// `expo-sqlite/localStorage/install` side effects this suite has no need to exercise, and this makes
+// the button's visibility a behavioural assertion rather than a side effect of the test environment.
+jest.mock("../../data/supabase/client", () => ({ isCloudSyncEnabled: jest.fn() }));
+
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -24,12 +31,15 @@ import { ProgressProvider } from "../../context/progress-context";
 import type { CourseRepository } from "../../data/course/course-repository";
 import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
 import type { ProgressRepository } from "../../data/progress/progress-repository";
+import { isCloudSyncEnabled } from "../../data/supabase/client";
 
 const mockRouter = { back: jest.fn(), push: jest.fn(), replace: jest.fn() };
 
 jest.mock("expo-router", () => ({
   useRouter: () => mockRouter,
 }));
+
+const mockIsCloudSyncEnabled = isCloudSyncEnabled as jest.MockedFunction<typeof isCloudSyncEnabled>;
 
 function buildLesson(id: string, moduleId: string, position: number, title: string): CourseLesson {
   return {
@@ -203,6 +213,28 @@ async function renderCourseScreen(
 describe("CourseScreen", () => {
   beforeEach(() => {
     mockRouter.push.mockClear();
+    mockIsCloudSyncEnabled.mockReturnValue(true);
+  });
+
+  test("shows an account button that navigates to /account when cloud sync is enabled", async () => {
+    await renderCourseScreen(["lesson-1a"]);
+
+    await waitFor(() => expect(screen.getByText("Coordinate systems")).toBeTruthy());
+
+    const accountButton = screen.getByRole("button", { name: "Account" });
+    fireEvent.press(accountButton);
+
+    expect(mockRouter.push).toHaveBeenCalledWith("/account");
+  });
+
+  test("hides the account button when cloud sync is disabled", async () => {
+    mockIsCloudSyncEnabled.mockReturnValue(false);
+
+    await renderCourseScreen(["lesson-1a"]);
+
+    await waitFor(() => expect(screen.getByText("Coordinate systems")).toBeTruthy());
+
+    expect(screen.queryByRole("button", { name: "Account" })).toBeNull();
   });
 
   test("tapping a fully complete module's card navigates to its last lesson", async () => {

@@ -19,6 +19,8 @@ The project is currently an early working prototype built with Expo and React Na
 - Guided completion summary with review and course-navigation actions
 - Fully offline curriculum and progress, backed by an on-device SQLite database seeded from a
   checksummed, version-controlled content release
+- Optional Supabase accounts and background cross-device progress synchronization, reachable from
+  an account icon on the Course screen; disabled by default and entirely inert until configured
 
 Modules 01, 02, and 03 are published and contain 14 interactive lessons in total (five, five,
 and four respectively). Every published module concludes with a layered shader challenge.
@@ -36,6 +38,9 @@ Completing Shape Synthesis unlocks Color & Light. Module 04, Procedural Textures
 - Zod-validated JSON content, compiled into a checksummed bundled release (see
   [`docs/data/local-curriculum.md`](docs/data/local-curriculum.md))
 - AsyncStorage, only to migrate a device's pre-SQLite legacy completions on first launch
+- [Supabase](https://supabase.com) for optional accounts and progress sync (see
+  [`docs/data/progress-sync.md`](docs/data/progress-sync.md)); off by default, and never reached
+  by any screen unless explicitly enabled
 - TypeScript and the React Compiler
 
 ## Requirements
@@ -44,6 +49,9 @@ Completing Shape Synthesis unlocks Color & Light. Module 04, Procedural Textures
 - npm
 - Android Studio with an Android emulator, or a connected Android device
 - A configured Android SDK and Java environment for native builds
+- Docker, only if developing against a local Supabase stack for optional accounts/sync (see
+  [`docs/data/progress-sync.md`](docs/data/progress-sync.md)) — not needed for offline curriculum
+  and progress
 
 Expo SDK 57 supports Android 7 and newer. iOS and web are configured, but current development
 and device verification have focused on Android.
@@ -109,7 +117,26 @@ marked incomplete after confirmation without deleting completion records for lat
 Progress survives app restarts and, on a device upgrading from an older release with no SQLite
 database, migrates automatically from its legacy AsyncStorage record on first launch.
 
-Progress does not currently sync between devices or GitHub accounts.
+Progress syncs between a learner's own devices only when they explicitly sign in, and only in
+builds with cloud sync configured — see [Optional accounts and sync](#optional-accounts-and-sync)
+below. Without an account, progress stays local to the device, exactly as above.
+
+## Optional accounts and sync
+
+Signing in is entirely optional and off by default. With `EXPO_PUBLIC_SUPABASE_ENABLED` unset (a
+fresh checkout), the account entry point on Course is hidden and nothing in the app ever talks to
+Supabase — every feature above works exactly as if accounts did not exist.
+
+When configured, an account icon appears on Course, leading to a screen where a learner can create
+an account or sign in with email and password, see their signed-in email, the number of pending
+local changes still waiting to reach the server, and — for a temporary sync problem — a way to
+retry it. Signing in merges progress made anonymously on that device into the account; signing out
+returns the device to local-only progress without losing it. Cross-device conflicts are resolved
+by the most recent action the server actually accepted, not by comparing device clocks.
+
+See [`docs/data/progress-sync.md`](docs/data/progress-sync.md) for how to configure a local
+Supabase stack, the account/profile merge rules, the conflict policy, and how to inspect pending
+sync rows during development.
 
 ## Curriculum content
 
@@ -124,7 +151,6 @@ the schema validates, and the constraints around preview capabilities and releas
 - Editable GLSL with debounced shader recompilation and compiler feedback
 - Configured linting (`expo lint` runs, but the project has no committed ESLint
   setup yet and currently reports pre-existing violations)
-- Optional cloud progress synchronization
 
 ## Contributing
 
