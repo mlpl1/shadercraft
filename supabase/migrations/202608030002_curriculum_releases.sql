@@ -87,8 +87,11 @@ create table public.content_sections (
 -- Published releases (and their children) are immutable. This trigger is the single place that
 -- enforces it, so no future RPC or ad-hoc admin query can accidentally corrupt history: once a
 -- release row exists, its id/schema_version/minimum_app_version/checksum/published_at cannot change,
--- the row cannot be deleted, and none of its child rows can be deleted either. `active` is the one
--- mutable field, because activating a different release is the whole point of publishing one.
+-- the row cannot be deleted, and none of its child rows can be changed or deleted either. `active` is
+-- the one mutable field, and only on `content_releases`, because activating a different release is
+-- the whole point of publishing one. Child tables (`content_modules`/`content_lessons`/
+-- `content_presets`/`content_sections`) have no mutable field at all: every update to any of their
+-- rows is rejected, not just delete, because they carry no analogue of `active`.
 --
 -- `publish_course_release` still needs to delete a release it *itself* just inserted, inside the same
 -- transaction, if a nested-count check fails partway through. It does this by deleting through a
@@ -107,13 +110,19 @@ begin
     raise exception 'published curriculum content is immutable' using errcode = '42501';
   end if;
 
-  -- tg_op = 'UPDATE' on content_releases: only `active` may move.
-  if new.id is distinct from old.id
-    or new.schema_version is distinct from old.schema_version
-    or new.minimum_app_version is distinct from old.minimum_app_version
-    or new.checksum is distinct from old.checksum
-    or new.published_at is distinct from old.published_at
-  then
+  -- tg_op = 'UPDATE'. On content_releases only `active` may move; every other table has no mutable
+  -- field, so any update at all is rejected (tg_table_name distinguishes the two cases because one
+  -- trigger function is shared by all five tables).
+  if tg_table_name = 'content_releases' then
+    if new.id is distinct from old.id
+      or new.schema_version is distinct from old.schema_version
+      or new.minimum_app_version is distinct from old.minimum_app_version
+      or new.checksum is distinct from old.checksum
+      or new.published_at is distinct from old.published_at
+    then
+      raise exception 'published curriculum content is immutable' using errcode = '42501';
+    end if;
+  else
     raise exception 'published curriculum content is immutable' using errcode = '42501';
   end if;
 
@@ -126,19 +135,19 @@ create trigger content_releases_immutable
   for each row execute function public.reject_published_mutation();
 
 create trigger content_modules_immutable
-  before delete on public.content_modules
+  before update or delete on public.content_modules
   for each row execute function public.reject_published_mutation();
 
 create trigger content_lessons_immutable
-  before delete on public.content_lessons
+  before update or delete on public.content_lessons
   for each row execute function public.reject_published_mutation();
 
 create trigger content_presets_immutable
-  before delete on public.content_presets
+  before update or delete on public.content_presets
   for each row execute function public.reject_published_mutation();
 
 create trigger content_sections_immutable
-  before delete on public.content_sections
+  before update or delete on public.content_sections
   for each row execute function public.reject_published_mutation();
 
 alter table public.content_releases enable row level security;
@@ -170,10 +179,14 @@ revoke all on public.content_releases, public.content_modules, public.content_le
 grant select on public.content_releases, public.content_modules, public.content_lessons,
   public.content_presets, public.content_sections
   to anon, authenticated;
--- service_role (the publishing tool / CI) reads its own writes directly, e.g. to confirm a publish
--- landed, in addition to calling publish_course_release to write.
-grant select, insert, update, delete on public.content_releases, public.content_modules,
-  public.content_lessons, public.content_presets, public.content_sections
+-- service_role (the publishing tool / CI) only ever reads these tables directly, e.g. to confirm a
+-- publish landed. It writes exclusively through `publish_course_release`, which is `security
+-- definer` and therefore runs with the function owner's privileges, not the caller's — it needs no
+-- table-level write grant to insert/update/delete. Granting service_role raw write access here would
+-- only reopen the immutability hole the triggers above close (an update/delete no longer needs to be
+-- routed through the RPC's own checks).
+grant select on public.content_releases, public.content_modules, public.content_lessons,
+  public.content_presets, public.content_sections
   to service_role;
 
 /**
@@ -211,6 +224,14 @@ grant execute on function public.get_active_course_manifest() to anon, authentic
  *
  * Only returns a published (i.e. existing) release row; there is no distinction between "not found"
  * and "not published" because every row in these tables is, by construction, published.
+ *
+ * `src/data/course/schema.ts` parses this with `.strict()` Zod object schemas where every optional
+ * field is `z.string().optional()` — which accepts a missing key but rejects an explicit JSON
+ * `null`. `default_preset_id`, `intro_eyebrow`, and `preview_value_label` are all nullable columns
+ * that are absent far more often than present, so the whole result is wrapped in
+ * `jsonb_strip_nulls`, which drops any object key whose value is JSON `null` (recursively, at every
+ * nesting level) and leaves everything else — including legitimately empty arrays/objects like
+ * `plannedTopics: []` or `previewParameters: {}`, which are never JSON null — untouched.
  */
 create function public.get_course_release(p_release_id text)
 returns jsonb
@@ -219,7 +240,7 @@ stable
 security definer
 set search_path = public, pg_temp
 as $$
-  select jsonb_build_object(
+  select jsonb_strip_nulls(jsonb_build_object(
     'id', r.id,
     'schemaVersion', r.schema_version,
     'minimumAppVersion', r.minimum_app_version,
@@ -290,7 +311,7 @@ as $$
       from public.content_modules m
       where m.release_id = r.id
     ), '[]'::jsonb)
-  )
+  ))
   from public.content_releases r
   where r.id = p_release_id;
 $$;
@@ -310,13 +331,19 @@ grant execute on function public.get_course_release(text) to anon, authenticated
  * actually landed. Republishing the same id with a *different* checksum is refused, because a
  * release id names one immutable payload forever; a correction must publish under a new id.
  *
- * On a fresh publish, every nested row is inserted and the expected nested counts (modules,
- * lessons, presets, sections) are checked against what the payload claimed before the release is
- * activated, all inside one transaction: a payload that is malformed partway through never leaves a
- * half-inserted release active, or even lying around. If the count check fails, the partially
- * inserted release is torn down via the `shadercraft.allow_release_teardown` guard (see
- * `reject_published_mutation`), and the exception propagates so the whole transaction rolls back
- * regardless.
+ * On a fresh publish, every nested row is inserted, and the expected nested counts (modules,
+ * lessons, presets, sections) are checked against the *actual* row counts left in the tables for
+ * this release, all inside one transaction, before the release is activated. The expected counts are
+ * computed once, directly from the payload's JSON structure (`jsonb_array_length` over its nested
+ * arrays), entirely independently of the insert loop below — they are not incremented alongside each
+ * insert. That independence is what makes the comparison meaningful: if the insert loop and the
+ * count derivation ever disagree about how many rows a payload implies (e.g. a future edit teaches
+ * one of them to skip or dedupe something the other still counts), this catches it, rather than two
+ * numbers that were always definitionally equal because one was tallied by watching the other run.
+ *
+ * If the count check fails, the partially inserted release is torn down via the
+ * `shadercraft.allow_release_teardown` guard (see `reject_published_mutation`), and the exception
+ * propagates so the whole transaction rolls back regardless.
  */
 create function public.publish_course_release(p_payload jsonb)
 returns void
@@ -336,9 +363,9 @@ declare
   v_preset jsonb;
   v_section jsonb;
   v_expected_modules integer := jsonb_array_length(coalesce(p_payload -> 'modules', '[]'::jsonb));
-  v_expected_lessons integer := 0;
-  v_expected_presets integer := 0;
-  v_expected_sections integer := 0;
+  v_expected_lessons integer;
+  v_expected_presets integer;
+  v_expected_sections integer;
   v_actual_modules integer;
   v_actual_lessons integer;
   v_actual_presets integer;
@@ -368,6 +395,23 @@ begin
     end if;
   end if;
 
+  -- Expected nested counts, derived once from the payload's own JSON structure and never touched
+  -- again — in particular, never incremented from inside the insert loop below. See the function
+  -- comment for why that independence matters.
+  select coalesce(sum(jsonb_array_length(coalesce(module -> 'lessons', '[]'::jsonb))), 0)
+    into v_expected_lessons
+    from jsonb_array_elements(coalesce(p_payload -> 'modules', '[]'::jsonb)) as module;
+
+  select coalesce(sum(jsonb_array_length(coalesce(lesson -> 'presets', '[]'::jsonb))), 0)
+    into v_expected_presets
+    from jsonb_array_elements(coalesce(p_payload -> 'modules', '[]'::jsonb)) as module,
+         jsonb_array_elements(coalesce(module -> 'lessons', '[]'::jsonb)) as lesson;
+
+  select coalesce(sum(jsonb_array_length(coalesce(lesson -> 'sections', '[]'::jsonb))), 0)
+    into v_expected_sections
+    from jsonb_array_elements(coalesce(p_payload -> 'modules', '[]'::jsonb)) as module,
+         jsonb_array_elements(coalesce(module -> 'lessons', '[]'::jsonb)) as lesson;
+
   insert into public.content_releases (id, schema_version, minimum_app_version, checksum, active)
   values (v_id, v_schema_version, v_minimum_app_version, v_checksum, false);
 
@@ -388,8 +432,6 @@ begin
 
     for v_lesson in select * from jsonb_array_elements(coalesce(v_module -> 'lessons', '[]'::jsonb))
     loop
-      v_expected_lessons := v_expected_lessons + 1;
-
       insert into public.content_lessons (
         release_id, id, module_id, position, title, short_title, intro, concept_title,
         concept_lede, try_hint, takeaway, preview_caption, default_preset_id, intro_eyebrow
@@ -412,8 +454,6 @@ begin
 
       for v_preset in select * from jsonb_array_elements(coalesce(v_lesson -> 'presets', '[]'::jsonb))
       loop
-        v_expected_presets := v_expected_presets + 1;
-
         insert into public.content_presets (
           release_id, id, lesson_id, position, label, preview_key, preview_parameters, value,
           preview_value_label, filename, code_lines, highlighted_lines
@@ -435,8 +475,6 @@ begin
 
       for v_section in select * from jsonb_array_elements(coalesce(v_lesson -> 'sections', '[]'::jsonb))
       loop
-        v_expected_sections := v_expected_sections + 1;
-
         insert into public.content_sections (
           release_id, id, lesson_id, position, title, body
         ) values (

@@ -11,7 +11,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(29);
+select plan(40);
 
 -- A minimal, schema-valid release payload. Matches `CourseRelease` in
 -- src/data/course/types.ts / schema.ts: camelCase keys, release -> modules -> lessons ->
@@ -66,6 +66,97 @@ as $$
                 'position', 1,
                 'title', 'Section',
                 'body', 'body'
+              )
+            )
+          )
+        )
+      )
+    )
+  );
+$$;
+
+-- Two lessons in one module, each with its own preset and section. Used to exercise the nested-row
+-- count check with something more than the trivially-one-of-everything fixture above: if the
+-- independent, payload-derived expected count and the post-insert actual count ever disagreed, this
+-- is the shape that would surface it.
+create or replace function pg_temp.fixture_payload_multi(p_id text, p_checksum text)
+returns jsonb
+language sql
+as $$
+  select jsonb_build_object(
+    'id', p_id,
+    'schemaVersion', 1,
+    'minimumAppVersion', '1.0.0',
+    'checksum', p_checksum,
+    'modules', jsonb_build_array(
+      jsonb_build_object(
+        'id', 'colors',
+        'position', 1,
+        'status', 'published',
+        'title', 'Colors',
+        'description', 'Intro to color.',
+        'plannedLessonCount', 0,
+        'plannedTopics', jsonb_build_array(),
+        'lessons', jsonb_build_array(
+          jsonb_build_object(
+            'id', 'fragment-output',
+            'moduleId', 'colors',
+            'position', 1,
+            'title', 'Fragment output',
+            'shortTitle', 'Fragment',
+            'intro', 'intro',
+            'conceptTitle', 'concept',
+            'conceptLede', 'lede',
+            'tryHint', 'hint',
+            'takeaway', 'takeaway',
+            'previewCaption', 'caption',
+            'presets', jsonb_build_array(
+              jsonb_build_object(
+                'id', 'basic',
+                'position', 1,
+                'label', 'Basic',
+                'previewKey', 'solid-color',
+                'previewParameters', jsonb_build_object(),
+                'value', 'red',
+                'filename', 'main.glsl',
+                'codeLines', jsonb_build_array('line one'),
+                'highlightedLines', jsonb_build_array(1)
+              )
+            ),
+            'sections', jsonb_build_array(
+              jsonb_build_object(
+                'id', 'section-one', 'position', 1, 'title', 'Section', 'body', 'body'
+              )
+            )
+          ),
+          jsonb_build_object(
+            'id', 'fragment-blend',
+            'moduleId', 'colors',
+            'position', 2,
+            'title', 'Fragment blend',
+            'shortTitle', 'Blend',
+            'intro', 'intro',
+            'conceptTitle', 'concept',
+            'conceptLede', 'lede',
+            'tryHint', 'hint',
+            'takeaway', 'takeaway',
+            'previewCaption', 'caption',
+            'presets', jsonb_build_array(
+              jsonb_build_object(
+                'id', 'blend-basic',
+                'position', 1,
+                'label', 'Basic',
+                'previewKey', 'solid-color',
+                'previewParameters', jsonb_build_object(),
+                'value', 'blue',
+                'filename', 'main.glsl',
+                'codeLines', jsonb_build_array('line one'),
+                'highlightedLines', jsonb_build_array(1)
+              )
+            ),
+            'sections', jsonb_build_array(
+              jsonb_build_object(
+                'id', 'section-two', 'position', 1, 'title', 'Section', 'body', 'body'
               )
             )
           )
@@ -210,21 +301,70 @@ select is(
   'release A''s row survives deactivation'
 );
 
+-- A release with two lessons under one module, each with its own preset and section, exercises the
+-- nested-row count check with something more than "one of everything". A regression that decoupled
+-- the expected/actual derivation incorrectly would show up here first.
+select lives_ok(
+  $q$ select public.publish_course_release(pg_temp.fixture_payload_multi('release-multi', repeat('e', 64))) $q$,
+  'service_role can publish a release with multiple lessons, presets, and sections'
+);
+select is(
+  (select count(*) from public.content_lessons where release_id = 'release-multi')::int,
+  2,
+  'publishing a multi-lesson release inserts every lesson row'
+);
+select is(
+  (select count(*) from public.content_presets where release_id = 'release-multi')::int,
+  2,
+  'publishing a multi-lesson release inserts every preset row, one per lesson'
+);
+select is(
+  (select count(*) from public.content_sections where release_id = 'release-multi')::int,
+  2,
+  'publishing a multi-lesson release inserts every section row, one per lesson'
+);
+
 reset role;
 
 -- Public reads of the active manifest and payload.
 select results_eq(
   $q$ select id from public.get_active_course_manifest() $q$,
-  $q$ values ('release-b'::text) $q$,
+  $q$ values ('release-multi'::text) $q$,
   'anon can read the active manifest and it names the active release'
 );
 
 select ok(
-  (select public.get_course_release('release-b') -> 'modules') is not null,
+  (select public.get_course_release('release-multi') -> 'modules') is not null,
   'anon can read the active release payload'
 );
 
--- Direct mutation of published content is rejected, including for an authenticated user.
+-- The fixture omits `defaultPresetId`/`introEyebrow` (on the lesson) and `previewValueLabel` (on the
+-- preset). `parseCourseRelease` uses `.strict()` schemas with `z.string().optional()`, which accepts
+-- a missing key but throws on an explicit JSON null, so the RPC must omit these keys entirely rather
+-- than emit them as null.
+select ok(
+  not (
+    (public.get_course_release('release-multi') -> 'modules' -> 0 -> 'lessons' -> 0) ? 'defaultPresetId'
+  ),
+  'an absent defaultPresetId is omitted from the payload rather than emitted as null'
+);
+select ok(
+  not (
+    (public.get_course_release('release-multi') -> 'modules' -> 0 -> 'lessons' -> 0) ? 'introEyebrow'
+  ),
+  'an absent introEyebrow is omitted from the payload rather than emitted as null'
+);
+select ok(
+  not (
+    (public.get_course_release('release-multi') -> 'modules' -> 0 -> 'lessons' -> 0
+      -> 'presets' -> 0) ? 'previewValueLabel'
+  ),
+  'an absent previewValueLabel is omitted from the payload rather than emitted as null'
+);
+
+-- Direct mutation of published content is rejected for every table, not just content_releases, and
+-- for both an authenticated learner and the service_role credential — service_role publishes through
+-- the RPC, but is not itself exempt from the immutability trigger on a raw table statement.
 set local role authenticated;
 select set_config(
   'request.jwt.claims',
@@ -233,18 +373,53 @@ select set_config(
 );
 
 select throws_ok(
-  $q$ update public.content_releases set checksum = repeat('d', 64) where id = 'release-b' $q$,
+  $q$ update public.content_releases set checksum = repeat('d', 64) where id = 'release-multi' $q$,
   '42501',
   null,
   'an authenticated user cannot update a published release row'
 );
 
 select throws_ok(
-  $q$ delete from public.content_releases where id = 'release-b' $q$,
+  $q$ delete from public.content_releases where id = 'release-multi' $q$,
   '42501',
   null,
   'an authenticated user cannot delete a published release row'
 );
+
+select throws_ok(
+  $q$ update public.content_modules set title = 'HACKED' where release_id = 'release-multi' $q$,
+  '42501',
+  null,
+  'an authenticated user cannot update a published module row'
+);
+
+select throws_ok(
+  $q$ delete from public.content_modules where release_id = 'release-multi' $q$,
+  '42501',
+  null,
+  'an authenticated user cannot delete a published module row'
+);
+
+reset role;
+
+set local role service_role;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+select throws_ok(
+  $q$ update public.content_modules set title = 'HACKED' where release_id = 'release-multi' $q$,
+  '42501',
+  null,
+  'service_role cannot update a published module row outside publish_course_release'
+);
+
+select throws_ok(
+  $q$ delete from public.content_modules where release_id = 'release-multi' $q$,
+  '42501',
+  null,
+  'service_role cannot delete a published module row outside publish_course_release'
+);
+
+reset role;
 
 select * from finish();
 
