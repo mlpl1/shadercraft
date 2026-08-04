@@ -604,6 +604,17 @@ export class SqliteProgressRepository
     );
   }
 
+  /** See {@link ProgressSyncRepository.getLastSyncSuccessAt}. */
+  async getLastSyncSuccessAt(profileId: string): Promise<string | null> {
+    const row = await this.driver.first<{ last_success_at: string | null }>(
+      `SELECT last_success_at FROM sync_state WHERE profile_id = ? AND resource = ?`,
+      [profileId, PROGRESS_SYNC_RESOURCE],
+    );
+    // A row can exist with the column still `NULL` — `getPullCursor`'s corrupt-cursor guard inserts
+    // exactly that shape — so "no row" and "no success yet" have to collapse to the same answer.
+    return row?.last_success_at ?? null;
+  }
+
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => {

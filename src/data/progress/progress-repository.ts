@@ -120,6 +120,17 @@ export interface ProgressSyncRepository {
    * `sync_state.last_success_at` stale even though the device is working.
    */
   recordSyncSuccess(profileId: string, cursor: number): Promise<void>;
+  /**
+   * When a pass last moved this profile's progress, as the ISO timestamp stored in
+   * `sync_state.last_success_at`, or `null` if none ever has. Durable, so it survives relaunches
+   * rather than describing only what happened while one screen was open.
+   *
+   * `null` means literally "no pass has ever moved anything", not "sync is broken": a pass with
+   * nothing to push and nothing to pull deliberately records nothing (see
+   * {@link recordSyncSuccess} and `ProgressSyncEngine.runOnce`), so a brand-new account that syncs
+   * successfully but has no work to do still reads `null`. A caller must not present it as a failure.
+   */
+  getLastSyncSuccessAt(profileId: string): Promise<string | null>;
 }
 
 export interface ProgressRepository {

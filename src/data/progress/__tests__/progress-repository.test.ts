@@ -528,6 +528,50 @@ describe("SQLite progress repository sync primitives", () => {
     expect(listener).toHaveBeenCalledTimes(1);
     await expect(repository.isLessonCompleted("color-mixing")).resolves.toBe(true);
   });
+
+  test("reports no last successful sync for a profile that has never synced", async () => {
+    const profileId = await repository.getActiveProfileId();
+
+    await expect(repository.getLastSyncSuccessAt(profileId)).resolves.toBeNull();
+  });
+
+  test("reads back the moment a pass recorded as successful, and each profile reads its own", async () => {
+    const anonymousId = await repository.getActiveProfileId();
+    const account = await repository.createAuthenticatedProfile("supabase-user-1");
+
+    await repository.recordSyncSuccess(account.id, 12);
+
+    await expect(repository.getLastSyncSuccessAt(account.id)).resolves.toBe(
+      "2026-08-03T00:00:00.000Z",
+    );
+    // The stamp belongs to the profile that synced, never to whoever asks.
+    await expect(repository.getLastSyncSuccessAt(anonymousId)).resolves.toBeNull();
+  });
+
+  test("reads back the moment a pulled batch recorded as successful", async () => {
+    const profileId = await repository.getActiveProfileId();
+
+    await repository.applyRemoteChanges(
+      profileId,
+      [{ lessonId: "color-mixing", completed: true, revision: 1, changeId: 3 }],
+      3,
+    );
+
+    await expect(repository.getLastSyncSuccessAt(profileId)).resolves.toBe(
+      "2026-08-03T00:00:00.000Z",
+    );
+  });
+
+  test("reports no last successful sync for a row that only holds a pull cursor", async () => {
+    const profileId = await repository.getActiveProfileId();
+    await driver.run(
+      `INSERT INTO sync_state (profile_id, resource, pull_cursor, last_success_at)
+       VALUES (?, 'lesson_progress', '4', NULL)`,
+      [profileId],
+    );
+
+    await expect(repository.getLastSyncSuccessAt(profileId)).resolves.toBeNull();
+  });
 });
 
 /**
