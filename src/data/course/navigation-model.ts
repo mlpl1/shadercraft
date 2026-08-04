@@ -80,9 +80,17 @@ function buildModuleViewModel(
       ? "planned"
       : getModuleStatus(module, completedLessonIds);
 
+  // Once every lesson is complete (or the module has none), `nextIncomplete` is -1 and there is
+  // no "next" lesson to resume — fall back to the last lesson so the module still has a valid
+  // lesson to surface as "current" (and the card renders a "Review lesson" tap target) instead of
+  // going tap-dead. `lessons.length - 1` is itself -1 when there are no lessons at all, which is
+  // the only case where -1 is still the correct answer.
+  const nextIncomplete = lessons.findIndex((lesson) => lesson.isUnlocked && !lesson.isComplete);
   const currentLessonIndex = isPlanned && !isLocked
     ? 0
-    : lessons.findIndex((lesson) => lesson.isUnlocked && !lesson.isComplete);
+    : nextIncomplete >= 0
+      ? nextIncomplete
+      : lessons.length - 1;
 
   return {
     id: module.id,

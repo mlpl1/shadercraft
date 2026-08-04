@@ -71,4 +71,12 @@ describe("navigation presentation model", () => {
     expect(preHydrationModel.featuredModule).toBeNull();
     expect(preHydrationModel.featuredLesson).toBeNull();
   });
+
+  test("points a fully complete module's currentLessonIndex at its last lesson, not -1", () => {
+    const module1 = completedModule1Model.modules[0];
+
+    expect(module1.status).toBe("complete");
+    expect(module1.currentLessonIndex).toBe(module1.lessons.length - 1);
+    expect(module1.currentLessonIndex).not.toBe(-1);
+  });
 });
