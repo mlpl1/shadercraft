@@ -8,21 +8,39 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import Constants from "expo-constants";
 
 import bundledCourse from "../../assets/course/bundled-course.json";
-import { Colors, Radius, Spacing } from "../constants/theme";
+import { SplashScreen } from "../components/splash-screen";
 import type { CourseRepository } from "../data/course/course-repository";
 import { SqliteCourseRepository } from "../data/course/sqlite-course-repository";
 import { openShadercraftDatabase } from "../data/database/client";
 import type { DatabaseDriver } from "../data/database/driver";
+import { LATEST_SCHEMA_VERSION } from "../data/database/migrations";
 import { installBundledRelease } from "../data/database/seed";
 import { importLegacyProgress } from "../data/progress/legacy-import";
 import type { ProgressRepository } from "../data/progress/progress-repository";
 import { SqliteProgressRepository } from "../data/progress/sqlite-progress-repository";
 
+/**
+ * The real initialization steps, in execution order. The splash screen renders these verbatim as
+ * its phase log, so the names are user-visible: keep them accurate to what each step does.
+ */
+const STARTUP_PHASES = ["OPEN_DATABASE", "INSTALL_RELEASE", "IMPORT_PROGRESS"] as const;
+
+/**
+ * On a warm start every step is a fast no-op, so without a floor the launch screen would flash past
+ * unread. Tests pass 0 to stay deterministic.
+ */
+const DEFAULT_MINIMUM_SPLASH_MS = 900;
+
+const PUBLISHED_LESSON_COUNT = bundledCourse.modules.reduce(
+  (total, module) => total + module.lessons.length,
+  0,
+);
+
 type DataState =
-  | { status: "loading" }
+  | { status: "loading"; completedPhases: number }
   | { status: "error"; error: Error }
   | {
       status: "ready";
@@ -41,22 +59,34 @@ export const DataContext = createContext<DataContextValue | null>(null);
  * UI and only mounts `children` once every step has succeeded; database initialization errors are
  * surfaced with a retry action rather than swallowed.
  */
-export function DataProvider({ children }: PropsWithChildren) {
-  const [state, setState] = useState<DataState>({ status: "loading" });
+export function DataProvider({
+  children,
+  minimumSplashMs = DEFAULT_MINIMUM_SPLASH_MS,
+}: PropsWithChildren<{ minimumSplashMs?: number }>) {
+  const [state, setState] = useState<DataState>({ status: "loading", completedPhases: 0 });
   const [attempt, setAttempt] = useState(0);
   const driverRef = useRef<DatabaseDriver | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setState({ status: "loading" });
+    setState({ status: "loading", completedPhases: 0 });
+    const startedAt = Date.now();
+
+    function completePhase(completedPhases: number) {
+      if (!cancelled) {
+        setState({ status: "loading", completedPhases });
+      }
+    }
 
     async function initialize() {
       // 1. Open and migrate SQLite.
       const driver = await openShadercraftDatabase();
       driverRef.current = driver;
+      completePhase(1);
 
       // 2. Parse and install the bundled release.
       await installBundledRelease(driver, bundledCourse);
+      completePhase(2);
 
       // 3. Create the SQLite repositories.
       const courseRepository = new SqliteCourseRepository(driver);
@@ -64,6 +94,14 @@ export function DataProvider({ children }: PropsWithChildren) {
 
       // 4. Run legacy progress import.
       await importLegacyProgress(AsyncStorage, progressRepository);
+      completePhase(3);
+
+      // Hold the launch screen long enough to be legible on a warm start, where every step above
+      // is a fast no-op. This delays only the handoff — all the real work is already done.
+      const remaining = minimumSplashMs - (Date.now() - startedAt);
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
 
       // 5. Expose repositories only after all steps succeed.
       if (!cancelled) {
@@ -93,7 +131,7 @@ export function DataProvider({ children }: PropsWithChildren) {
         void driver.close();
       }
     };
-  }, [attempt]);
+  }, [attempt, minimumSplashMs]);
 
   const retry = useCallback(() => {
     setAttempt((previousAttempt) => previousAttempt + 1);
@@ -103,39 +141,23 @@ export function DataProvider({ children }: PropsWithChildren) {
 
   return (
     <DataContext.Provider value={value}>
-      {state.status === "ready" ? children : <StartupStatus state={state} onRetry={retry} />}
+      {state.status === "ready" ? (
+        children
+      ) : (
+        <SplashScreen
+          error={state.status === "error" ? state.error : undefined}
+          lessonCount={PUBLISHED_LESSON_COUNT}
+          onRetry={retry}
+          phases={STARTUP_PHASES.map((id, index) => ({
+            done: state.status === "loading" && index < state.completedPhases,
+            id,
+          }))}
+          releaseId={bundledCourse.id}
+          schemaVersion={LATEST_SCHEMA_VERSION}
+          version={Constants.expoConfig?.version ?? "0.0.0"}
+        />
+      )}
     </DataContext.Provider>
-  );
-}
-
-function StartupStatus({
-  state,
-  onRetry,
-}: {
-  state: Extract<DataState, { status: "loading" | "error" }>;
-  onRetry: () => void;
-}) {
-  if (state.status === "error") {
-    return (
-      <View style={styles.startupContainer}>
-        <Text style={styles.errorTitle}>Could not open Shadercraft</Text>
-        <Text style={styles.startupText}>{state.error.message}</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onRetry}
-          style={styles.retryButton}
-        >
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.startupContainer}>
-      <ActivityIndicator color={Colors.accent} />
-      <Text style={styles.startupText}>Preparing Shadercraft…</Text>
-    </View>
   );
 }
 
@@ -146,34 +168,3 @@ export function useData(): DataContextValue {
   }
   return context;
 }
-
-const styles = StyleSheet.create({
-  errorTitle: {
-    color: Colors.coral,
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  retryButton: {
-    backgroundColor: Colors.accent,
-    borderRadius: Radius.md,
-    marginTop: Spacing.sm,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.sm,
-  },
-  retryButtonText: {
-    color: Colors.background,
-    fontWeight: "700",
-  },
-  startupContainer: {
-    alignItems: "center",
-    backgroundColor: Colors.background,
-    flex: 1,
-    gap: 12,
-    justifyContent: "center",
-    padding: 24,
-  },
-  startupText: {
-    color: Colors.textMuted,
-    textAlign: "center",
-  },
-});

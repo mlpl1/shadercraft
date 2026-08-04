@@ -87,7 +87,7 @@ describe("DataProvider", () => {
     });
 
     await render(
-      <DataProvider>
+      <DataProvider minimumSplashMs={0}>
         <Probe />
       </DataProvider>,
     );
@@ -106,13 +106,54 @@ describe("DataProvider", () => {
     expect(fakeDriver.close).not.toHaveBeenCalled();
   });
 
+  test("advances the splash phase log as each real init step completes", async () => {
+    const fakeDriver = createFakeDriver();
+
+    // Gate each step so the splash can be observed mid-initialization rather than only at the end.
+    let releaseInstall: () => void = () => undefined;
+    let legacyImport: () => void = () => undefined;
+
+    mockOpenShadercraftDatabase.mockResolvedValue(fakeDriver);
+    mockInstallBundledRelease.mockImplementation(
+      () => new Promise<void>((resolve) => (releaseInstall = resolve)),
+    );
+    mockImportLegacyProgress.mockImplementation(
+      () => new Promise<void>((resolve) => (legacyImport = resolve)),
+    );
+
+    await render(
+      <DataProvider minimumSplashMs={0}>
+        <Probe />
+      </DataProvider>,
+    );
+
+    // The database is open, so its phase reads OK while the release install is still running.
+    await waitFor(() => expect(screen.getByText("> OPEN_DATABASE  OK")).toBeTruthy());
+    expect(screen.getByText("> INSTALL_RELEASE  …")).toBeTruthy();
+    expect(screen.getByText("INSTALL_RELEASE")).toBeTruthy();
+
+    await act(async () => {
+      releaseInstall();
+    });
+
+    await waitFor(() => expect(screen.getByText("> INSTALL_RELEASE  OK")).toBeTruthy());
+    expect(screen.getByText("> IMPORT_PROGRESS  …")).toBeTruthy();
+
+    await act(async () => {
+      legacyImport();
+    });
+
+    // Once every step is done the splash hands off to the children.
+    await waitFor(() => expect(screen.getByTestId("ready")).toBeTruthy());
+  });
+
   test("surfaces an initialization error instead of swallowing it, closing the opened driver first", async () => {
     const fakeDriver = createFakeDriver();
     mockOpenShadercraftDatabase.mockResolvedValue(fakeDriver);
     mockInstallBundledRelease.mockRejectedValue(new Error("bad bundled release"));
 
     await render(
-      <DataProvider>
+      <DataProvider minimumSplashMs={0}>
         <Probe />
       </DataProvider>,
     );
@@ -140,7 +181,7 @@ describe("DataProvider", () => {
     mockImportLegacyProgress.mockResolvedValue(undefined);
 
     await render(
-      <DataProvider>
+      <DataProvider minimumSplashMs={0}>
         <Probe />
       </DataProvider>,
     );

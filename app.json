@@ -25,7 +25,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0D1919",
+          "backgroundColor": "#111B1C",
           "image": "./assets/images/scanline-s.png",
           "imageWidth": 180
         }
