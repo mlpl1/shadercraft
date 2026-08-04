@@ -113,7 +113,7 @@ published module with leftover `plannedTopics`.
 
 `scripts/content/build-course.ts` compiles the modules into a release with a fixed `id` (the
 bundled release is currently `bundled-2026-08-04`) and a SHA-256 `checksum` over the canonicalized
-content. `installBundledRelease` (`src/data/database/migrations.ts`) uses that pair to decide
+content. `installBundledRelease` (`src/data/database/seed.ts`) uses that pair to decide
 what to do on a device that already has SQLite data:
 
 - Unseen release id → install it.

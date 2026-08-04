@@ -81,6 +81,9 @@ the installed application.
 | `npm run web` | Start the web version |
 | `npm run content:build` | Regenerate `assets/course/bundled-course.json` from `content/module-*.json` |
 | `npm run content:check` | Fail if the tracked bundled course is stale |
+| `npm test` | Run the Jest suite |
+| `npm run test:watch` | Run the Jest suite in watch mode |
+| `npm run lint` | Lint the project with Expo's ESLint configuration |
 | `npx tsc --noEmit` | Run the TypeScript check without emitting files |
 
 ## Project structure
@@ -120,7 +123,6 @@ the schema validates, and the constraints around preview capabilities and releas
 ## Roadmap
 
 - Editable GLSL with debounced shader recompilation and compiler feedback
-- Automated tests and configured linting
 - Optional cloud progress synchronization
 
 ## Contributing
