@@ -9,8 +9,10 @@ import type { SyncResult } from "./progress-sync-engine";
  *   most recent attempt failed once and a retry is already scheduled.
  * - `"idle"` — authenticated and caught up; the last pass, if any, succeeded.
  * - `"syncing"` — a pass is currently running.
- * - `"attention"` — failure has repeated, or the session itself needs the learner's attention
- *   (expired/invalid). Never blocking: it is a signal to surface non-intrusively, not an error page.
+ * - `"attention"` — failure has repeated, the session itself needs the learner's attention
+ *   (expired/invalid), or a pass otherwise succeeded but left a mutation the server keeps refusing
+ *   ({@link SyncResult.blocked}). Never blocking: it is a signal to surface non-intrusively, not an
+ *   error page.
  */
 export type SyncStatus = "offline" | "idle" | "syncing" | "attention";
 
@@ -27,11 +29,23 @@ export type SyncSchedulerState = {
 };
 
 /**
+ * Which learner profile syncs, and which Supabase account it belongs to.
+ *
+ * Carried as one value rather than two arguments because the pair is meaningless apart: a pass scoped
+ * to a profile must send every request as that profile's own account, and the whole point of
+ * `ProgressRemote`'s per-request identity check is that the two can never drift.
+ */
+export type SyncSession = {
+  profileId: string;
+  supabaseUserId: string;
+};
+
+/**
  * The one operation the scheduler drives, narrowed from `ProgressSyncEngine` to `sync()` so a test
  * double never has to impersonate the rest of it.
  */
 export type SyncEngineLike = {
-  sync(profileId: string): Promise<SyncResult>;
+  sync(profileId: string, supabaseUserId: string): Promise<SyncResult>;
 };
 
 /**
@@ -78,10 +92,13 @@ const INITIAL_STATE: SyncSchedulerState = { status: "offline", pending: 0, error
  * those real triggers into these calls is `src/context/sync-context.tsx`'s job, not this class's.
  *
  * - {@link setSession} — the authenticated profile changed: signed in, switched accounts, a session
- *   refresh, or signed out. The only method that runs while anonymous, and even then only to *stop*:
+ *   refresh, or signed out. Carries the profile *and* the Supabase account it belongs to, since every
+ *   pass is scoped to both. The only method that runs while anonymous, and even then only to *stop*:
  *   passing `null` cancels any pending retry and leaves the scheduler idle without ever attempting.
  * - {@link notifyAppForeground} — the app returned to the foreground.
- * - {@link retry} — an explicit, learner-initiated retry.
+ * - {@link retry} — an explicit, learner-initiated retry. The only trigger that is *queued* rather
+ *   than dropped when a pass is already in flight, since a person asked for it and handing them the
+ *   pass already running would look like the control did nothing.
  * - {@link notifyLocalMutation} — a local write just queued a fresh outbox mutation.
  *
  * `setSession`, `notifyAppForeground`, and `retry` all attempt immediately, cancelling any pending
@@ -95,7 +112,7 @@ const INITIAL_STATE: SyncSchedulerState = { status: "offline", pending: 0, error
 export class SyncScheduler {
   private state: SyncSchedulerState = INITIAL_STATE;
   private readonly listeners = new Set<(state: SyncSchedulerState) => void>();
-  private profileId: string | null = null;
+  private session: SyncSession | null = null;
   /**
    * Bumped on every {@link setSession} call, so a pass started for a since-abandoned (or merely
    * superseded) session can never write its outcome into a different one's state — see the "ignores a
@@ -110,6 +127,14 @@ export class SyncScheduler {
    * `notifyAppForeground`, and `retry` are explicit enough to be allowed to try anyway.
    */
   private authPaused = false;
+  /**
+   * Set when {@link retry} arrived while a pass was already in flight. `ProgressSyncEngine.sync` hands
+   * a concurrent caller the pass already running rather than starting a second one, so without this
+   * the retry would resolve into that pass and do nothing — and the pass may well have read the outbox
+   * before whatever the learner is retrying for. Cleared by the follow-up itself, by any fresh
+   * attempt, and by a session change.
+   */
+  private followUpRequested = false;
   private cancelPendingRetry: (() => void) | null = null;
   private disposed = false;
 
@@ -129,20 +154,21 @@ export class SyncScheduler {
     };
   }
 
-  setSession(profileId: string | null): void {
+  setSession(session: SyncSession | null): void {
     if (this.disposed) return;
 
     this.cancelTimer();
     this.generation += 1;
-    this.profileId = profileId;
+    this.session = session;
     // Not observable by itself (a stale attempt's callback is already discarded by the generation
     // check above), but kept in step so `syncing` stays true only while *this* generation is really
     // mid-attempt — an invariant worth holding even where nothing currently depends on it.
     this.syncing = false;
     this.failureStreak = 0;
     this.authPaused = false;
+    this.followUpRequested = false;
 
-    if (profileId === null) {
+    if (session === null) {
       this.publish({ status: "offline", pending: 0, errorKind: null });
       return;
     }
@@ -151,51 +177,80 @@ export class SyncScheduler {
   }
 
   notifyAppForeground(): void {
-    if (this.disposed || this.profileId === null) return;
+    if (this.disposed || this.session === null) return;
     // `attempt()` itself cancels any pending backoff wait before it does anything else.
     this.attempt();
   }
 
   retry(): void {
-    if (this.disposed || this.profileId === null) return;
+    if (this.disposed || this.session === null) return;
+    if (this.syncing) {
+      // Cannot usefully start now (see {@link followUpRequested}); the earliest a *fresh* pass can
+      // read the outbox again is when this one settles, so ask for one then.
+      this.followUpRequested = true;
+      return;
+    }
     this.attempt();
   }
 
   notifyLocalMutation(): void {
-    if (this.disposed || this.profileId === null) return;
+    if (this.disposed || this.session === null) return;
     if (this.syncing || this.cancelPendingRetry || this.authPaused) return;
     this.attempt();
   }
 
   dispose(): void {
     this.disposed = true;
+    this.followUpRequested = false;
     this.cancelTimer();
     this.listeners.clear();
   }
 
   private attempt(): void {
-    const profileId = this.profileId;
-    if (profileId === null) return;
+    const session = this.session;
+    if (session === null) return;
 
     this.cancelTimer();
     this.syncing = true;
     this.authPaused = false;
+    // A pass starting now supersedes any queued follow-up: it will read the outbox afresh anyway.
+    this.followUpRequested = false;
     const generation = this.generation;
     this.publish({ ...this.state, status: "syncing" });
 
-    this.engine.sync(profileId).then(
+    this.engine.sync(session.profileId, session.supabaseUserId).then(
       (result) => {
         if (generation !== this.generation) return;
         this.syncing = false;
+        // The pass itself succeeded, so the backoff resets either way: whatever is wrong with a
+        // blocked mutation, this device is reaching the server and everything else went through.
         this.failureStreak = 0;
-        this.publish({ status: "idle", pending: result.pending, errorKind: null });
+        if (result.blocked > 0) {
+          // Reported as `rejected` because that is what a blocked mutation means to the learner: the
+          // server has considered it and will not take it, and no amount of waiting changes that.
+          this.publish({ status: "attention", pending: result.pending, errorKind: "rejected" });
+        } else {
+          this.publish({ status: "idle", pending: result.pending, errorKind: null });
+        }
+        this.runQueuedFollowUp();
       },
       (error: unknown) => {
         if (generation !== this.generation) return;
         this.syncing = false;
         this.handleFailure(error);
+        this.runQueuedFollowUp();
       },
     );
+  }
+
+  /**
+   * Runs the pass a {@link retry} asked for while the previous one was still in flight. Overrides
+   * whatever {@link handleFailure} just decided — a backoff wait or an auth pause — because that is
+   * exactly what an explicit retry is allowed to do.
+   */
+  private runQueuedFollowUp(): void {
+    if (!this.followUpRequested || this.disposed || this.session === null) return;
+    this.attempt();
   }
 
   private handleFailure(error: unknown): void {

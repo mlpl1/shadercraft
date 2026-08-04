@@ -40,6 +40,17 @@ type ProgressChangeRow = {
  * internals, and the compiler still catches drift if a call site here stops matching the real shape.
  */
 export type SupabaseProgressClientLike = {
+  auth: {
+    /**
+     * The session the next request will authenticate with. Read before every request so an account
+     * switch that happened after a sync pass began is seen rather than assumed away — see
+     * {@link SupabaseProgressRemote.assertSessionUser}.
+     */
+    getSession(): Promise<{
+      data: { session: { user: { id: string } } | null };
+      error: { message: string } | null;
+    }>;
+  };
   rpc(
     fn: "apply_progress_mutation",
     args: {
@@ -66,7 +77,11 @@ export type SupabaseProgressClientLike = {
   };
 };
 
-/** One page of `pullAfter`'s underlying request. Kept well under PostgREST's own row cap. */
+/**
+ * The most rows one `pullAfter` request will ask for, whatever the caller passes. Kept well under
+ * PostgREST's own row cap. Paginating past it is the *caller's* job — see
+ * {@link SupabaseProgressRemote.pullAfter}.
+ */
 export const PULL_PAGE_SIZE = 200;
 
 const PROGRESS_COLUMNS = "lesson_id, completed, revision, change_id";
@@ -161,7 +176,50 @@ function toProgressChange(row: ProgressChangeRow): RemoteProgressChange {
 export class SupabaseProgressRemote implements ProgressRemote {
   constructor(private readonly client: SupabaseProgressClientLike) {}
 
-  async applyMutation(mutation: ProgressMutation): Promise<RemoteMutationResult> {
+  /**
+   * Refuses to issue a request whose JWT would not belong to `expectedUserId`.
+   *
+   * The client is a process-wide singleton and attaches whatever session is current *at request
+   * time*; a sync pass, by contrast, is scoped to one local learner profile for its whole duration.
+   * Without this check, an account switch while a pass is in flight would send the first account's
+   * mutations under the second account's JWT: the server resolves `auth.uid()` to the new user,
+   * writes the rows there, reports `applied`, and the engine then deletes the outbox row of a
+   * profile whose action has silently moved to someone else's account. The following pull would
+   * mirror the damage inwards, writing the new account's rows — and its global `change_id`s — into
+   * the old profile.
+   *
+   * Reported as `auth` because that is exactly the reaction wanted: the engine leaves the outbox
+   * untouched (an expired session is never the mutation's fault) and the scheduler pauses instead of
+   * retrying a request that cannot succeed until the session and the profile agree again.
+   */
+  private async assertSessionUser(expectedUserId: string): Promise<void> {
+    const { data, error } = await this.client.auth.getSession();
+    if (error) {
+      throw new ProgressRemoteError(
+        "auth",
+        error.message || "Could not read the Supabase session this request would authenticate with.",
+      );
+    }
+
+    const sessionUserId = data.session?.user.id ?? null;
+    if (sessionUserId === expectedUserId) {
+      return;
+    }
+
+    throw new ProgressRemoteError(
+      "auth",
+      sessionUserId === null
+        ? "No Supabase session is active, so this request cannot be attributed to the learner profile it belongs to."
+        : "The active Supabase session belongs to a different account than the learner profile this request belongs to.",
+    );
+  }
+
+  async applyMutation(
+    mutation: ProgressMutation,
+    supabaseUserId: string,
+  ): Promise<RemoteMutationResult> {
+    await this.assertSessionUser(supabaseUserId);
+
     const { data, error, status } = await this.client.rpc("apply_progress_mutation", {
       p_mutation_id: mutation.mutationId,
       p_lesson_id: mutation.lessonId,
@@ -182,40 +240,42 @@ export class SupabaseProgressRemote implements ProgressRemote {
     return toMutationResult(data[0]);
   }
 
-  async pullAfter(changeId: number, limit: number): Promise<RemoteProgressChange[]> {
-    const results: RemoteProgressChange[] = [];
-    let cursor = changeId;
+  /**
+   * One request, one page — never more.
+   *
+   * Paginating is deliberately left to the engine, which already loops until a short batch and
+   * derives its next cursor with `Math.max` over the batch rather than trusting the response to
+   * arrive in ascending order. A second loop here would have to make the opposite bet (its own
+   * cursor could only come from the last row it received), and duplicating pagination with a
+   * *weaker* trust posture is worse than not duplicating it at all.
+   */
+  async pullAfter(
+    changeId: number,
+    limit: number,
+    supabaseUserId: string,
+  ): Promise<RemoteProgressChange[]> {
+    await this.assertSessionUser(supabaseUserId);
 
-    while (results.length < limit) {
-      const pageSize = Math.min(PULL_PAGE_SIZE, limit - results.length);
-      const { data, error, status } = await this.client
-        .from("lesson_progress")
-        .select(PROGRESS_COLUMNS)
-        .gt("change_id", cursor)
-        .order("change_id", { ascending: true })
-        .limit(pageSize);
+    const { data, error, status } = await this.client
+      .from("lesson_progress")
+      .select(PROGRESS_COLUMNS)
+      .gt("change_id", changeId)
+      .order("change_id", { ascending: true })
+      .limit(Math.min(PULL_PAGE_SIZE, limit));
 
-      if (error) throw classifyError(error, status);
+    if (error) throw classifyError(error, status);
 
-      if (!Array.isArray(data)) {
-        throw new ProgressRemoteError("rejected", "lesson_progress pull returned a non-array response.");
-      }
-
-      if (data.length === 0) break;
-
-      // Parsed one row at a time and appended immediately, rather than mapped and appended in bulk,
-      // so a malformed row later in the page throws before any row past it is trusted — but note the
-      // whole call still rejects, so nothing already pushed here is ever handed back to the caller
-      // either. The cursor this method's caller holds is only ever advanced from a value it returned.
-      for (const row of data) {
-        results.push(toProgressChange(row));
-      }
-
-      cursor = results[results.length - 1].changeId;
-
-      if (data.length < pageSize) break;
+    if (!Array.isArray(data)) {
+      throw new ProgressRemoteError("rejected", "lesson_progress pull returned a non-array response.");
     }
 
+    // Parsed one row at a time and appended immediately, rather than mapped and appended in bulk, so
+    // a malformed row later in the page throws before any row past it is trusted — but note the whole
+    // call still rejects, so nothing already pushed here is ever handed back to the caller either.
+    const results: RemoteProgressChange[] = [];
+    for (const row of data) {
+      results.push(toProgressChange(row));
+    }
     return results;
   }
 }

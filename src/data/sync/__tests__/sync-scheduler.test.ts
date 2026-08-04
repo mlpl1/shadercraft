@@ -5,10 +5,16 @@ import {
   type SyncEngineLike,
   type SyncSchedulerState,
   type SyncSchedulerTimer,
+  type SyncSession,
 } from "../sync-scheduler";
 
-function makeResult(pending = 0): SyncResult {
-  return { pushed: 0, pulled: 0, pending, lastCursor: 0 };
+/** The profile/account pair every test below syncs, unless it needs a second one. */
+const SESSION: SyncSession = { profileId: "profile-1", supabaseUserId: "user-1" };
+const SESSION_A: SyncSession = { profileId: "profile-a", supabaseUserId: "user-a" };
+const SESSION_B: SyncSession = { profileId: "profile-b", supabaseUserId: "user-b" };
+
+function makeResult(pending = 0, blocked = 0): SyncResult {
+  return { pushed: 0, pulled: 0, pending, blocked, lastCursor: 0 };
 }
 
 type ScheduledTimer = { delayMs: number; run: () => void; cancelled: boolean };
@@ -46,11 +52,14 @@ function createFakeClock() {
 /** A controllable stand-in for `ProgressSyncEngine.sync`: each call queues its own resolution. */
 function createFakeEngine() {
   const calls: string[] = [];
+  /** Every `(profileId, supabaseUserId)` pair the scheduler asked for, in order. */
+  const identities: SyncSession[] = [];
   const pending: { resolve: (result: SyncResult) => void; reject: (error: unknown) => void }[] = [];
 
   const engine: SyncEngineLike = {
-    sync(profileId: string) {
+    sync(profileId: string, supabaseUserId: string) {
       calls.push(profileId);
+      identities.push({ profileId, supabaseUserId });
       return new Promise<SyncResult>((resolve, reject) => {
         pending.push({ resolve, reject });
       });
@@ -60,6 +69,7 @@ function createFakeEngine() {
   return {
     engine,
     calls,
+    identities,
     resolveNext(result: SyncResult = makeResult()): void {
       const next = pending.shift();
       if (!next) throw new Error("No pending sync() call to resolve");
@@ -90,7 +100,7 @@ describe("SyncScheduler", () => {
     const { engine, calls } = createFakeEngine();
     const scheduler = new SyncScheduler(engine, createFakeClock().clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
 
     expect(calls).toEqual(["profile-1"]);
     expect(scheduler.getState().status).toBe("syncing");
@@ -115,7 +125,7 @@ describe("SyncScheduler", () => {
     const { engine, resolveNext } = createFakeEngine();
     const scheduler = new SyncScheduler(engine, createFakeClock().clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     resolveNext(makeResult(3));
     await flush();
 
@@ -126,7 +136,7 @@ describe("SyncScheduler", () => {
     const { engine, calls, resolveNext } = createFakeEngine();
     const scheduler = new SyncScheduler(engine, createFakeClock().clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     resolveNext(makeResult());
     await flush();
 
@@ -140,7 +150,7 @@ describe("SyncScheduler", () => {
     const { clock, scheduled } = createFakeClock();
     const scheduler = new SyncScheduler(engine, clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "network down"));
     await flush();
 
@@ -157,7 +167,7 @@ describe("SyncScheduler", () => {
     const { engine, calls, resolveNext } = createFakeEngine();
     const scheduler = new SyncScheduler(engine, createFakeClock().clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     resolveNext(makeResult());
     await flush();
 
@@ -170,7 +180,7 @@ describe("SyncScheduler", () => {
     const { engine, calls, rejectNext } = createFakeEngine();
     const scheduler = new SyncScheduler(engine, createFakeClock().clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "network down"));
     await flush();
 
@@ -184,7 +194,7 @@ describe("SyncScheduler", () => {
     const { engine, calls } = createFakeEngine();
     const scheduler = new SyncScheduler(engine, createFakeClock().clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     expect(scheduler.getState().status).toBe("syncing");
 
     scheduler.notifyLocalMutation();
@@ -197,7 +207,7 @@ describe("SyncScheduler", () => {
     const { clock, scheduled, fireLatest } = createFakeClock();
     const scheduler = new SyncScheduler(engine, clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     const delays: number[] = [];
     for (let attempt = 0; attempt < 7; attempt += 1) {
       rejectNext(new ProgressRemoteError("transport", `failure ${attempt}`));
@@ -214,7 +224,7 @@ describe("SyncScheduler", () => {
     const { clock, scheduled, fireLatest } = createFakeClock();
     const scheduler = new SyncScheduler(engine, clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "first failure"));
     await flush();
     expect(scheduled[0].delayMs).toBe(2000);
@@ -240,7 +250,7 @@ describe("SyncScheduler", () => {
     const { clock, fireLatest } = createFakeClock();
     const scheduler = new SyncScheduler(engine, clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "first failure"));
     await flush();
     expect(scheduler.getState().status).toBe("offline");
@@ -256,7 +266,7 @@ describe("SyncScheduler", () => {
     const { clock, scheduled } = createFakeClock();
     const scheduler = new SyncScheduler(engine, clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     resolveNext(makeResult(2));
     await flush();
 
@@ -277,7 +287,7 @@ describe("SyncScheduler", () => {
     const { clock, scheduled } = createFakeClock();
     const scheduler = new SyncScheduler(engine, clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "network down"));
     await flush();
     expect(scheduled).toHaveLength(1);
@@ -293,7 +303,7 @@ describe("SyncScheduler", () => {
     const { engine, calls, resolveNext } = createFakeEngine();
     const scheduler = new SyncScheduler(engine, createFakeClock().clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     expect(scheduler.getState().status).toBe("syncing");
 
     scheduler.setSession(null);
@@ -313,8 +323,8 @@ describe("SyncScheduler", () => {
     const scheduler = new SyncScheduler(engine, createFakeClock().clock);
     const states = collectStates(scheduler);
 
-    scheduler.setSession("profile-a");
-    scheduler.setSession("profile-b");
+    scheduler.setSession(SESSION_A);
+    scheduler.setSession(SESSION_B);
 
     expect(calls).toEqual(["profile-a", "profile-b"]);
 
@@ -336,7 +346,7 @@ describe("SyncScheduler", () => {
     const { clock, scheduled } = createFakeClock();
     const scheduler = new SyncScheduler(engine, clock);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     rejectNext(new ProgressRemoteError("transport", "network down"));
     await flush();
     expect(scheduled[0].cancelled).toBe(false);
@@ -344,11 +354,65 @@ describe("SyncScheduler", () => {
     scheduler.dispose();
     expect(scheduled[0].cancelled).toBe(true);
 
-    scheduler.setSession("profile-1");
+    scheduler.setSession(SESSION);
     scheduler.retry();
     scheduler.notifyAppForeground();
     scheduler.notifyLocalMutation();
 
     expect(calls).toEqual(["profile-1"]);
+  });
+
+  test("hands the engine the Supabase account the profile belongs to, not just the profile", async () => {
+    const { engine, identities, resolveNext } = createFakeEngine();
+    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+
+    scheduler.setSession(SESSION_A);
+    resolveNext(makeResult());
+    await flush();
+    scheduler.setSession(SESSION_B);
+
+    // The pair is what the remote checks each request against, so a scheduler that dropped or reused
+    // the account id would silently reopen the cross-account write it exists to prevent.
+    expect(identities).toEqual([SESSION_A, SESSION_B]);
+  });
+
+  test("asks for attention, not idle, when a pass leaves a mutation the server keeps refusing", async () => {
+    const { engine, resolveNext } = createFakeEngine();
+    const { clock, scheduled } = createFakeClock();
+    const scheduler = new SyncScheduler(engine, clock);
+
+    scheduler.setSession(SESSION);
+    resolveNext(makeResult(1, 1));
+    await flush();
+
+    expect(scheduler.getState()).toEqual({ status: "attention", pending: 1, errorKind: "rejected" });
+    // The pass itself succeeded, so there is nothing to back off from — retrying the same request on a
+    // timer is exactly what a permanent refusal does not need.
+    expect(scheduled).toEqual([]);
+  });
+
+  test("queues an explicit retry that arrives while a pass is in flight, rather than dropping it", async () => {
+    const { engine, calls, resolveNext } = createFakeEngine();
+    const scheduler = new SyncScheduler(engine, createFakeClock().clock);
+
+    scheduler.setSession(SESSION);
+    expect(calls).toEqual(["profile-1"]);
+
+    // `ProgressSyncEngine.sync` would hand this caller the pass already running, which may well have
+    // read the outbox before whatever the learner is retrying for.
+    scheduler.retry();
+    expect(calls).toEqual(["profile-1"]);
+
+    resolveNext(makeResult(1));
+    await flush();
+
+    expect(calls).toEqual(["profile-1", "profile-1"]);
+    expect(scheduler.getState().status).toBe("syncing");
+
+    // And exactly one follow-up: it must not turn into a pass per pass forever.
+    resolveNext(makeResult());
+    await flush();
+    expect(calls).toEqual(["profile-1", "profile-1"]);
+    expect(scheduler.getState().status).toBe("idle");
   });
 });

@@ -13,12 +13,17 @@ import {
   type RemoteMutationResult,
   type RemoteProgressChange,
 } from "../progress-remote";
-import { ProgressSyncEngine } from "../progress-sync-engine";
+import { MAX_MUTATION_ATTEMPTS, ProgressSyncEngine } from "../progress-sync-engine";
 
 const LESSON_A = "coordinate-systems-uv-space";
 const LESSON_B = "colors-fragment-output";
 const LESSON_C = "color-mixing";
 const LESSON_D = "uniforms-time";
+
+/** The account every device below belongs to unless a test says otherwise. */
+const USER_ONE = "supabase-user-one";
+/** A second account, so "this account's work must never land in another's" is representable at all. */
+const USER_TWO = "supabase-user-two";
 
 type ServerRow = { completed: boolean; revision: number; changeId: number };
 
@@ -26,38 +31,51 @@ type ServerRow = { completed: boolean; revision: number; changeId: number };
  * An in-memory stand-in for `apply_progress_mutation` and the `lesson_progress` table it writes.
  *
  * Deliberately models the *contract* verified by `supabase/tests/database/progress_sync.test.sql`
- * rather than the engine's expectations: one global change-id sequence, per-row revisions, a stale
- * base revision answered with the server's current state, and a replayed mutation id answered with
- * its recorded outcome. Only the current row per lesson is readable, exactly like the real pull query.
+ * rather than the engine's expectations: rows and mutation records are per user, revisions are per
+ * row, a stale base revision is answered with the server's current state, a replayed mutation id is
+ * answered with its recorded outcome, and a mutation id recorded under a *different* user is refused
+ * outright. `change_id` comes from one sequence shared by every user — which is precisely why one
+ * account's cursor values are poison to another's profile. Only the current row per lesson is
+ * readable, exactly like the real pull query.
  */
 class FakeProgressServer {
-  private readonly rows = new Map<string, ServerRow>();
-  private readonly accepted = new Map<string, ServerRow>();
+  private readonly rows = new Map<string, Map<string, ServerRow>>();
+  private readonly accepted = new Map<string, { userId: string; row: ServerRow }>();
   private nextChangeId = 1;
 
   /** Writes a row as if another device had done it, taking the next revision and change id. */
-  write(lessonId: string, completed: boolean): ServerRow {
+  write(lessonId: string, completed: boolean, userId: string = USER_ONE): ServerRow {
+    const userRows = this.rowsOf(userId);
     const row = {
       completed,
-      revision: (this.rows.get(lessonId)?.revision ?? 0) + 1,
+      revision: (userRows.get(lessonId)?.revision ?? 0) + 1,
       changeId: this.nextChangeId,
     };
     this.nextChangeId += 1;
-    this.rows.set(lessonId, row);
+    userRows.set(lessonId, row);
     return row;
   }
 
-  stateOf(lessonId: string): ServerRow | undefined {
-    return this.rows.get(lessonId);
+  stateOf(lessonId: string, userId: string = USER_ONE): ServerRow | undefined {
+    return this.rowsOf(userId).get(lessonId);
   }
 
-  apply(mutation: ProgressMutation): RemoteMutationResult {
+  /** Every lesson one account holds a row for, so a test can assert an account was left untouched. */
+  lessonsOf(userId: string): string[] {
+    return [...this.rowsOf(userId).keys()].sort();
+  }
+
+  apply(userId: string, mutation: ProgressMutation): RemoteMutationResult {
     const recorded = this.accepted.get(mutation.mutationId);
     if (recorded) {
-      return { kind: "applied", ...recorded };
+      if (recorded.userId !== userId) {
+        // The real function raises 42501 here; the adapter classifies that as permanent.
+        throw new ProgressRemoteError("rejected", "mutation_id belongs to another user");
+      }
+      return { kind: "applied", ...recorded.row };
     }
 
-    const current = this.rows.get(mutation.lessonId);
+    const current = this.rowsOf(userId).get(mutation.lessonId);
     const currentRevision = current?.revision ?? 0;
     if (currentRevision !== mutation.baseRevision) {
       return {
@@ -68,17 +86,26 @@ class FakeProgressServer {
       };
     }
 
-    const row = this.write(mutation.lessonId, mutation.completed);
-    this.accepted.set(mutation.mutationId, row);
+    const row = this.write(mutation.lessonId, mutation.completed, userId);
+    this.accepted.set(mutation.mutationId, { userId, row });
     return { kind: "applied", ...row };
   }
 
-  changesAfter(changeId: number, limit: number): RemoteProgressChange[] {
-    return [...this.rows.entries()]
+  changesAfter(userId: string, changeId: number, limit: number): RemoteProgressChange[] {
+    return [...this.rowsOf(userId).entries()]
       .map(([lessonId, row]) => ({ lessonId, ...row }))
       .filter((change) => change.changeId > changeId)
       .sort((left, right) => left.changeId - right.changeId)
       .slice(0, limit);
+  }
+
+  private rowsOf(userId: string): Map<string, ServerRow> {
+    let userRows = this.rows.get(userId);
+    if (!userRows) {
+      userRows = new Map();
+      this.rows.set(userId, userRows);
+    }
+    return userRows;
   }
 }
 
@@ -86,7 +113,17 @@ type RemoteCall =
   | { kind: "apply"; mutationId: string; lessonId: string; completed: boolean; baseRevision: number }
   | { kind: "pull"; changeId: number; limit: number };
 
-/** Wraps {@link FakeProgressServer} with a call log and scripted failures/interleavings. */
+/**
+ * Wraps {@link FakeProgressServer} with a call log and scripted failures/interleavings.
+ *
+ * Stands in for `SupabaseProgressRemote` over the app's *singleton* Supabase client, so it models the
+ * two properties that make an account switch dangerous: a request authenticates as whichever session
+ * is current at request time ({@link sessionUserId}, which a test can change mid-pass), and every
+ * request first checks that session against the account the caller says the request belongs to,
+ * failing `auth` on a mismatch. What reaches the server is deliberately keyed off `sessionUserId`, not
+ * off the account the caller passed, so deleting the check reproduces the real bug rather than hiding
+ * it.
+ */
 class FakeProgressRemote implements ProgressRemote {
   readonly calls: RemoteCall[] = [];
   /** Attempt counters, kept apart from `calls` so clearing the log cannot reschedule a failure. */
@@ -95,14 +132,22 @@ class FakeProgressRemote implements ProgressRemote {
   private readonly applyFailures: (ProgressRemoteError | undefined)[] = [];
   private readonly pullFailures: (ProgressRemoteError | undefined)[] = [];
 
-  /** Runs before each `applyMutation` reaches the server, to simulate another device racing this one. */
+  /**
+   * Runs just before each `applyMutation` request goes out, to simulate something happening between
+   * this device's requests — another device writing the same lesson, or the learner signing into a
+   * different account.
+   */
   beforeApply: ((mutation: ProgressMutation) => void) | null = null;
-  /** Runs before each `pullAfter` returns, to simulate a local action landing mid-sync. */
+  /** Runs just before each `pullAfter` request goes out, for the same reasons. */
   beforePull: (() => Promise<void>) | null = null;
   /** Returned instead of the server's own answer, to simulate a misbehaving server. */
   pullOverride: RemoteProgressChange[] | null = null;
 
-  constructor(readonly server: FakeProgressServer) {}
+  constructor(
+    readonly server: FakeProgressServer,
+    /** The account the client's current JWT belongs to. Reassign to simulate an account switch. */
+    public sessionUserId: string = USER_ONE,
+  ) {}
 
   failApplyOnAttempt(attempt: number, error: ProgressRemoteError): void {
     this.applyFailures[attempt - 1] = error;
@@ -124,7 +169,10 @@ class FakeProgressRemote implements ProgressRemote {
     );
   }
 
-  async applyMutation(mutation: ProgressMutation): Promise<RemoteMutationResult> {
+  async applyMutation(
+    mutation: ProgressMutation,
+    supabaseUserId: string,
+  ): Promise<RemoteMutationResult> {
     this.calls.push({
       kind: "apply",
       mutationId: mutation.mutationId,
@@ -140,10 +188,15 @@ class FakeProgressRemote implements ProgressRemote {
     }
 
     this.beforeApply?.(mutation);
-    return this.server.apply(mutation);
+    this.assertSessionUser(supabaseUserId);
+    return this.server.apply(this.sessionUserId, mutation);
   }
 
-  async pullAfter(changeId: number, limit: number): Promise<RemoteProgressChange[]> {
+  async pullAfter(
+    changeId: number,
+    limit: number,
+    supabaseUserId: string,
+  ): Promise<RemoteProgressChange[]> {
     this.calls.push({ kind: "pull", changeId, limit });
 
     this.pullAttempts += 1;
@@ -155,7 +208,18 @@ class FakeProgressRemote implements ProgressRemote {
     if (this.beforePull) {
       await this.beforePull();
     }
-    return this.pullOverride ?? this.server.changesAfter(changeId, limit);
+    this.assertSessionUser(supabaseUserId);
+    return this.pullOverride ?? this.server.changesAfter(this.sessionUserId, changeId, limit);
+  }
+
+  /** See {@link FakeProgressRemote} and `SupabaseProgressRemote.assertSessionUser`. */
+  private assertSessionUser(supabaseUserId: string): void {
+    if (this.sessionUserId !== supabaseUserId) {
+      throw new ProgressRemoteError(
+        "auth",
+        "The active Supabase session belongs to a different account than the learner profile this request belongs to.",
+      );
+    }
   }
 }
 
@@ -180,6 +244,8 @@ type Device = {
   engine: ProgressSyncEngine;
   remote: FakeProgressRemote;
   profileId: string;
+  /** The Supabase account this device's profile belongs to, handed to every `sync()` call. */
+  userId: string;
   /** How many write statements have gone through the repository's driver so far. */
   writeCount(): number;
   /** Builds another repository over the same database, optionally through a fault-injecting driver. */
@@ -236,7 +302,11 @@ function createFailingDriver(inner: DatabaseDriver, failOn: string): DatabaseDri
  * One simulated installation: its own SQLite database and sync engine, talking to a shared
  * {@link FakeProgressServer}. Timestamps increase per call so outbox creation order is unambiguous.
  */
-async function createDevice(server: FakeProgressServer, idPrefix = "a"): Promise<Device> {
+async function createDevice(
+  server: FakeProgressServer,
+  idPrefix = "a",
+  userId: string = USER_ONE,
+): Promise<Device> {
   const sqlite = new NodeSqliteDriver(":memory:");
   await migrateDatabase(sqlite);
   await installBundledRelease(sqlite, bundledCourse);
@@ -252,7 +322,7 @@ async function createDevice(server: FakeProgressServer, idPrefix = "a"): Promise
     });
 
   const repository = createRepository();
-  const remote = new FakeProgressRemote(server);
+  const remote = new FakeProgressRemote(server, userId);
   const engine = new ProgressSyncEngine(remote, repository);
   const profileId = await repository.getActiveProfileId();
 
@@ -262,6 +332,7 @@ async function createDevice(server: FakeProgressServer, idPrefix = "a"): Promise
     engine,
     remote,
     profileId,
+    userId,
     writeCount: counting.writeCount,
     createRepository,
     readProgress: () =>
@@ -273,7 +344,7 @@ async function createDevice(server: FakeProgressServer, idPrefix = "a"): Promise
     readOutbox: () =>
       sqlite.all<OutboxRow>(
         `SELECT mutation_id, entity_id, base_revision, attempts, last_error FROM sync_outbox
-         WHERE profile_id = ? ORDER BY created_at, mutation_id`,
+         WHERE profile_id = ? ORDER BY rowid`,
         [profileId],
       ),
     readCursor: async () =>
@@ -304,7 +375,7 @@ describe("ProgressSyncEngine push", () => {
     await device.repository.setLessonCompleted(LESSON_B, true);
     server.write(LESSON_C, true);
 
-    await device.engine.sync(device.profileId);
+    await device.engine.sync(device.profileId, device.userId);
 
     expect(
       device.remote.calls.map((call) => (call.kind === "apply" ? call.lessonId : "PULL")),
@@ -314,7 +385,7 @@ describe("ProgressSyncEngine push", () => {
   test("removes an outbox row only once the server has applied it, stamping the revision", async () => {
     await device.repository.setLessonCompleted(LESSON_A, true);
 
-    await device.engine.sync(device.profileId);
+    await device.engine.sync(device.profileId, device.userId);
 
     await expect(device.readOutbox()).resolves.toEqual([]);
     await expect(device.readProgress()).resolves.toEqual([
@@ -331,7 +402,7 @@ describe("ProgressSyncEngine push", () => {
     await device.repository.setLessonCompleted(LESSON_A, true);
     device.remote.failApplyOnAttempt(1, new ProgressRemoteError("transport", "network unreachable"));
 
-    await expect(device.engine.sync(device.profileId)).rejects.toMatchObject({ kind: "transport" });
+    await expect(device.engine.sync(device.profileId, device.userId)).rejects.toMatchObject({ kind: "transport" });
 
     await expect(device.readOutbox()).resolves.toEqual([
       {
@@ -351,7 +422,7 @@ describe("ProgressSyncEngine push", () => {
     await device.repository.setLessonCompleted(LESSON_A, true);
     device.remote.failApplyOnAttempt(1, new ProgressRemoteError("auth", "JWT expired"));
 
-    await expect(device.engine.sync(device.profileId)).rejects.toMatchObject({ kind: "auth" });
+    await expect(device.engine.sync(device.profileId, device.userId)).rejects.toMatchObject({ kind: "auth" });
 
     // An expired session is not the mutation's fault: nothing about the row may change, and above
     // all it must not be deleted.
@@ -372,7 +443,7 @@ describe("ProgressSyncEngine push", () => {
     await device.repository.setLessonCompleted(LESSON_B, true);
     device.remote.failApplyOnAttempt(2, new ProgressRemoteError("auth", "JWT expired"));
 
-    await expect(device.engine.sync(device.profileId)).rejects.toMatchObject({ kind: "auth" });
+    await expect(device.engine.sync(device.profileId, device.userId)).rejects.toMatchObject({ kind: "auth" });
 
     // The mutation the server did accept is settled; the one it never saw is untouched, not lost.
     await expect(device.readOutbox()).resolves.toEqual([
@@ -397,7 +468,7 @@ describe("ProgressSyncEngine push", () => {
     await device.repository.setLessonCompleted(LESSON_A, true);
     await device.repository.setLessonCompleted(LESSON_A, false);
 
-    await device.engine.sync(device.profileId);
+    await device.engine.sync(device.profileId, device.userId);
 
     expect(device.remote.applyCalls.map((call) => [call.completed, call.baseRevision])).toEqual([
       [true, 0],
@@ -413,7 +484,7 @@ describe("ProgressSyncEngine push", () => {
     await device.repository.setLessonCompleted(LESSON_A, true);
     await device.repository.setLessonCompleted(LESSON_A, false);
 
-    await device.engine.sync(device.profileId);
+    await device.engine.sync(device.profileId, device.userId);
 
     // The second action is rebased onto the revision the first one produced, so both are accepted
     // without a round trip through a conflict.
@@ -430,7 +501,7 @@ describe("ProgressSyncEngine push", () => {
     server.write(LESSON_A, true);
     await device.repository.setLessonCompleted(LESSON_A, false);
 
-    const result = await device.engine.sync(device.profileId);
+    const result = await device.engine.sync(device.profileId, device.userId);
 
     const [first, second] = device.remote.applyCalls;
     expect(device.remote.applyCalls).toHaveLength(2);
@@ -450,7 +521,7 @@ describe("ProgressSyncEngine push", () => {
       server.write(LESSON_A, false);
     };
 
-    const result = await device.engine.sync(device.profileId);
+    const result = await device.engine.sync(device.profileId, device.userId);
 
     expect(device.remote.applyCalls).toHaveLength(3);
     expect(result).toMatchObject({ pushed: 0, pulled: 0, pending: 1 });
@@ -481,7 +552,7 @@ describe("ProgressSyncEngine push", () => {
     };
     server.write(LESSON_D, true);
 
-    const result = await device.engine.sync(device.profileId);
+    const result = await device.engine.sync(device.profileId, device.userId);
 
     // LESSON_A is retried three times and never accepted; B and C are neither delayed nor blocked by
     // it.
@@ -509,13 +580,149 @@ describe("ProgressSyncEngine push", () => {
 
   test("does not resend an acknowledged mutation on the next run", async () => {
     await device.repository.setLessonCompleted(LESSON_A, true);
-    await device.engine.sync(device.profileId);
+    await device.engine.sync(device.profileId, device.userId);
     const callsAfterFirstRun = device.remote.applyCalls.length;
 
-    await device.engine.sync(device.profileId);
+    await device.engine.sync(device.profileId, device.userId);
 
     expect(callsAfterFirstRun).toBe(1);
     expect(device.remote.applyCalls).toHaveLength(1);
+  });
+
+  test("keeps pushing later mutations and still pulls when one is permanently rejected", async () => {
+    await device.repository.setLessonCompleted(LESSON_A, true);
+    await device.repository.setLessonCompleted(LESSON_B, true);
+    // An independent change from another device is waiting, so "did the pull run" is answerable from
+    // local state and not only from the call log.
+    server.write(LESSON_D, true);
+    device.remote.failApplyOnAttempt(
+      1,
+      new ProgressRemoteError("rejected", "permission denied for table lesson_progress"),
+    );
+
+    const result = await device.engine.sync(device.profileId, device.userId);
+
+    // The refusal belongs to LESSON_A alone: LESSON_B is still sent, and the pull still happens.
+    expect(device.remote.applyCalls.map((call) => call.lessonId)).toEqual([LESSON_A, LESSON_B]);
+    expect(result).toMatchObject({ pushed: 1, pending: 1, blocked: 0 });
+    await expect(device.readOutbox()).resolves.toEqual([
+      {
+        mutation_id: expect.any(String),
+        entity_id: LESSON_A,
+        base_revision: 0,
+        attempts: 1,
+        last_error: "permission denied for table lesson_progress",
+      },
+    ]);
+    expect(device.remote.pullCalls).toHaveLength(1);
+    // Without the pull, this device would never hear about another device's work again.
+    await expect(device.repository.isLessonCompleted(LESSON_D)).resolves.toBe(true);
+  });
+
+  test("surfaces a mutation the server keeps refusing as blocked once its attempts pass the bound", async () => {
+    await device.repository.setLessonCompleted(LESSON_A, true);
+    for (let attempt = 1; attempt <= MAX_MUTATION_ATTEMPTS; attempt += 1) {
+      device.remote.failApplyOnAttempt(
+        attempt,
+        new ProgressRemoteError("rejected", "permission denied for table lesson_progress"),
+      );
+    }
+
+    const blockedPerPass: number[] = [];
+    for (let pass = 0; pass < MAX_MUTATION_ATTEMPTS; pass += 1) {
+      blockedPerPass.push((await device.engine.sync(device.profileId, device.userId)).blocked);
+    }
+
+    // Silent patience until the durable attempt count reaches the bound, then a signal the UI can turn
+    // into a non-blocking "needs attention".
+    expect(blockedPerPass).toEqual(
+      Array.from({ length: MAX_MUTATION_ATTEMPTS }, (_unused, index) =>
+        index === MAX_MUTATION_ATTEMPTS - 1 ? 1 : 0,
+      ),
+    );
+    // Every pass still completed, pull included, and the learner's action is still queued — not
+    // dropped, and not stopping anything else.
+    expect(device.remote.pullCalls).toHaveLength(MAX_MUTATION_ATTEMPTS);
+    await expect(device.readOutbox()).resolves.toMatchObject([
+      { entity_id: LESSON_A, attempts: MAX_MUTATION_ATTEMPTS },
+    ]);
+    await expect(device.repository.isLessonCompleted(LESSON_A)).resolves.toBe(true);
+  });
+});
+
+describe("ProgressSyncEngine account identity", () => {
+  let server: FakeProgressServer;
+  let device: Device;
+
+  beforeEach(async () => {
+    server = new FakeProgressServer();
+    device = await createDevice(server);
+  });
+
+  afterEach(async () => {
+    await device.driver.close();
+  });
+
+  test("stops pushing rather than writing one account's mutations into another account's rows", async () => {
+    await device.repository.setLessonCompleted(LESSON_A, true);
+    await device.repository.setLessonCompleted(LESSON_B, true);
+    // The learner signs into a different account between this pass's two upload requests. The Supabase
+    // client is a singleton, so from here on every request would carry the *new* account's JWT while
+    // the pass keeps reading the old account's profile.
+    device.remote.beforeApply = (mutation) => {
+      if (mutation.lessonId === LESSON_B) {
+        device.remote.sessionUserId = USER_TWO;
+      }
+    };
+
+    await expect(device.engine.sync(device.profileId, device.userId)).rejects.toMatchObject({
+      kind: "auth",
+    });
+
+    // The first mutation was accepted while the session still matched, so it is settled. The second
+    // was refused before it left the device: the new account holds nothing that is not its own.
+    expect(server.lessonsOf(USER_ONE)).toEqual([LESSON_A]);
+    expect(server.lessonsOf(USER_TWO)).toEqual([]);
+    // Reported as `auth`, so the outbox row is kept untouched — attempts still 0 — and the next pass
+    // under the right session sends it.
+    await expect(device.readOutbox()).resolves.toEqual([
+      {
+        mutation_id: expect.any(String),
+        entity_id: LESSON_B,
+        base_revision: 0,
+        attempts: 0,
+        last_error: null,
+      },
+    ]);
+    expect(device.remote.pullCalls).toHaveLength(0);
+  });
+
+  test("stops pulling rather than writing another account's rows and cursor into this profile", async () => {
+    // The other account has changes of its own, and they hold change ids from the sequence *both*
+    // accounts share — which is what makes adopting them as this profile's cursor unrecoverable.
+    server.write(LESSON_C, true, USER_TWO);
+    server.write(LESSON_D, true, USER_TWO);
+    await device.repository.setLessonCompleted(LESSON_A, true);
+    // This time the switch lands after the push, as the pull request goes out.
+    device.remote.beforePull = async () => {
+      device.remote.sessionUserId = USER_TWO;
+    };
+
+    await expect(device.engine.sync(device.profileId, device.userId)).rejects.toMatchObject({
+      kind: "auth",
+    });
+
+    expect(server.lessonsOf(USER_ONE)).toEqual([LESSON_A]);
+    // The push went through under the right account; the pull applied nothing and moved no cursor.
+    await expect(device.readProgress()).resolves.toEqual([
+      {
+        lesson_id: LESSON_A,
+        completed: 1,
+        server_revision: 1,
+        server_updated_at: expect.any(String),
+      },
+    ]);
+    await expect(device.readCursor()).resolves.toBeNull();
   });
 });
 
@@ -536,7 +743,7 @@ describe("ProgressSyncEngine pull", () => {
     server.write(LESSON_A, true);
     const last = server.write(LESSON_B, false);
 
-    const result = await device.engine.sync(device.profileId);
+    const result = await device.engine.sync(device.profileId, device.userId);
 
     await expect(device.readProgress()).resolves.toEqual([
       { lesson_id: LESSON_B, completed: 0, server_revision: 1, server_updated_at: expect.any(String) },
@@ -553,7 +760,7 @@ describe("ProgressSyncEngine pull", () => {
     );
     const engine = new ProgressSyncEngine(device.remote, failingRepository);
 
-    await expect(engine.sync(device.profileId)).rejects.toThrow(/injected failure/);
+    await expect(engine.sync(device.profileId, device.userId)).rejects.toThrow(/injected failure/);
 
     // Progress rows and the cursor commit together or not at all.
     await expect(device.readProgress()).resolves.toEqual([]);
@@ -567,11 +774,11 @@ describe("ProgressSyncEngine pull", () => {
     const engine = new ProgressSyncEngine(device.remote, device.repository, { pullBatchSize: 2 });
     device.remote.failPullOnAttempt(2, new ProgressRemoteError("transport", "connection reset"));
 
-    await expect(engine.sync(device.profileId)).rejects.toMatchObject({ kind: "transport" });
+    await expect(engine.sync(device.profileId, device.userId)).rejects.toMatchObject({ kind: "transport" });
     await expect(device.readCursor()).resolves.toBe("2");
 
     device.remote.calls.length = 0;
-    const result = await engine.sync(device.profileId);
+    const result = await engine.sync(device.profileId, device.userId);
 
     expect(device.remote.pullCalls[0]).toEqual({ kind: "pull", changeId: 2, limit: 2 });
     expect(result.lastCursor).toBe(third.changeId);
@@ -586,7 +793,7 @@ describe("ProgressSyncEngine pull", () => {
       await device.repository.setLessonCompleted(LESSON_A, false);
     };
 
-    const result = await device.engine.sync(device.profileId);
+    const result = await device.engine.sync(device.profileId, device.userId);
 
     await expect(device.repository.isLessonCompleted(LESSON_A)).resolves.toBe(false);
     const [row] = await device.readProgress();
@@ -609,11 +816,11 @@ describe("ProgressSyncEngine pull", () => {
       await device.repository.setLessonCompleted(LESSON_A, false);
     };
 
-    const firstResult = await device.engine.sync(device.profileId);
+    const firstResult = await device.engine.sync(device.profileId, device.userId);
     expect(firstResult.pending).toBe(1);
     await expect(device.repository.isLessonCompleted(LESSON_A)).resolves.toBe(false);
 
-    const secondResult = await device.engine.sync(device.profileId);
+    const secondResult = await device.engine.sync(device.profileId, device.userId);
 
     expect(secondResult.pending).toBe(0);
     await expect(device.readOutbox()).resolves.toEqual([]);
@@ -632,7 +839,7 @@ describe("ProgressSyncEngine pull", () => {
       writesBeforePull = device.writeCount();
     };
 
-    await device.engine.sync(device.profileId);
+    await device.engine.sync(device.profileId, device.userId);
 
     // The pull sees its own accepted change come back. Applying it would produce identical column
     // values, so only the write count can tell the difference: the cursor upsert is the single
@@ -646,22 +853,23 @@ describe("ProgressSyncEngine pull", () => {
 
   test("refuses a batch that would not advance the cursor instead of pulling it forever", async () => {
     server.write(LESSON_A, true);
-    await device.engine.sync(device.profileId);
+    await device.engine.sync(device.profileId, device.userId);
     // A batch whose last change is at or before the cursor is a request to pull the same rows again.
     // Asserted on a short batch so a regression fails fast; at a full batch the same answer would
     // loop, and because these awaits only ever queue microtasks it would starve the event loop
     // outright rather than time out.
     device.remote.pullOverride = [{ lessonId: LESSON_A, completed: true, revision: 1, changeId: 1 }];
 
-    await expect(device.engine.sync(device.profileId)).rejects.toMatchObject({ kind: "rejected" });
+    await expect(device.engine.sync(device.profileId, device.userId)).rejects.toMatchObject({ kind: "rejected" });
     await expect(device.readCursor()).resolves.toBe("1");
   });
 
   test("reports zero counts and no cursor movement for an idle profile", async () => {
-    await expect(device.engine.sync(device.profileId)).resolves.toEqual({
+    await expect(device.engine.sync(device.profileId, device.userId)).resolves.toEqual({
       pushed: 0,
       pulled: 0,
       pending: 0,
+      blocked: 0,
       lastCursor: 0,
     });
     await expect(device.readCursor()).resolves.toBeNull();
@@ -685,14 +893,14 @@ describe("ProgressSyncEngine convergence", () => {
     const second = await createDevice(server, "b");
     try {
       await device.repository.setLessonCompleted(LESSON_A, true);
-      await device.engine.sync(device.profileId);
+      await device.engine.sync(device.profileId, device.userId);
 
       // The second device acted from a stale base (it had never seen the server row).
       await second.repository.setLessonCompleted(LESSON_A, true);
       await second.repository.setLessonCompleted(LESSON_A, false);
-      await second.engine.sync(second.profileId);
+      await second.engine.sync(second.profileId, second.userId);
 
-      await device.engine.sync(device.profileId);
+      await device.engine.sync(device.profileId, device.userId);
 
       expect(server.stateOf(LESSON_A)).toMatchObject({ completed: false });
       await expect(device.repository.isLessonCompleted(LESSON_A)).resolves.toBe(false);
@@ -708,10 +916,10 @@ describe("ProgressSyncEngine convergence", () => {
   test("a repeated sync of a settled profile writes nothing", async () => {
     await device.repository.setLessonCompleted(LESSON_A, true);
     server.write(LESSON_B, true);
-    await device.engine.sync(device.profileId);
+    await device.engine.sync(device.profileId, device.userId);
     const writesAfterFirstRun = device.writeCount();
 
-    const result = await device.engine.sync(device.profileId);
+    const result = await device.engine.sync(device.profileId, device.userId);
 
     expect(device.writeCount()).toBe(writesAfterFirstRun);
     expect(result).toMatchObject({ pushed: 0, pulled: 0, pending: 0 });
@@ -721,8 +929,8 @@ describe("ProgressSyncEngine convergence", () => {
     await device.repository.setLessonCompleted(LESSON_A, true);
 
     const [first, secondResult] = await Promise.all([
-      device.engine.sync(device.profileId),
-      device.engine.sync(device.profileId),
+      device.engine.sync(device.profileId, device.userId),
+      device.engine.sync(device.profileId, device.userId),
     ]);
 
     expect(first).toBe(secondResult);

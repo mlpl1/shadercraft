@@ -56,10 +56,31 @@ export class ProgressRemoteError extends Error {
  * Deliberately thin: this layer translates one request to one response and back. It performs no
  * local writes, holds no retry policy, and does not decide what to do about a conflict or an
  * error — that ordering, rebasing, and backoff logic belongs to the engine.
+ *
+ * Every method takes the Supabase user the caller believes it is acting as, and an implementation
+ * **must** confirm that against the identity its transport will really authenticate with *before*
+ * each request, failing with an `auth` error on any mismatch. A sync pass is scoped to a local
+ * learner profile and can outlive the session it started under: an account switch mid-pass would
+ * otherwise send one account's mutations under another's JWT, which the server would happily accept
+ * and attribute to the wrong user. Passing the identity per request rather than binding it at
+ * construction is what lets that check see a switch that happened after the pass began.
  */
 export interface ProgressRemote {
-  /** Sends one outbox mutation. Replaying an already-accepted `mutationId` returns its recorded outcome. */
-  applyMutation(mutation: ProgressMutation): Promise<RemoteMutationResult>;
-  /** Rows accepted after `changeId`, oldest first, capped at `limit`. Empty when the caller is caught up. */
-  pullAfter(changeId: number, limit: number): Promise<RemoteProgressChange[]>;
+  /**
+   * Sends one outbox mutation. Replaying an already-accepted `mutationId` returns its recorded
+   * outcome. `supabaseUserId` is the account the mutation belongs to — see {@link ProgressRemote}.
+   */
+  applyMutation(
+    mutation: ProgressMutation,
+    supabaseUserId: string,
+  ): Promise<RemoteMutationResult>;
+  /**
+   * Rows accepted after `changeId`, oldest first, capped at `limit`. Empty when the caller is caught
+   * up. `supabaseUserId` is the account whose rows are being read — see {@link ProgressRemote}.
+   */
+  pullAfter(
+    changeId: number,
+    limit: number,
+    supabaseUserId: string,
+  ): Promise<RemoteProgressChange[]>;
 }

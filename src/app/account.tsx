@@ -275,6 +275,8 @@ function AuthenticatedPanel({
           <Text style={styles.syncNotice}>{describeSyncErrorKind(sync.errorKind)}</Text>
         ) : null}
 
+        {/* Safe to tap at any time this is on screen: a retry that lands while a pass is already in
+            flight is queued as a follow-up pass rather than swallowed — see `SyncScheduler.retry`. */}
         {sync.status === "attention" ? (
           <Pressable
             accessibilityRole="button"

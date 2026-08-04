@@ -17,6 +17,13 @@ export type SyncResult = {
   pushed: number;
   pulled: number;
   pending: number;
+  /**
+   * How many of `pending` have failed often enough ({@link MAX_MUTATION_ATTEMPTS}) that they are no
+   * longer expected to succeed on their own. Nothing is blocked by them — the rest of the queue is
+   * pushed and the pull still runs — but a caller should surface a non-blocking attention state
+   * rather than reporting a clean idle sync while a mutation is stuck.
+   */
+  blocked: number;
   lastCursor: number;
 };
 
@@ -33,6 +40,19 @@ export const DEFAULT_PULL_BATCH_SIZE = 200;
  * the next pass.
  */
 export const MAX_CONFLICTS_PER_MUTATION = 3;
+
+/**
+ * How many recorded failures ({@link ProgressMutation.attempts}, which is durable) make one mutation
+ * worth the learner's attention rather than silent patience.
+ *
+ * Reaching it does *not* drop the mutation or stop the queue: the row is kept and still offered to the
+ * server once per pass, because the causes of a permanent rejection include ones a later deployment
+ * fixes (a `lesson_progress` migration that is not live yet answers every push with a PostgREST 404)
+ * and abandoning the row outright would strand the learner's action with no way back. What the bound
+ * changes is only the reported state: {@link SyncResult.blocked} becomes non-zero, and the scheduler
+ * surfaces `attention` instead of a clean `idle`.
+ */
+export const MAX_MUTATION_ATTEMPTS = 5;
 
 export type ProgressSyncEngineOptions = {
   /** Overridable mainly so tests can exercise multi-batch pulls; defaults to {@link DEFAULT_PULL_BATCH_SIZE}. */
@@ -69,10 +89,13 @@ type PullOutcome = {
  * 3. **Pull from a durable cursor.** Changes newer than the stored cursor are applied one batch at a
  *    time, each batch committing its rows and its new cursor together.
  *
- * Two rules hold across all of it. An outbox row is deleted only once the server has acknowledged
- * it, because progress and outbox rows are not reconstructible from anything else. And a failure
- * from the remote propagates to the caller unchanged, so the scheduler above can tell an expired
- * session (pause) from a transport failure (retry) — the outbox survives either way.
+ * Three rules hold across all of it. An outbox row is deleted only once the server has acknowledged
+ * it, because progress and outbox rows are not reconstructible from anything else. A `transport` or
+ * `auth` failure from the remote propagates to the caller unchanged, so the scheduler above can tell
+ * an expired session (pause) from a transport failure (retry) — the outbox survives either way. And
+ * every pass is bound to *both* the local profile and the Supabase account that profile belongs to:
+ * the account travels with every request so a session that changes mid-pass is refused rather than
+ * silently written to (see {@link ProgressRemote}).
  */
 export class ProgressSyncEngine {
   private readonly pullBatchSize: number;
@@ -87,8 +110,14 @@ export class ProgressSyncEngine {
   }
 
   /**
-   * Runs one pass for `profileId`. Concurrent callers get the pass already in flight rather than a
-   * second one, since two passes would send the same mutations and race over the same cursor.
+   * Runs one pass for `profileId`, acting as the Supabase account `supabaseUserId` — the account that
+   * profile is bound to. Every request the pass makes carries that identity, so the remote can refuse
+   * to send it under a session that has since become someone else's; nothing here assumes the session
+   * that started the pass is still current when a later request goes out.
+   *
+   * Concurrent callers get the pass already in flight rather than a second one, since two passes would
+   * send the same mutations and race over the same cursor. Keyed by profile alone, because a profile
+   * belongs to exactly one Supabase account for its whole life.
    *
    * Not `async`, so the in-flight entry is registered before the caller can interleave.
    *
@@ -98,22 +127,22 @@ export class ProgressSyncEngine {
    * engine alongside the foreground one — would each believe they had exclusivity and could both
    * push at once.
    */
-  sync(profileId: string): Promise<SyncResult> {
+  sync(profileId: string, supabaseUserId: string): Promise<SyncResult> {
     const inFlight = this.runs.get(profileId);
     if (inFlight) {
       return inFlight;
     }
 
-    const run = this.runOnce(profileId).finally(() => {
+    const run = this.runOnce(profileId, supabaseUserId).finally(() => {
       this.runs.delete(profileId);
     });
     this.runs.set(profileId, run);
     return run;
   }
 
-  private async runOnce(profileId: string): Promise<SyncResult> {
-    const pushed = await this.push(profileId);
-    const pull = await this.pull(profileId);
+  private async runOnce(profileId: string, supabaseUserId: string): Promise<SyncResult> {
+    const pushed = await this.push(profileId, supabaseUserId);
+    const pull = await this.pull(profileId, supabaseUserId);
 
     // `applyRemoteChanges` stamps a successful pass's timestamp itself, but only runs when a batch is
     // non-empty. A pass that pushed something yet received nothing to pull (an idle server) would
@@ -130,19 +159,33 @@ export class ProgressSyncEngine {
       pushed,
       pulled: pull.pulled,
       pending: pending.length,
+      // Read from the durable attempt counter rather than tracked across the pass, so a mutation that
+      // has been failing since long before this pass — across relaunches included — is still reported.
+      blocked: pending.filter((mutation) => mutation.attempts >= MAX_MUTATION_ATTEMPTS).length,
       lastCursor: pull.cursor,
     };
   }
 
   /**
-   * Sends every queued mutation, in creation order, and returns how many were accepted. A mutation
-   * that exhausts {@link MAX_CONFLICTS_PER_MUTATION} is abandoned *on its own* — the loop moves on to
-   * the next queued mutation rather than returning, because lessons are independent: another device
-   * fighting over one lesson says nothing about lessons nobody else is touching, and must not stall
-   * their uploads or the pull that follows. The abandoned row is kept, rebased onto the newest
-   * revision the server reported, and picked up again by the next pass.
+   * Sends every queued mutation, in creation order, and returns how many were accepted.
+   *
+   * Two per-mutation dead ends are handled the same way, and for the same reason: lessons are
+   * independent, so one lesson going nowhere must not stall the uploads of lessons nobody else is
+   * touching, nor the pull that follows — a device that stopped pulling would stop hearing from every
+   * other device the learner owns.
+   *
+   * - A mutation that exhausts {@link MAX_CONFLICTS_PER_MUTATION} is abandoned on its own. The row is
+   *   kept, rebased onto the newest revision the server reported, and picked up by the next pass.
+   * - A `rejected` failure — the server considered the request and permanently refused it (a `42501`,
+   *   a constraint refusal, a PostgREST 404 from an undeployed migration, a response that broke the
+   *   protocol) — records the failure against the row and moves on. It is deliberately not raised to
+   *   the caller, because "this one mutation cannot be sent" is not "this device cannot sync": raising
+   *   it left every later mutation unsent and skipped the pull entirely, on every pass, forever.
+   *
+   * `transport` and `auth` still abort the whole pass, which is right: neither says anything about the
+   * mutation, and both mean the *next* request would fail in exactly the same way.
    */
-  private async push(profileId: string): Promise<number> {
+  private async push(profileId: string, supabaseUserId: string): Promise<number> {
     const mutations = await this.repository.getPendingMutations(profileId);
     /** The newest revision this pass has had accepted per lesson, i.e. the next mutation's base. */
     const acceptedRevisions = new Map<string, number>();
@@ -156,7 +199,21 @@ export class ProgressSyncEngine {
 
       let conflicts = 0;
       for (;;) {
-        const result = await this.applyMutation(profileId, { ...mutation, baseRevision });
+        let result: RemoteMutationResult;
+        try {
+          result = await this.applyMutation(
+            profileId,
+            { ...mutation, baseRevision },
+            supabaseUserId,
+          );
+        } catch (error) {
+          if (error instanceof ProgressRemoteError && error.kind === "rejected") {
+            // `applyMutation` has already counted the failure against the row, which is what
+            // eventually surfaces it through `SyncResult.blocked`.
+            break;
+          }
+          throw error;
+        }
 
         if (result.kind === "applied") {
           await this.repository.acknowledgeMutation(profileId, mutation.mutationId, result);
@@ -194,9 +251,10 @@ export class ProgressSyncEngine {
   private async applyMutation(
     profileId: string,
     mutation: ProgressMutation,
+    supabaseUserId: string,
   ): Promise<RemoteMutationResult> {
     try {
-      return await this.remote.applyMutation(mutation);
+      return await this.remote.applyMutation(mutation, supabaseUserId);
     } catch (error) {
       if (!(error instanceof ProgressRemoteError) || error.kind !== "auth") {
         await this.repository.recordMutationFailure(
@@ -209,13 +267,13 @@ export class ProgressSyncEngine {
     }
   }
 
-  private async pull(profileId: string): Promise<PullOutcome> {
+  private async pull(profileId: string, supabaseUserId: string): Promise<PullOutcome> {
     let cursor = await this.repository.getPullCursor(profileId);
     let pulled = 0;
     let received = 0;
 
     for (;;) {
-      const changes = await this.remote.pullAfter(cursor, this.pullBatchSize);
+      const changes = await this.remote.pullAfter(cursor, this.pullBatchSize, supabaseUserId);
       if (changes.length === 0) {
         break;
       }

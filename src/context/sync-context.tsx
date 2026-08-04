@@ -82,9 +82,18 @@ export function SyncProvider({ children }: PropsWithChildren) {
 
   // Drives the authenticated profile into the scheduler. `auth.session` is the *activated* session —
   // see `auth-context.tsx` — so this never fires ahead of the profile switch it depends on.
+  //
+  // The Supabase user id travels with the profile id, and both come from the same activated session,
+  // so the pair can never be mismatched here. That pair is what every request the pass makes is
+  // checked against, which is how an account switch mid-pass stops rather than writing one account's
+  // work into another's (see `ProgressRemote`).
   useEffect(() => {
     if (!enabled) return;
-    schedulerRef.current?.setSession(auth.session ? auth.profileId : null);
+    const profileId = auth.profileId;
+    const supabaseUserId = auth.session?.userId;
+    schedulerRef.current?.setSession(
+      profileId && supabaseUserId ? { profileId, supabaseUserId } : null,
+    );
   }, [enabled, auth.session, auth.profileId]);
 
   // The one place `AppState` is read: turned into a single scheduler call, never imported by the

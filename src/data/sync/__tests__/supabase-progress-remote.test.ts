@@ -6,6 +6,9 @@ import {
   type SupabaseProgressClientLike,
 } from "../supabase-progress-remote";
 
+/** The account every mutation and pull below belongs to. */
+const USER_ID = "11111111-2222-3333-4444-555555555555";
+
 const MUTATION: ProgressMutation = {
   profileId: "profile-1",
   mutationId: "11111111-1111-1111-1111-111111111111",
@@ -47,11 +50,18 @@ function createChainMock() {
 function createClientMock() {
   const rpc = jest.fn();
   const chain = createChainMock();
+  // The session the client would authenticate the next request with. Defaults to the account every
+  // call below claims to be acting as, so only the identity tests have to think about it.
+  const getSession = jest.fn().mockResolvedValue({
+    data: { session: { user: { id: USER_ID } } },
+    error: null,
+  });
   const client: SupabaseProgressClientLike = {
+    auth: { getSession },
     rpc,
     from: chain.from as unknown as SupabaseProgressClientLike["from"],
   };
-  return { client, rpc, ...chain };
+  return { client, rpc, getSession, ...chain };
 }
 
 describe("SupabaseProgressRemote.applyMutation", () => {
@@ -60,7 +70,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     rpc.mockResolvedValue(rpcRow());
     const remote = new SupabaseProgressRemote(client);
 
-    await remote.applyMutation(MUTATION);
+    await remote.applyMutation(MUTATION, USER_ID);
 
     expect(rpc).toHaveBeenCalledWith("apply_progress_mutation", {
       p_mutation_id: MUTATION.mutationId,
@@ -75,7 +85,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     rpc.mockResolvedValue(rpcRow({ applied: true, conflict: false, completed: true, revision: 1, change_id: 42 }));
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.applyMutation(MUTATION)).resolves.toEqual({
+    await expect(remote.applyMutation(MUTATION, USER_ID)).resolves.toEqual({
       kind: "applied",
       completed: true,
       revision: 1,
@@ -91,7 +101,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     const remote = new SupabaseProgressRemote(client);
 
     // A conflict is a normal outcome, not an error: it must resolve, not reject.
-    await expect(remote.applyMutation(MUTATION)).resolves.toEqual({
+    await expect(remote.applyMutation(MUTATION, USER_ID)).resolves.toEqual({
       kind: "conflict",
       completed: false,
       revision: 5,
@@ -104,8 +114,8 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     rpc.mockResolvedValue(rpcRow({ applied: true, conflict: false, completed: true, revision: 1, change_id: 7 }));
     const remote = new SupabaseProgressRemote(client);
 
-    const first = await remote.applyMutation(MUTATION);
-    const second = await remote.applyMutation(MUTATION);
+    const first = await remote.applyMutation(MUTATION, USER_ID);
+    const second = await remote.applyMutation(MUTATION, USER_ID);
 
     expect(first).toEqual(second);
     expect(rpc).toHaveBeenCalledTimes(2);
@@ -120,7 +130,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     });
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.applyMutation(MUTATION)).rejects.toMatchObject({
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({
       kind: "transport",
     } satisfies Partial<ProgressRemoteError>);
   });
@@ -134,7 +144,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     });
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.applyMutation(MUTATION)).rejects.toMatchObject({ kind: "transport" });
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({ kind: "transport" });
   });
 
   it("classifies an expired session as an authentication error", async () => {
@@ -146,7 +156,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     });
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.applyMutation(MUTATION)).rejects.toMatchObject({ kind: "auth" });
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({ kind: "auth" });
   });
 
   it("classifies a permission rejection as permanent, not transport or auth", async () => {
@@ -158,7 +168,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     });
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.applyMutation(MUTATION)).rejects.toMatchObject({ kind: "rejected" });
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({ kind: "rejected" });
   });
 
   it("rejects a response with zero rows as a protocol error", async () => {
@@ -166,7 +176,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     rpc.mockResolvedValue({ data: [], error: null, status: 200 });
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.applyMutation(MUTATION)).rejects.toMatchObject({ kind: "rejected" });
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({ kind: "rejected" });
   });
 
   it("rejects a response with more than one row as a protocol error", async () => {
@@ -176,7 +186,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     rpc.mockResolvedValue(twoRows);
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.applyMutation(MUTATION)).rejects.toMatchObject({ kind: "rejected" });
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({ kind: "rejected" });
   });
 
   it("rejects a non-integer revision as a protocol error", async () => {
@@ -184,7 +194,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     rpc.mockResolvedValue(rpcRow({ revision: 1.5 }));
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.applyMutation(MUTATION)).rejects.toMatchObject({ kind: "rejected" });
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({ kind: "rejected" });
   });
 
   it("rejects a row reporting both applied and conflict as a protocol error", async () => {
@@ -192,7 +202,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     rpc.mockResolvedValue(rpcRow({ applied: true, conflict: true }));
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.applyMutation(MUTATION)).rejects.toMatchObject({ kind: "rejected" });
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({ kind: "rejected" });
   });
 
   it("rejects a row reporting neither applied nor conflict as a protocol error", async () => {
@@ -200,7 +210,7 @@ describe("SupabaseProgressRemote.applyMutation", () => {
     rpc.mockResolvedValue(rpcRow({ applied: false, conflict: false }));
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.applyMutation(MUTATION)).rejects.toMatchObject({ kind: "rejected" });
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({ kind: "rejected" });
   });
 });
 
@@ -221,7 +231,7 @@ describe("SupabaseProgressRemote.pullAfter", () => {
     limit.mockResolvedValue({ data: [], error: null, status: 200 });
     const remote = new SupabaseProgressRemote(client);
 
-    await remote.pullAfter(41, 10);
+    await remote.pullAfter(41, 10, USER_ID);
 
     expect(from).toHaveBeenCalledWith("lesson_progress");
     expect(select).toHaveBeenCalledWith("lesson_id, completed, revision, change_id");
@@ -235,7 +245,7 @@ describe("SupabaseProgressRemote.pullAfter", () => {
     limit.mockResolvedValue({ data: [], error: null, status: 200 });
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.pullAfter(0, 200)).resolves.toEqual([]);
+    await expect(remote.pullAfter(0, 200, USER_ID)).resolves.toEqual([]);
   });
 
   it("maps a single page of rows to remote progress changes", async () => {
@@ -250,7 +260,7 @@ describe("SupabaseProgressRemote.pullAfter", () => {
     });
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.pullAfter(0, 200)).resolves.toEqual([
+    await expect(remote.pullAfter(0, 200, USER_ID)).resolves.toEqual([
       { lessonId: "a", completed: true, revision: 1, changeId: 1 },
       { lessonId: "b", completed: false, revision: 3, changeId: 2 },
     ]);
@@ -261,49 +271,28 @@ describe("SupabaseProgressRemote.pullAfter", () => {
     limit.mockResolvedValue({ data: [], error: null, status: 200 });
     const remote = new SupabaseProgressRemote(client);
 
-    await remote.pullAfter(0, PULL_PAGE_SIZE * 5);
+    await remote.pullAfter(0, PULL_PAGE_SIZE * 5, USER_ID);
 
     expect(limit).toHaveBeenCalledWith(PULL_PAGE_SIZE);
   });
 
-  it("fetches a second page, cursoring from the last row of the first, for a multi-page pull", async () => {
+  it("issues exactly one request per call, leaving pagination to the caller", async () => {
     const { client, gt, limit } = createClientMock();
-    const firstPage = Array.from({ length: PULL_PAGE_SIZE }, (_, i) =>
+    const fullPage = Array.from({ length: PULL_PAGE_SIZE }, (_, i) =>
       changeRow({ lesson_id: `lesson-${i}`, change_id: i + 1 }),
     );
-    const secondPage = [changeRow({ lesson_id: "last", change_id: PULL_PAGE_SIZE + 1 })];
-    limit
-      .mockResolvedValueOnce({ data: firstPage, error: null, status: 200 })
-      .mockResolvedValueOnce({ data: secondPage, error: null, status: 200 });
+    limit.mockResolvedValue({ data: fullPage, error: null, status: 200 });
     const remote = new SupabaseProgressRemote(client);
 
-    const result = await remote.pullAfter(0, PULL_PAGE_SIZE + 1);
+    // A full page is exactly the case a paging loop here would follow up on. It must not: the engine
+    // owns pagination, and derives its next cursor with `Math.max` over the batch rather than trusting
+    // the response's order the way a loop here would have to.
+    const result = await remote.pullAfter(0, PULL_PAGE_SIZE * 3, USER_ID);
 
-    expect(result).toHaveLength(PULL_PAGE_SIZE + 1);
-    expect(result[result.length - 1]).toEqual({
-      lessonId: "last",
-      completed: true,
-      revision: 1,
-      changeId: PULL_PAGE_SIZE + 1,
-    });
-    expect(limit).toHaveBeenCalledTimes(2);
-    expect(gt).toHaveBeenNthCalledWith(1, "change_id", 0);
-    expect(gt).toHaveBeenNthCalledWith(2, "change_id", PULL_PAGE_SIZE);
-  });
-
-  it("stops paging once a page comes back shorter than requested", async () => {
-    const { client, limit } = createClientMock();
-    limit.mockResolvedValueOnce({
-      data: [changeRow({ change_id: 1 })],
-      error: null,
-      status: 200,
-    });
-    const remote = new SupabaseProgressRemote(client);
-
-    await remote.pullAfter(0, PULL_PAGE_SIZE * 3);
-
-    // A page shorter than requested means the server is caught up; a second request would be wasted.
+    expect(result).toHaveLength(PULL_PAGE_SIZE);
     expect(limit).toHaveBeenCalledTimes(1);
+    expect(gt).toHaveBeenCalledTimes(1);
+    expect(gt).toHaveBeenCalledWith("change_id", 0);
   });
 
   it("rejects the whole pull, advancing nothing, when a row is missing its lesson id", async () => {
@@ -315,7 +304,7 @@ describe("SupabaseProgressRemote.pullAfter", () => {
     });
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.pullAfter(0, 200)).rejects.toMatchObject({ kind: "rejected" });
+    await expect(remote.pullAfter(0, 200, USER_ID)).rejects.toMatchObject({ kind: "rejected" });
   });
 
   it("rejects a page containing a non-integer revision", async () => {
@@ -323,7 +312,7 @@ describe("SupabaseProgressRemote.pullAfter", () => {
     limit.mockResolvedValue({ data: [changeRow({ revision: 2.2 })], error: null, status: 200 });
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.pullAfter(0, 200)).rejects.toMatchObject({ kind: "rejected" });
+    await expect(remote.pullAfter(0, 200, USER_ID)).rejects.toMatchObject({ kind: "rejected" });
   });
 
   it("classifies a network failure during a pull as a retryable transport error", async () => {
@@ -331,7 +320,7 @@ describe("SupabaseProgressRemote.pullAfter", () => {
     limit.mockResolvedValue({ data: null, error: { message: "network error", code: "" }, status: 0 });
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.pullAfter(0, 200)).rejects.toMatchObject({ kind: "transport" });
+    await expect(remote.pullAfter(0, 200, USER_ID)).rejects.toMatchObject({ kind: "transport" });
   });
 
   it("classifies an expired session during a pull as an authentication error", async () => {
@@ -343,6 +332,73 @@ describe("SupabaseProgressRemote.pullAfter", () => {
     });
     const remote = new SupabaseProgressRemote(client);
 
-    await expect(remote.pullAfter(0, 200)).rejects.toMatchObject({ kind: "auth" });
+    await expect(remote.pullAfter(0, 200, USER_ID)).rejects.toMatchObject({ kind: "auth" });
+  });
+});
+
+/**
+ * The check that keeps a sync pass scoped to the account it started for. The client is a singleton
+ * carrying whichever session is current at request time, so without this a pass whose learner switched
+ * accounts mid-flight would keep sending — and the server would accept every request as the *new*
+ * account's own work.
+ */
+describe("SupabaseProgressRemote session identity", () => {
+  it("refuses to send a mutation once the client's session belongs to another account", async () => {
+    const { client, rpc, getSession } = createClientMock();
+    rpc.mockResolvedValue(rpcRow());
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "99999999-9999-9999-9999-999999999999" } } },
+      error: null,
+    });
+    const remote = new SupabaseProgressRemote(client);
+
+    // `auth`, not `rejected`: the engine leaves the outbox untouched and the scheduler pauses, so the
+    // mutation is still there to send once the session and the profile agree again.
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({ kind: "auth" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses to pull once the client's session belongs to another account", async () => {
+    const { client, from, getSession } = createClientMock();
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "99999999-9999-9999-9999-999999999999" } } },
+      error: null,
+    });
+    const remote = new SupabaseProgressRemote(client);
+
+    await expect(remote.pullAfter(0, 200, USER_ID)).rejects.toMatchObject({ kind: "auth" });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("refuses to send anything when no session is active at all", async () => {
+    const { client, rpc, getSession } = createClientMock();
+    getSession.mockResolvedValue({ data: { session: null }, error: null });
+    const remote = new SupabaseProgressRemote(client);
+
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({ kind: "auth" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("treats a failure to read the session as an auth failure rather than proceeding", async () => {
+    const { client, rpc, getSession } = createClientMock();
+    getSession.mockResolvedValue({
+      data: { session: null },
+      error: { message: "could not read the stored session" },
+    });
+    const remote = new SupabaseProgressRemote(client);
+
+    await expect(remote.applyMutation(MUTATION, USER_ID)).rejects.toMatchObject({ kind: "auth" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("sends normally when the session matches the account the request belongs to", async () => {
+    const { client, rpc } = createClientMock();
+    rpc.mockResolvedValue(rpcRow());
+    const remote = new SupabaseProgressRemote(client);
+
+    await expect(remote.applyMutation(MUTATION, USER_ID)).resolves.toMatchObject({
+      kind: "applied",
+    });
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });
