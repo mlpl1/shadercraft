@@ -2,11 +2,13 @@ import * as Crypto from "expo-crypto";
 
 import type { CourseRepository } from "../course/course-repository";
 import type { DatabaseDriver } from "../database/driver";
+import type { AppliedProgressResult, RemoteProgressChange } from "../sync/progress-remote";
 import type {
   LearnerProfile,
   LearnerProfileRepository,
   ProgressMutation,
   ProgressRepository,
+  ProgressSyncRepository,
 } from "./progress-repository";
 
 const LEGACY_IMPORT_METADATA_KEY = "legacy_progress_imported";
@@ -18,6 +20,12 @@ const LEGACY_IMPORT_METADATA_KEY = "legacy_progress_imported";
 const ACTIVE_PROFILE_METADATA_KEY = "active_profile_id";
 
 const PROFILE_COLUMNS = `id, kind, supabase_user_id, merged_into_profile_id`;
+
+/**
+ * The `sync_state` row lesson progress uses. That table is keyed by `(profile_id, resource)` so a
+ * later synchronized entity (saved shaders, say) can carry its own cursor without disturbing this one.
+ */
+const PROGRESS_SYNC_RESOURCE = "lesson_progress";
 
 /**
  * True for a profile holding anything that is not reconstructible — explicit progress rows or outbox
@@ -69,9 +77,10 @@ export type SqliteProgressRepositoryOptions = {
 };
 
 /**
- * SQLite-backed implementation of {@link ProgressRepository} and {@link LearnerProfileRepository}.
- * One class covers both so profile switching and progress reads share a connection and an
- * active-profile cache — a switch has to take effect for the very next read.
+ * SQLite-backed implementation of {@link ProgressRepository}, {@link LearnerProfileRepository} and
+ * {@link ProgressSyncRepository}. One class covers all three so profile switching, progress reads and
+ * synchronization share a connection and an active-profile cache — a switch has to take effect for
+ * the very next read, and a pulled change has to notify the screens reading the same rows.
  *
  * Also exposes two additional methods
  * (`hasImportedLegacyProgress`, `markLegacyProgressImported`) used exclusively by the legacy
@@ -80,7 +89,9 @@ export type SqliteProgressRepositoryOptions = {
  * by contrast, *is* on the interface, since any future `ProgressRepository` implementation would
  * need the same atomic bulk-write guarantee to support the same one-time import.
  */
-export class SqliteProgressRepository implements ProgressRepository, LearnerProfileRepository {
+export class SqliteProgressRepository
+  implements ProgressRepository, LearnerProfileRepository, ProgressSyncRepository
+{
   private readonly listeners = new Set<() => void>();
   private readonly generateId: () => string;
   private readonly now: () => string;
@@ -366,14 +377,18 @@ export class SqliteProgressRepository implements ProgressRepository, LearnerProf
     return true;
   }
 
-  async getPendingMutations(): Promise<ProgressMutation[]> {
-    const profileId = await this.getActiveProfileId();
+  /**
+   * Satisfies both {@link ProgressRepository.getPendingMutations} (the active profile, for app code)
+   * and {@link ProgressSyncRepository.getPendingMutations} (an explicit profile, for the sync engine).
+   */
+  async getPendingMutations(profileId?: string): Promise<ProgressMutation[]> {
+    const targetProfileId = profileId ?? (await this.getActiveProfileId());
     const rows = await this.driver.all<MutationRow>(
       `SELECT profile_id, mutation_id, entity_id, base_revision, attempts, created_at, payload_json
        FROM sync_outbox
        WHERE profile_id = ? AND merged_at IS NULL
        ORDER BY created_at, mutation_id`,
-      [profileId],
+      [targetProfileId],
     );
 
     return rows.map((row) => {
@@ -388,6 +403,148 @@ export class SqliteProgressRepository implements ProgressRepository, LearnerProf
         createdAt: row.created_at,
       };
     });
+  }
+
+  /**
+   * See {@link ProgressSyncRepository.acknowledgeMutation}. Deleting the outbox row and stamping the
+   * lesson's server revision share one transaction, so the row can never disappear without the
+   * revision that replaces it being recorded.
+   *
+   * Two things are deliberately *not* written here. The lesson's `completed` value is left alone:
+   * the acknowledged result restates what this mutation sent, while the row already holds the
+   * learner's newest choice, which may be a later queued action. And the result's `changeId` never
+   * touches the pull cursor — it belongs to one global sequence, so adopting it would skip every
+   * other device's changes that landed between the current cursor and this one.
+   */
+  async acknowledgeMutation(
+    profileId: string,
+    mutationId: string,
+    result: AppliedProgressResult,
+  ): Promise<void> {
+    await this.driver.transaction(async () => {
+      const row = await this.driver.first<{ entity_id: string }>(
+        `SELECT entity_id FROM sync_outbox WHERE profile_id = ? AND mutation_id = ?`,
+        [profileId, mutationId],
+      );
+      // Already settled by an earlier pass; replaying the acknowledgement changes nothing.
+      if (!row) {
+        return;
+      }
+
+      await this.driver.run(`DELETE FROM sync_outbox WHERE profile_id = ? AND mutation_id = ?`, [
+        profileId,
+        mutationId,
+      ]);
+      await this.driver.run(
+        `UPDATE lesson_progress SET server_revision = ?, server_updated_at = ?
+         WHERE profile_id = ? AND lesson_id = ? AND server_revision < ?`,
+        [result.revision, this.now(), profileId, row.entity_id, result.revision],
+      );
+    });
+  }
+
+  /** See {@link ProgressSyncRepository.rebaseMutation}. One statement, so no transaction is needed. */
+  async rebaseMutation(profileId: string, mutationId: string, revision: number): Promise<void> {
+    await this.driver.run(
+      `UPDATE sync_outbox SET base_revision = ?
+       WHERE profile_id = ? AND mutation_id = ? AND merged_at IS NULL`,
+      [revision, profileId, mutationId],
+    );
+  }
+
+  /** See {@link ProgressSyncRepository.recordMutationFailure}. */
+  async recordMutationFailure(profileId: string, mutationId: string, error: string): Promise<void> {
+    await this.driver.run(
+      `UPDATE sync_outbox SET attempts = attempts + 1, last_error = ?
+       WHERE profile_id = ? AND mutation_id = ? AND merged_at IS NULL`,
+      [error, profileId, mutationId],
+    );
+  }
+
+  /** See {@link ProgressSyncRepository.applyRemoteChanges}. */
+  async applyRemoteChanges(
+    profileId: string,
+    changes: readonly RemoteProgressChange[],
+    cursor: number,
+  ): Promise<void> {
+    const didChange = await this.driver.transaction(async () => {
+      const pendingRows = await this.driver.all<{ entity_id: string }>(
+        `SELECT DISTINCT entity_id FROM sync_outbox WHERE profile_id = ? AND merged_at IS NULL`,
+        [profileId],
+      );
+      const lessonsWithPendingMutation = new Set(pendingRows.map((row) => row.entity_id));
+
+      let anyChanged = false;
+      for (const change of changes) {
+        if (lessonsWithPendingMutation.has(change.lessonId)) {
+          continue;
+        }
+
+        const existing = await this.driver.first<ProgressRow>(
+          `SELECT completed, server_revision FROM lesson_progress
+           WHERE profile_id = ? AND lesson_id = ?`,
+          [profileId, change.lessonId],
+        );
+        // A revision this row already holds — typically this device's own accepted change coming
+        // back — carries no new information, and an older one would move the row backwards.
+        if (existing && existing.server_revision >= change.revision) {
+          continue;
+        }
+
+        const completedValue = change.completed ? 1 : 0;
+        const timestamp = this.now();
+        await this.driver.run(
+          `INSERT INTO lesson_progress
+            (profile_id, lesson_id, completed, server_revision, locally_modified_at, server_updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(profile_id, lesson_id) DO UPDATE SET
+             completed = excluded.completed,
+             server_revision = excluded.server_revision,
+             server_updated_at = excluded.server_updated_at`,
+          [profileId, change.lessonId, completedValue, change.revision, timestamp, timestamp],
+        );
+
+        // Compared against the *effective* previous state — a missing row reads as not completed —
+        // so a first server row confirming "not completed" is not reported as a visible change.
+        anyChanged = anyChanged || (existing?.completed === 1) !== change.completed;
+      }
+
+      await this.driver.run(
+        `INSERT INTO sync_state (profile_id, resource, pull_cursor, last_success_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(profile_id, resource) DO UPDATE SET
+           pull_cursor = excluded.pull_cursor,
+           last_success_at = excluded.last_success_at`,
+        [profileId, PROGRESS_SYNC_RESOURCE, String(cursor), this.now()],
+      );
+
+      return anyChanged;
+    });
+
+    // Only the active profile's rows are on screen; see `mergeAnonymousProfile` for the same rule.
+    if (didChange && this.cachedProfile?.id === profileId) {
+      this.notifySubscribers();
+    }
+  }
+
+  /** See {@link ProgressSyncRepository.getPullCursor}. */
+  async getPullCursor(profileId: string): Promise<number> {
+    const row = await this.driver.first<{ pull_cursor: string | null }>(
+      `SELECT pull_cursor FROM sync_state WHERE profile_id = ? AND resource = ?`,
+      [profileId, PROGRESS_SYNC_RESOURCE],
+    );
+    if (!row?.pull_cursor) {
+      return 0;
+    }
+
+    const cursor = Number(row.pull_cursor);
+    if (!Number.isSafeInteger(cursor) || cursor < 0) {
+      throw new Error(
+        `Learner profile ${profileId} has a corrupt ${PROGRESS_SYNC_RESOURCE} pull cursor: ` +
+          `${row.pull_cursor}`,
+      );
+    }
+    return cursor;
   }
 
   subscribe(listener: () => void): () => void {

@@ -1,3 +1,5 @@
+import type { AppliedProgressResult, RemoteProgressChange } from "../sync/progress-remote";
+
 export type LearnerProfile = {
   id: string;
   kind: "anonymous" | "authenticated";
@@ -53,11 +55,60 @@ export interface LearnerProfileRepository {
   mergeAnonymousProfile(sourceProfileId: string, targetProfileId: string): Promise<void>;
 }
 
+/**
+ * The local half of synchronization: everything `../sync/progress-sync-engine` needs to read and
+ * settle one profile's outbox and pull cursor.
+ *
+ * Kept apart from {@link ProgressRepository} for the same reason as
+ * {@link LearnerProfileRepository}: screens never call any of it, and every method here takes its
+ * profile explicitly rather than resolving the active one, because a sync pass must keep writing to
+ * the profile it started with even if the learner signs out mid-pass.
+ *
+ * Each method is one unit of work, and therefore at most one transaction. None of them may be
+ * called from inside another transaction — see `../database/transaction-queue`.
+ */
+export interface ProgressSyncRepository {
+  /** Unmerged outbox mutations for `profileId`, oldest first. Creation order is upload order. */
+  getPendingMutations(profileId: string): Promise<ProgressMutation[]>;
+  /**
+   * Records that the server accepted `mutationId`: drops the outbox row and stamps the resulting
+   * server revision on the lesson. The only place an outbox row is ever removed.
+   */
+  acknowledgeMutation(
+    profileId: string,
+    mutationId: string,
+    result: AppliedProgressResult,
+  ): Promise<void>;
+  /** Repoints a still-queued mutation at a newer server revision, keeping its mutation ID. */
+  rebaseMutation(profileId: string, mutationId: string, revision: number): Promise<void>;
+  /**
+   * Counts one failed delivery attempt against a mutation and stores why, so repeated failure is
+   * durable enough to surface as a non-blocking attention state. Never deletes the row.
+   */
+  recordMutationFailure(profileId: string, mutationId: string, error: string): Promise<void>;
+  /**
+   * Applies one batch of server changes and advances the pull cursor to `cursor` in a single
+   * transaction, so a crash can never leave the cursor ahead of the rows it accounts for.
+   *
+   * A lesson that still has a pending local mutation is left alone: that mutation is about to be
+   * pushed and become authoritative, so the server's older value must not overwrite it. So is a
+   * lesson already at or ahead of the incoming revision.
+   */
+  applyRemoteChanges(
+    profileId: string,
+    changes: readonly RemoteProgressChange[],
+    cursor: number,
+  ): Promise<void>;
+  /** The last change ID this profile has applied, or `0` when it has never pulled. */
+  getPullCursor(profileId: string): Promise<number>;
+}
+
 export interface ProgressRepository {
   getActiveProfileId(): Promise<string>;
   getCompletedLessonIds(): Promise<string[]>;
   isLessonCompleted(lessonId: string): Promise<boolean>;
   setLessonCompleted(lessonId: string, completed: boolean): Promise<void>;
+  /** Unmerged outbox mutations for the active profile, oldest first. */
   getPendingMutations(): Promise<ProgressMutation[]>;
   /**
    * Atomically inserts one completed progress row (and its outbox mutation) per given lesson ID

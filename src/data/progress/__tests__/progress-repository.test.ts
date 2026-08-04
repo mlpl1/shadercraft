@@ -356,6 +356,113 @@ describe("SQLite progress repository learner profiles", () => {
   });
 });
 
+describe("SQLite progress repository sync primitives", () => {
+  let driver: NodeSqliteDriver;
+  let repository: SqliteProgressRepository;
+
+  beforeEach(async () => {
+    ({ driver, repository } = await createProgressRepositoryTestContext());
+  });
+
+  afterEach(async () => {
+    await driver.close();
+  });
+
+  async function readProgressRow(
+    profileId: string,
+    lessonId: string,
+  ): Promise<{ completed: number; server_revision: number } | null> {
+    return driver.first(
+      `SELECT completed, server_revision FROM lesson_progress
+       WHERE profile_id = ? AND lesson_id = ?`,
+      [profileId, lessonId],
+    );
+  }
+
+  test("starts a profile that has never pulled at cursor zero", async () => {
+    const profileId = await repository.getActiveProfileId();
+
+    await expect(repository.getPullCursor(profileId)).resolves.toBe(0);
+  });
+
+  test("refuses to read a corrupt pull cursor rather than pulling from the beginning", async () => {
+    const profileId = await repository.getActiveProfileId();
+    await driver.run(
+      `INSERT INTO sync_state (profile_id, resource, pull_cursor, last_success_at)
+       VALUES (?, 'lesson_progress', 'not-a-number', NULL)`,
+      [profileId],
+    );
+
+    await expect(repository.getPullCursor(profileId)).rejects.toThrow(/corrupt/);
+  });
+
+  test("keeps one profile's pulled changes and cursor out of another's", async () => {
+    const anonymousId = await repository.getActiveProfileId();
+    const account = await repository.createAuthenticatedProfile("supabase-user-1");
+
+    await repository.applyRemoteChanges(
+      account.id,
+      [{ lessonId: "color-mixing", completed: true, revision: 4, changeId: 9 }],
+      9,
+    );
+
+    await expect(readProgressRow(account.id, "color-mixing")).resolves.toEqual({
+      completed: 1,
+      server_revision: 4,
+    });
+    await expect(readProgressRow(anonymousId, "color-mixing")).resolves.toBeNull();
+    await expect(repository.getPullCursor(account.id)).resolves.toBe(9);
+    await expect(repository.getPullCursor(anonymousId)).resolves.toBe(0);
+  });
+
+  test("never lowers a lesson's server revision when an older acknowledgement arrives", async () => {
+    const profileId = await repository.getActiveProfileId();
+    await repository.setLessonCompleted("color-mixing", true);
+    await repository.setLessonCompleted("color-mixing", false);
+    const [older, newer] = await repository.getPendingMutations(profileId);
+
+    await repository.acknowledgeMutation(profileId, newer.mutationId, {
+      completed: false,
+      revision: 5,
+      changeId: 50,
+    });
+    await repository.acknowledgeMutation(profileId, older.mutationId, {
+      completed: true,
+      revision: 2,
+      changeId: 20,
+    });
+
+    await expect(repository.getPendingMutations(profileId)).resolves.toEqual([]);
+    // The acknowledged local state is the learner's, and revision 5 is the newest the server gave.
+    await expect(readProgressRow(profileId, "color-mixing")).resolves.toEqual({
+      completed: 0,
+      server_revision: 5,
+    });
+  });
+
+  test("notifies subscribers only when a pulled change alters visible completion", async () => {
+    const profileId = await repository.getActiveProfileId();
+    const listener = jest.fn();
+    repository.subscribe(listener);
+
+    // A first server row saying "not completed" matches what the screen already shows.
+    await repository.applyRemoteChanges(
+      profileId,
+      [{ lessonId: "color-mixing", completed: false, revision: 1, changeId: 1 }],
+      1,
+    );
+    expect(listener).not.toHaveBeenCalled();
+
+    await repository.applyRemoteChanges(
+      profileId,
+      [{ lessonId: "color-mixing", completed: true, revision: 2, changeId: 2 }],
+      2,
+    );
+    expect(listener).toHaveBeenCalledTimes(1);
+    await expect(repository.isLessonCompleted("color-mixing")).resolves.toBe(true);
+  });
+});
+
 /**
  * Wraps a driver so one chosen statement rejects, standing in for a crash mid-transaction. Reads,
  * `exec`, and `transaction` still go to the real connection so `BEGIN`/`ROLLBACK` behave normally.
