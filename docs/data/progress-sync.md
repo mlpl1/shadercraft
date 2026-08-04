@@ -54,10 +54,21 @@ informational screen instead of ever constructing a Supabase client.
 
 ## RLS and database tests
 
-`supabase/tests/database/progress_sync.test.sql` is a pgTAP suite that exercises row level
-security directly against Postgres: that an authenticated user can only read and write their own
-`lesson_progress`/`sync_outbox`-equivalent rows, that anonymous (unauthenticated) requests are
-rejected, and that the schema's constraints hold. Run it with:
+`supabase/tests/database/progress_sync.test.sql` is a pgTAP suite that exercises the server contract
+directly against Postgres, acting as two fixture users in the `authenticated` role: that row level
+security is enabled and a learner can neither see nor write another learner's `lesson_progress`
+rows, that direct writes are refused so every change has to go through
+`apply_progress_mutation`, that replaying a mutation id is idempotent while replaying *another
+user's* mutation id is refused outright, and that revision/`change_id` ordering behaves — including
+that an accepted update takes a new, larger `change_id`, which is what every other device's pull
+cursor depends on.
+
+Two things it deliberately does **not** cover. There is no server-side equivalent of SQLite's
+`sync_outbox`; the outbox is purely local (see below). And it never leaves the `authenticated` role,
+so it says nothing about what an unauthenticated (`anon`) caller can do — that is enforced by the
+`revoke ... from anon` grants and the `28000` guard in `apply_progress_mutation`
+(`supabase/migrations/202608030001_progress_sync.sql`), and asserting it would mean driving the
+suite as `anon` as well. Run it with:
 
 ```bash
 npx supabase start   # once, if not already running
@@ -106,13 +117,37 @@ resends under a fresh revision rather than dropping the mutation.
 
 Outbox mutations (`sync_outbox` in SQLite) are only ever deleted **after** the server has
 acknowledged them — a mutation that fails to send, or fails partway through a device losing
-connectivity, is retried on the next pass rather than lost.
+connectivity, is retried on the next pass rather than lost. Their *upload* order comes from SQLite's
+`rowid`, which is monotonic per insert, for the same reason conflicts are ordered by server revision:
+the device clock cannot be trusted to order two actions taken in the same millisecond, and the server
+treats the last action it accepts for a lesson as authoritative.
+
+Every request a pass makes also carries the Supabase account that pass is scoped to, and
+`SupabaseProgressRemote` checks it against the client's live session before each request. The client
+is a singleton that attaches whichever JWT is current *at request time*, so signing into a different
+account while a pass is in flight would otherwise send the first account's mutations under the
+second's session — which the server accepts and files as the new account's own work. The check turns
+that into an `auth` failure instead: the pass stops, the outbox is untouched, and sync resumes under
+the right identity.
+
+A mutation the server *permanently* refuses (`rejected` — a permission error, a constraint refusal, a
+PostgREST 404 from a migration that is not deployed yet) is recorded against its own outbox row and
+skipped for the rest of the pass. The remaining queue is still pushed and the pull still runs, so one
+stuck lesson can never stop a device hearing from the learner's other devices. Once such a row has
+accumulated `MAX_MUTATION_ATTEMPTS` recorded failures it is counted in `SyncResult.blocked` and the
+account screen shows a non-blocking "Needs attention" rather than a clean "Up to date"; the row is
+still kept and still offered once per pass, because some causes of a permanent rejection are fixed
+somewhere else entirely and abandoning the learner's action outright has no way back.
 
 ## Inspecting the local outbox during development
 
 Every unsynced lesson completion/incompletion is a row in SQLite's `sync_outbox` table until the
-server accepts it, at which point `merged_at` is stamped. To inspect it on a connected device or
-emulator with `adb`:
+server accepts it, at which point the row is **deleted** — acknowledgement is the only thing that
+ever removes one (`SqliteProgressRepository.acknowledgeMutation`). `merged_at` is a different signal
+entirely: it is stamped by `mergeAnonymousProfile` on the *source* guest profile's rows, which are
+retired in place because the merge re-queues that progress under the account instead, and are never
+uploaded. So a row with `merged_at` set is not a synced row — it is one that will never sync. To
+inspect the table on a connected device or emulator with `adb`:
 
 ```bash
 # Pull the on-device database out to inspect locally (requires a debug build).
@@ -120,11 +155,15 @@ adb shell "run-as <application-id> cat /data/data/<application-id>/files/SQLite/
   > shadercraft.db
 
 # Then, with any SQLite client:
-sqlite3 shadercraft.db "SELECT profile_id, mutation_id, entity_id, operation, base_revision, attempts, merged_at FROM sync_outbox ORDER BY created_at;"
+sqlite3 shadercraft.db "SELECT rowid, profile_id, mutation_id, entity_id, operation, base_revision, attempts, merged_at FROM sync_outbox ORDER BY rowid;"
 ```
 
-Rows with `merged_at IS NULL` are still pending — this is exactly the query
-`idx_sync_outbox_profile_pending_created_at` is shaped for, and is also what the account screen's
+`rowid` — not `created_at` — is upload order: it is the only value here that is monotonic per insert,
+and upload order decides which of two actions on the same lesson the server accepts last and treats
+as authoritative (`SqliteProgressRepository.getPendingMutations`).
+
+Rows with `merged_at IS NULL` are still pending — the partial index
+`idx_sync_outbox_profile_pending_created_at` is what makes that filter cheap, and it is also what the account screen's
 "Pending changes" count reflects (`ProgressSyncEngine`'s `SyncResult.pending`, surfaced through
 `useSyncStatus()`).
 
