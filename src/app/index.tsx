@@ -101,6 +101,20 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {courseError ? (
+          <View style={styles.courseErrorBanner}>
+            <Text style={styles.errorTitle}>Could not refresh curriculum</Text>
+            <Text style={styles.errorBody}>{courseError.message}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={retryCourse}
+              style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           overScrollMode="never"
@@ -300,9 +314,16 @@ const styles = StyleSheet.create({
   },
   progressRetry: {
     color: Colors.coral,
+    fontFamily: "monospace",
     fontSize: 12,
-    fontWeight: "800",
-    textAlign: "right",
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  courseErrorBanner: {
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.md,
+    alignItems: "flex-start",
+    gap: Spacing.xs,
   },
   progressLabel: {
     color: Colors.textMuted,

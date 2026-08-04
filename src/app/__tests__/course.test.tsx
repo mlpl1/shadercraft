@@ -117,6 +117,18 @@ class FakeCourseRepository implements CourseRepository {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
+
+  /** Arms the next `getModules()` call to reject, mirroring a refresh triggered after hydration
+   * (e.g. by `emit()`) rather than the initial load. */
+  failNextRead(error: Error): void {
+    this.pendingReadError = error;
+  }
+
+  /** Notifies subscribers, mirroring `courseRepository.subscribe(...)` firing after hydration
+   * (e.g. a release re-activation). */
+  emit(): void {
+    for (const listener of this.listeners) listener();
+  }
 }
 
 class FakeProgressRepository implements ProgressRepository {
@@ -226,5 +238,56 @@ describe("CourseScreen", () => {
 
     await waitFor(() => expect(screen.getByText("Coordinate systems")).toBeTruthy());
     expect(screen.queryByText("Could not load curriculum")).toBeNull();
+  });
+
+  test("surfaces a retry affordance for a post-hydration course refresh failure without hiding hydrated content, and recovers via retry", async () => {
+    // `courseError` was previously only read inside the `!isCourseHydrated` branch. Once hydrated,
+    // `isHydrated` never flips back to `false` (see `course-context.tsx`'s catch block), so a later
+    // rejection — e.g. from `courseRepository.subscribe(...)` firing after a release
+    // re-activation — set `error` with no affordance rendered anywhere. This first read succeeds
+    // (unlike the sibling test above, which injects the rejection on the very first read) so the
+    // screen actually hydrates before the second, post-hydration rejection is injected.
+    const dataValue = buildDataValue(["lesson-1a"]);
+    if (dataValue.status !== "ready") throw new Error("expected a ready DataContextValue");
+    const courseRepository = dataValue.courseRepository as FakeCourseRepository;
+
+    async function renderScreen() {
+      return render(
+        <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+          <DataContext.Provider value={dataValue}>
+            <CourseProvider>
+              <ProgressProvider>
+                <CourseScreen />
+              </ProgressProvider>
+            </CourseProvider>
+          </DataContext.Provider>
+        </SafeAreaProvider>,
+      );
+    }
+
+    await renderScreen();
+
+    await waitFor(() => expect(screen.getByText("Coordinate systems")).toBeTruthy());
+    // Also wait for `ProgressProvider`'s own concurrent hydration (triggered by the same mount) to
+    // settle, not just `CourseProvider`'s — otherwise its later, unrelated state update can land
+    // after this `waitFor` has already stopped polling and produce an act() warning.
+    await waitFor(() => expect(screen.queryByText("—")).toBeNull());
+
+    courseRepository.failNextRead(new Error("curriculum refresh failed"));
+
+    courseRepository.emit();
+
+    await waitFor(() => expect(screen.getByText("Could not refresh curriculum")).toBeTruthy());
+    expect(screen.getByText("curriculum refresh failed")).toBeTruthy();
+    // The hydrated view must stay up: stale content plus a visible error, not a swap back to the
+    // pre-hydration loading branch.
+    expect(screen.getByText("Coordinate systems")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    });
+
+    await waitFor(() => expect(screen.queryByText("Could not refresh curriculum")).toBeNull());
+    expect(screen.getByText("Coordinate systems")).toBeTruthy();
   });
 });

@@ -71,8 +71,11 @@ export async function importLegacyProgress(
 
   // `rawValue` present but unparseable means real historical data is about to be discarded
   // irreversibly (see `parseLegacyProgressState`/`isLegacyProgressState`) — there is nothing to
-  // salvage without a semantics change, but the loss should at least be observable.
-  if (rawValue !== null && legacyState === null) {
+  // salvage without a semantics change, but the loss should at least be observable. An empty
+  // string is falsy, so it takes the same `null`-returning path through
+  // `parseLegacyProgressState` as a missing key, but it never went through the JSON-parse-failure
+  // branch — it is not malformed, just empty, and warning about it would misdescribe what happened.
+  if (rawValue !== null && rawValue !== "" && legacyState === null) {
     console.warn("Shadercraft: discarding malformed legacy progress value", rawValue);
   }
 

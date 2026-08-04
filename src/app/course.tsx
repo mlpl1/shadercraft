@@ -86,6 +86,20 @@ export default function CourseScreen() {
           <Text style={styles.title}>Curriculum</Text>
         </View>
 
+        {courseError ? (
+          <View style={styles.courseErrorBanner}>
+            <Text style={styles.errorTitle}>Could not refresh curriculum</Text>
+            <Text style={styles.errorBody}>{courseError.message}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={retryCourse}
+              style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <ScrollView
           contentContainerStyle={styles.content}
           overScrollMode="never"
@@ -235,6 +249,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
     textTransform: "uppercase",
+  },
+  courseErrorBanner: {
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.md,
+    alignItems: "flex-start",
+    gap: Spacing.xs,
   },
   content: {
     paddingHorizontal: Spacing.xl,

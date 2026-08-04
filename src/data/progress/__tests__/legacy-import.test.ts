@@ -66,6 +66,26 @@ describe("importLegacyProgress", () => {
     }
   });
 
+  test("treats an empty-string legacy value as absent, clears storage, and does not warn", async () => {
+    // An empty string is falsy, so it fails the same `if (!rawValue)` check as a missing key in
+    // `parseLegacyProgressState` and yields `legacyState === null` — but it never went through the
+    // JSON-parse-failure path, so it is not "malformed" and should not be reported as if real
+    // historical data were discarded.
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      const storage = createStorage("");
+
+      await importLegacyProgress(storage, repository);
+
+      expect(await repository.getCompletedLessonIds()).toEqual([]);
+      expect(storage.removeItem).toHaveBeenCalledWith(LEGACY_STORAGE_KEY);
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   test("deduplicates repeated legacy lesson IDs into a single completion", async () => {
     const storage = createStorage(
       JSON.stringify({
