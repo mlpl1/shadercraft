@@ -83,7 +83,6 @@ the installed application.
 | `npm run content:check` | Fail if the tracked bundled course is stale |
 | `npm test` | Run the Jest suite |
 | `npm run test:watch` | Run the Jest suite in watch mode |
-| `npm run lint` | Lint the project with Expo's ESLint configuration |
 | `npx tsc --noEmit` | Run the TypeScript check without emitting files |
 
 ## Project structure
@@ -123,6 +122,8 @@ the schema validates, and the constraints around preview capabilities and releas
 ## Roadmap
 
 - Editable GLSL with debounced shader recompilation and compiler feedback
+- Configured linting (`expo lint` runs, but the project has no committed ESLint
+  setup yet and currently reports pre-existing violations)
 - Optional cloud progress synchronization
 
 ## Contributing
