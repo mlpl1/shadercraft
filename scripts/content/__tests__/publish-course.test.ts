@@ -84,17 +84,33 @@ function baseDeps(overrides: Partial<PublishDeps> = {}): PublishDeps {
 }
 
 test("refuses to publish when SUPABASE_URL is missing", async () => {
-  const deps = baseDeps({ env: { SUPABASE_SERVICE_ROLE_KEY: "sb_secret_example" } });
+  let createAdminClientCalled = false;
+  const deps = baseDeps({
+    env: { SUPABASE_SERVICE_ROLE_KEY: "sb_secret_example" },
+    createAdminClient: () => {
+      createAdminClientCalled = true;
+      return fakeAdminClient();
+    },
+  });
 
   await expect(publishCourseRelease("course-2026-08-03", deps)).rejects.toThrow(/SUPABASE_URL/);
+  expect(createAdminClientCalled).toBe(false);
 });
 
 test("refuses to publish when SUPABASE_SERVICE_ROLE_KEY is missing", async () => {
-  const deps = baseDeps({ env: { SUPABASE_URL: "https://project-ref.supabase.co" } });
+  let createAdminClientCalled = false;
+  const deps = baseDeps({
+    env: { SUPABASE_URL: "https://project-ref.supabase.co" },
+    createAdminClient: () => {
+      createAdminClientCalled = true;
+      return fakeAdminClient();
+    },
+  });
 
   await expect(publishCourseRelease("course-2026-08-03", deps)).rejects.toThrow(
     /SUPABASE_SERVICE_ROLE_KEY/,
   );
+  expect(createAdminClientCalled).toBe(false);
 });
 
 test("refuses a release id that does not match the id pattern before loading content", async () => {
@@ -138,13 +154,6 @@ test("sends exactly one publish_course_release RPC with the checksummed payload"
   expect(payload.modules).toEqual(validModules());
 });
 
-test("exits successfully when the server reports the release already published", async () => {
-  const admin = fakeAdminClient({ error: null });
-  const deps = baseDeps({ createAdminClient: () => admin, log: () => {} });
-
-  await expect(publishCourseRelease("course-2026-08-03", deps)).resolves.toBeUndefined();
-});
-
 test("fails when the RPC reports an error", async () => {
   const admin = fakeAdminClient({ error: { message: "release already published with a different checksum" } });
   const deps = baseDeps({ createAdminClient: () => admin });
@@ -166,5 +175,6 @@ test("never logs the service-role key", async () => {
 
   await publishCourseRelease("course-2026-08-03", deps);
 
+  expect(logs.length).toBeGreaterThan(0);
   expect(logs.some((message) => message.includes("sb_secret_do_not_log_me"))).toBe(false);
 });

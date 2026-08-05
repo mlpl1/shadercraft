@@ -141,7 +141,7 @@ describe("SupabaseCourseRemote.getRelease", () => {
     });
     const remote = new SupabaseCourseRemote(client);
 
-    await expect(remote.getRelease("release-1")).rejects.toThrow();
+    await expect(remote.getRelease("release-1")).rejects.toThrow(/schemaVersion/);
   });
 
   it("throws when Supabase reports an error", async () => {
