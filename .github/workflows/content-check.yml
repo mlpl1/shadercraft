@@ -1,0 +1,50 @@
+name: Content check
+
+# Validates authored curriculum content on every change that could affect it: the authoring JSON,
+# the scripts that compile/publish it, the schema/repository code that reads it, and the generated
+# bundle itself. A change under any of these paths could make the tracked
+# `assets/course/bundled-course.json` stale or invalid without touching anything else CI watches.
+on:
+  pull_request:
+    paths:
+      - "content/**"
+      - "scripts/content/**"
+      - "src/data/course/**"
+      - "assets/course/bundled-course.json"
+  push:
+    branches:
+      - main
+    paths:
+      - "content/**"
+      - "scripts/content/**"
+      - "src/data/course/**"
+      - "assets/course/bundled-course.json"
+
+jobs:
+  content-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node.js 22.13 or newer — see README.md "Requirements".
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fails if `assets/course/bundled-course.json` is not exactly what `content:build` would
+      # produce from `content/*.json` right now.
+      - name: Check the bundled course is up to date
+        run: npm run content:check
+
+      # Only the tests that exercise the content pipeline, per the task-6 brief. This is narrower
+      # than `npm test -- --runInBand` (the full suite) — a contributor still runs the full suite
+      # locally per README.md "Contributing" before opening a pull request.
+      - name: Run content-related Jest suites
+        run: npm test -- --runInBand src/data/course scripts/content
+
+      - name: Type-check
+        run: npx tsc --noEmit

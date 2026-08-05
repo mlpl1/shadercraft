@@ -9,9 +9,17 @@ import {
   type PropsWithChildren,
 } from "react";
 import { AppState } from "react-native";
+import Constants from "expo-constants";
 import * as Network from "expo-network";
 
 import type { ProgressSyncRepository } from "../data/progress/progress-repository";
+import { CourseSyncEngine } from "../data/sync/course-sync-engine";
+import {
+  CourseSyncScheduler,
+  type CourseSyncSchedulerState,
+  type CourseSyncStatus,
+} from "../data/sync/course-sync-scheduler";
+import { createSupabaseCourseRemote } from "../data/sync/supabase-course-remote";
 import type { ProgressRemoteErrorKind } from "../data/sync/progress-remote";
 import { ProgressSyncEngine } from "../data/sync/progress-sync-engine";
 import { createSupabaseProgressRemote } from "../data/sync/supabase-progress-remote";
@@ -25,7 +33,25 @@ import { getSupabaseClient, isCloudSyncEnabled } from "../data/supabase/client";
 import { useAuth } from "./auth-context";
 import { useData } from "./data-context";
 
-export type { SyncStatus, ProgressRemoteErrorKind };
+export type { SyncStatus, ProgressRemoteErrorKind, CourseSyncStatus };
+
+/**
+ * What the UI may render about background *curriculum* checks, kept in its own object with its own
+ * vocabulary.
+ *
+ * The separation is the point. Progress sync is about a learner's own work reaching their account;
+ * curriculum sync is about whether the installed course is the newest published one. A curriculum
+ * check that fails must never move `status`, `errorKind`, or `pending` — a learner whose progress is
+ * perfectly synced would otherwise be told something is wrong with it because a content manifest was
+ * unreachable.
+ */
+export type CourseUpdateState = {
+  status: CourseSyncStatus;
+  /** The release id the most recent activation installed, or `null` if none has. */
+  updatedReleaseId: string | null;
+  /** The app version the published curriculum demands, while `status` is `requires-app-update`. */
+  requiredAppVersion: string | null;
+};
 
 type SyncContextValue = {
   status: SyncStatus;
@@ -48,9 +74,23 @@ type SyncContextValue = {
   /** An explicit, learner-initiated retry. Bypasses any backoff wait in progress. No-op when there is
    *  nothing to sync (cloud sync disabled, or no authenticated session). */
   retrySync: () => void;
+  /** See {@link CourseUpdateState}. Never affected by, and never affecting, progress sync. */
+  courseUpdate: CourseUpdateState;
+  /**
+   * An explicit, learner-initiated curriculum check. Ignores the six-hour recheck interval and any
+   * backoff wait. No-op when cloud sync is disabled or the local database is not ready.
+   */
+  checkForCourseUpdate: () => void;
 };
 
 const INITIAL_STATE: SyncSchedulerState = { status: "signed-out", errorKind: null };
+
+const INITIAL_COURSE_STATE: CourseSyncSchedulerState = {
+  status: "idle",
+  updatedReleaseId: null,
+  requiredAppVersion: null,
+  failureCategory: null,
+};
 
 /** What {@link SyncProvider} reads out of SQLite rather than out of the scheduler's own state. */
 type DurableSyncFacts = { pending: number; lastSuccessAt: string | null };
@@ -92,11 +132,17 @@ export function SyncProvider({ children }: PropsWithChildren) {
   const data = useData();
   const auth = useAuth();
   const progressRepository = data.status === "ready" ? data.progressRepository : null;
+  const courseRepository = data.status === "ready" ? data.courseRepository : null;
+  const releaseInstaller = data.status === "ready" ? data.releaseInstaller : null;
+  const bundledReleaseId = data.status === "ready" ? data.bundledReleaseId : null;
   const enabled = isCloudSyncEnabled();
 
   const [state, setState] = useState<SyncSchedulerState>(INITIAL_STATE);
+  const [courseState, setCourseState] =
+    useState<CourseSyncSchedulerState>(INITIAL_COURSE_STATE);
   const [durableFacts, setDurableFacts] = useState<DurableSyncFacts>(NO_DURABLE_FACTS);
   const schedulerRef = useRef<SyncScheduler | null>(null);
+  const courseSchedulerRef = useRef<CourseSyncScheduler | null>(null);
   const connectivity = useConnectivityMonitor(enabled);
 
   // Builds the engine and scheduler once cloud sync is enabled and a repository exists, and rebuilds
@@ -128,6 +174,45 @@ export function SyncProvider({ children }: PropsWithChildren) {
     // so it never causes a rebuild here.
   }, [enabled, progressRepository, connectivity]);
 
+  // Builds the curriculum engine and its scheduler, and starts the schedule.
+  //
+  // Gated on `data.status === "ready"`, which is the whole of "after local database readiness": that
+  // status is only set once SQLite is open and migrated, the bundled release is installed, and the
+  // repositories exist (see `data-context.tsx`). Nothing here can run earlier, so no release check
+  // ever stands between launch and first paint — this effect fires after the first committed render
+  // of the app's children, and every call it makes is asynchronous.
+  //
+  // Deliberately independent of `auth`: both curriculum RPCs are readable by `anon`, so published
+  // course content reaches a signed-out learner exactly as it reaches a signed-in one.
+  useEffect(() => {
+    if (!enabled || !courseRepository || !releaseInstaller || bundledReleaseId === null) {
+      return undefined;
+    }
+
+    const engine = new CourseSyncEngine(
+      createSupabaseCourseRemote(getSupabaseClient()),
+      releaseInstaller,
+      courseRepository,
+      bundledReleaseId,
+      // The one place the running app's version is read; the engine itself stays free of native
+      // modules, the same way `SyncScheduler` stays free of `expo-network`. A build that does not
+      // state a version installs nothing rather than guessing (see `CourseSyncEngine`).
+      { appVersion: Constants.expoConfig?.version ?? null },
+    );
+    const scheduler = new CourseSyncScheduler(engine, { connectivity });
+    courseSchedulerRef.current = scheduler;
+
+    const unsubscribe = scheduler.subscribe(setCourseState);
+    scheduler.start();
+
+    return () => {
+      unsubscribe();
+      scheduler.dispose();
+      courseSchedulerRef.current = null;
+      setCourseState(INITIAL_COURSE_STATE);
+    };
+  }, [enabled, courseRepository, releaseInstaller, bundledReleaseId, connectivity]);
+
   // Drives the authenticated profile into the scheduler. `auth.session` is the *activated* session —
   // see `auth-context.tsx` — so this never fires ahead of the profile switch it depends on.
   //
@@ -152,6 +237,9 @@ export function SyncProvider({ children }: PropsWithChildren) {
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
         schedulerRef.current?.notifyAppForeground();
+        // Each scheduler decides for itself whether this is worth an attempt: progress sync always
+        // tries, curriculum sync only once its recheck interval has elapsed.
+        courseSchedulerRef.current?.notifyAppForeground();
       }
     });
 
@@ -213,6 +301,21 @@ export function SyncProvider({ children }: PropsWithChildren) {
     schedulerRef.current?.retry();
   }, []);
 
+  const checkForCourseUpdate = useCallback(() => {
+    courseSchedulerRef.current?.retry();
+  }, []);
+
+  // `failureCategory` is deliberately not exposed: it exists so the scheduler can decide whether to
+  // retry, and nothing a learner can act on follows from which of the four categories it was.
+  const courseUpdate = useMemo<CourseUpdateState>(
+    () => ({
+      status: courseState.status,
+      updatedReleaseId: courseState.updatedReleaseId,
+      requiredAppVersion: courseState.requiredAppVersion,
+    }),
+    [courseState.status, courseState.updatedReleaseId, courseState.requiredAppVersion],
+  );
+
   const value = useMemo<SyncContextValue>(
     () => ({
       status: state.status,
@@ -220,8 +323,10 @@ export function SyncProvider({ children }: PropsWithChildren) {
       pending: durableFacts.pending,
       lastSuccessAt: durableFacts.lastSuccessAt,
       retrySync,
+      courseUpdate,
+      checkForCourseUpdate,
     }),
-    [state.status, state.errorKind, durableFacts, retrySync],
+    [state.status, state.errorKind, durableFacts, retrySync, courseUpdate, checkForCourseUpdate],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

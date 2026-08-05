@@ -25,6 +25,19 @@ jest.mock("../../data/sync/progress-sync-engine", () => ({
   })),
 }));
 
+// Curriculum sync's own remote and engine, stubbed for the same reason: every assertion here is about
+// what `SyncProvider` does *around* a check — when one starts, and what it may and may not tell the
+// screen — while the decision logic has its own suite (`course-sync-engine.test.ts`).
+jest.mock("../../data/sync/supabase-course-remote", () => ({
+  createSupabaseCourseRemote: () => ({}),
+}));
+jest.mock("../../data/sync/course-sync-engine", () => ({
+  ...jest.requireActual("../../data/sync/course-sync-engine"),
+  CourseSyncEngine: jest.fn().mockImplementation(() => ({
+    checkForUpdate: () => mockCourseChecks.checkForUpdate(),
+  })),
+}));
+
 // `SyncProvider` reads `useAuth()` for the activated session only; `AuthProvider` itself (and the
 // Supabase auth client under it) is exercised by its own suite, so the hook is mocked here the same way
 // `src/app/__tests__/account.test.tsx` mocks it.
@@ -47,10 +60,15 @@ import type {
   ProgressMutation,
   ProgressRepository,
 } from "../../data/progress/progress-repository";
+import type { CourseSyncResult } from "../../data/sync/course-sync-engine";
 import type { SyncResult } from "../../data/sync/progress-sync-engine";
 import { useAuth } from "../auth-context";
 import { DataContext, type DataContextValue } from "../data-context";
 import { SyncProvider, useSyncStatus } from "../sync-context";
+import {
+  STUB_BUNDLED_RELEASE_ID,
+  STUB_RELEASE_INSTALLER,
+} from "../../data/course/testing/stub-release-installer";
 
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockAddNetworkStateListener = Network.addNetworkStateListener as jest.MockedFunction<
@@ -142,6 +160,35 @@ function createEnginePasses() {
 
 const mockEnginePasses = createEnginePasses();
 
+/** The same explicit-settlement stand-in, for `CourseSyncEngine.checkForUpdate`. */
+function createCourseChecks() {
+  const settlers: { resolve: (result: CourseSyncResult) => void }[] = [];
+  let calls = 0;
+
+  return {
+    callCount: () => calls,
+    checkForUpdate(): Promise<CourseSyncResult> {
+      calls += 1;
+      return new Promise<CourseSyncResult>((resolve) => {
+        settlers.push({ resolve });
+      });
+    },
+    reset(): void {
+      settlers.length = 0;
+      calls = 0;
+    },
+    async resolveNext(result: CourseSyncResult): Promise<void> {
+      const next = settlers.shift();
+      if (!next) throw new Error("No pending checkForUpdate() call to resolve");
+      await act(async () => {
+        next.resolve(result);
+      });
+    },
+  };
+}
+
+const mockCourseChecks = createCourseChecks();
+
 function mutation(mutationId: string): ProgressMutation {
   return {
     profileId: PROFILE_ID,
@@ -188,6 +235,8 @@ type FakeRepository = ReturnType<typeof createFakeRepository>;
 function buildDataValue(repository: FakeRepository): DataContextValue {
   return {
     status: "ready",
+    releaseInstaller: STUB_RELEASE_INSTALLER,
+    bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
     progressRepository: repository as unknown as ProgressRepository,
     courseRepository: {} as unknown as CourseRepository,
     retry: jest.fn(),
@@ -201,6 +250,11 @@ function SyncProbe() {
       <Text testID="status">{sync.status}</Text>
       <Text testID="pending">{String(sync.pending)}</Text>
       <Text testID="last-success">{String(sync.lastSuccessAt)}</Text>
+      <Text testID="course-status">{sync.courseUpdate.status}</Text>
+      <Text testID="course-release">{String(sync.courseUpdate.updatedReleaseId)}</Text>
+      <Text testID="course-required-version">
+        {String(sync.courseUpdate.requiredAppVersion)}
+      </Text>
     </>
   );
 }
@@ -222,6 +276,7 @@ describe("SyncProvider with cloud sync enabled", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockEnginePasses.reset();
+    mockCourseChecks.reset();
     network = createFakeNetwork();
     repository = createFakeRepository();
     mockUseAuth.mockReturnValue({
@@ -376,5 +431,74 @@ describe("SyncProvider with cloud sync enabled", () => {
     });
 
     expect(network.removeCount()).toBe(1);
+  });
+
+  describe("curriculum checks alongside progress sync", () => {
+    test("checks for a course update once the local database is ready", async () => {
+      await renderProvider(repository);
+
+      expect(mockCourseChecks.callCount()).toBe(1);
+      expect(screen.getByTestId("course-status")).toHaveTextContent("checking");
+
+      await mockCourseChecks.resolveNext({ kind: "updated", releaseId: "remote-7" });
+
+      expect(screen.getByTestId("course-status")).toHaveTextContent("up-to-date");
+      expect(screen.getByTestId("course-release")).toHaveTextContent("remote-7");
+    });
+
+    test("a failed curriculum check never moves the progress-sync status", async () => {
+      await renderProvider(repository);
+      await mockEnginePasses.resolveNext(makeResult(0));
+      expect(screen.getByTestId("status")).toHaveTextContent("up-to-date");
+
+      await mockCourseChecks.resolveNext({ kind: "failed", category: "network" });
+
+      // The curriculum check says so, loudly, in its own state...
+      expect(screen.getByTestId("course-status")).toHaveTextContent("retrying");
+      // ...and progress sync, which succeeded and is untouched by any of it, still says so.
+      expect(screen.getByTestId("status")).toHaveTextContent("up-to-date");
+      expect(screen.getByTestId("pending")).toHaveTextContent("0");
+    });
+
+    test("a progress pass needing attention never moves the curriculum status", async () => {
+      await renderProvider(repository);
+      await mockCourseChecks.resolveNext({ kind: "updated", releaseId: "remote-7" });
+      expect(screen.getByTestId("course-status")).toHaveTextContent("up-to-date");
+
+      // A mutation the server keeps refusing: progress sync's `attention` state.
+      await mockEnginePasses.resolveNext(makeResult(0, 1));
+
+      expect(screen.getByTestId("status")).toHaveTextContent("attention");
+      // The curriculum is still the newest published one, and still says so.
+      expect(screen.getByTestId("course-status")).toHaveTextContent("up-to-date");
+      expect(screen.getByTestId("course-release")).toHaveTextContent("remote-7");
+    });
+
+    test("reports the app version a published release demands, without blocking anything", async () => {
+      await renderProvider(repository);
+      await mockEnginePasses.resolveNext(makeResult(0));
+
+      await mockCourseChecks.resolveNext({
+        kind: "requires-app-update",
+        minimumAppVersion: "2.4.0",
+      });
+
+      expect(screen.getByTestId("course-status")).toHaveTextContent("requires-app-update");
+      expect(screen.getByTestId("course-required-version")).toHaveTextContent("2.4.0");
+      // Progress sync — the thing a learner's own work depends on — is entirely unaffected.
+      expect(screen.getByTestId("status")).toHaveTextContent("up-to-date");
+    });
+
+    test("a local write prompts a progress pass but never a curriculum check", async () => {
+      await renderProvider(repository);
+      await mockEnginePasses.resolveNext(makeResult(0));
+      await mockCourseChecks.resolveNext({ kind: "current" });
+
+      await repository.notifyChange();
+
+      expect(mockEnginePasses.calls).toHaveLength(2);
+      // Completing a lesson says nothing about whether new curriculum was published.
+      expect(mockCourseChecks.callCount()).toBe(1);
+    });
   });
 });

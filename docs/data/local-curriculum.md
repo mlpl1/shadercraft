@@ -113,13 +113,27 @@ published module with leftover `plannedTopics`.
 
 `scripts/content/build-course.ts` compiles the modules into a release with a fixed `id` (the
 bundled release is currently `bundled-2026-08-04`) and a SHA-256 `checksum` over the canonicalized
-content. `installBundledRelease` (`src/data/database/seed.ts`) uses that pair to decide
-what to do on a device that already has SQLite data:
+content. `installBundledRelease` (`src/data/database/seed.ts`) is a thin wrapper that hands that
+pair to `ReleaseInstaller.stageAndActivate` (`src/data/course/release-installer.ts`) — the same
+installer downloaded remote releases go through (see
+[`docs/data/curriculum-publishing.md`](curriculum-publishing.md)) — with the bundled seed's own
+activation policy (`only-when-none-active`, since this runs on every cold start and must not
+reclaim the pointer from a newer release the device already activated) and checksum verification
+skipped (it is already verified at build time by `content:check`, and the asset ships inside the
+signed application bundle). The installer decides what to do on a device that already has SQLite
+data:
 
-- Unseen release id → install it.
-- Same release id, matching checksum → no-op (already installed).
+- Unseen release id → install it, and activate it if nothing usable is currently active (a genuine
+  first launch, or a device whose active pointer is missing or dangling).
+- Same release id, matching checksum → no-op.
 - **Same release id, different checksum → throws `Release <id> is already installed with a
   different checksum`, permanently, on every launch of that device.**
+
+A new bundled release id an app update ships — even one that is not yet installed on a device with
+an active *downloaded* release — is inserted and activated unconditionally, because
+`only-when-none-active` only ever holds a pointer steady for a release that is already installed;
+see [`docs/data/curriculum-publishing.md`](curriculum-publishing.md#current-behavior-an-app-updates-own-bundled-release-can-outrun-a-stale-remote-one--while-offline)
+for what that means for a device that updates the app and then stays offline.
 
 That last case is why a release id can only be reused while its content is byte-identical to
 what already shipped. **Once a release id has reached any device, any further content change

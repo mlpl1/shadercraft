@@ -1,0 +1,59 @@
+name: Publish course release
+
+# Manually triggered only. Publishing writes an immutable release to the production Supabase
+# project, so there is no automatic trigger — see docs/data/curriculum-publishing.md for the full
+# release/rollback workflow this button is one step of.
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: >-
+          The release id to publish (lowercase letters, digits, and hyphens — see
+          docs/data/curriculum-publishing.md#release-ids). Must match the current authored content
+          exactly: this workflow publishes whatever is on the triggering ref, not a specific
+          checksum.
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Binds the job to a protected `production-course` GitHub environment. Configure that
+    # environment with required reviewers so a human approval gates every run before the
+    # service-role credential is ever read, and store SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY as
+    # that environment's secrets (never as repository- or organization-level secrets, and never as
+    # `EXPO_PUBLIC_*` — only `EXPO_PUBLIC_*` variables are inlined into the mobile app bundle).
+    environment: production-course
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node.js 22.13 or newer — see README.md "Requirements".
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The same validation a pull request gets, run again here because this job can be triggered
+      # from any ref, not only one that already passed content-check.yml.
+      - name: Check the bundled course is up to date
+        run: npm run content:check
+
+      - name: Run content-related Jest suites
+        run: npm test -- --runInBand src/data/course scripts/content
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      # SUPABASE_SERVICE_ROLE_KEY is read only into this step's environment and is never printed,
+      # echoed, or passed on the command line — `content:publish` reads both variables from
+      # `process.env`. GitHub also redacts any secret value it recognizes in logs as a second line
+      # of defense, but the real guarantee is that nothing here ever writes the key anywhere.
+      - name: Publish release
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: npm run content:publish -- --release "$RELEASE_ID"

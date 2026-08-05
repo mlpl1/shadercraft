@@ -27,6 +27,17 @@ jest.mock("../../data/sync/sync-scheduler", () => {
   return { ...actual, SyncScheduler: jest.fn() };
 });
 
+// Curriculum sync gets the same treatment, and for a stronger reason: a constructed
+// `CourseSyncScheduler` immediately starts a check, which reaches Supabase. A local-only build must
+// never construct one.
+jest.mock("../../data/sync/course-sync-scheduler", () => {
+  const actual = jest.requireActual("../../data/sync/course-sync-scheduler");
+  return { ...actual, CourseSyncScheduler: jest.fn() };
+});
+jest.mock("../../data/sync/supabase-course-remote", () => ({
+  createSupabaseCourseRemote: jest.fn(),
+}));
+
 // `expo-network` is a native module, so it needs a mock either way; making both of its entry points
 // `jest.fn()` is what lets the assertions below be about them *not* being reached. A local-only build
 // must not register a network listener or even ask the platform for the current state.
@@ -45,14 +56,24 @@ import * as Network from "expo-network";
 import type { CourseRepository } from "../../data/course/course-repository";
 import type { LearnerProfile, ProgressRepository } from "../../data/progress/progress-repository";
 import { getSupabaseClient, isCloudSyncEnabled } from "../../data/supabase/client";
+import { CourseSyncScheduler } from "../../data/sync/course-sync-scheduler";
+import { createSupabaseCourseRemote } from "../../data/sync/supabase-course-remote";
 import { SyncScheduler } from "../../data/sync/sync-scheduler";
 import { AuthProvider, useAuth } from "../auth-context";
 import { DataContext, type DataContextValue } from "../data-context";
 import { SyncProvider, useSyncStatus } from "../sync-context";
+import {
+  STUB_BUNDLED_RELEASE_ID,
+  STUB_RELEASE_INSTALLER,
+} from "../../data/course/testing/stub-release-installer";
 
 const mockIsCloudSyncEnabled = isCloudSyncEnabled as jest.MockedFunction<typeof isCloudSyncEnabled>;
 const mockGetSupabaseClient = getSupabaseClient as jest.MockedFunction<typeof getSupabaseClient>;
 const MockSyncScheduler = SyncScheduler as jest.MockedClass<typeof SyncScheduler>;
+const MockCourseSyncScheduler = CourseSyncScheduler as jest.MockedClass<typeof CourseSyncScheduler>;
+const mockCreateSupabaseCourseRemote = createSupabaseCourseRemote as jest.MockedFunction<
+  typeof createSupabaseCourseRemote
+>;
 
 /** A promise whose settlement is controlled from outside, so no microtask is scheduled until
  * `resolve`/`reject` is called explicitly. Used to make the pre-hydration window deterministically
@@ -109,6 +130,8 @@ type FakeRepository = ReturnType<typeof createFakeRepository>;
 function buildDataValue(repository: FakeRepository): DataContextValue {
   return {
     status: "ready",
+    releaseInstaller: STUB_RELEASE_INSTALLER,
+    bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
     // `AuthProvider`/`SyncProvider` only ever see this through `ProgressRepository`; the wider
     // `ProfileStore`/`ProgressSyncRepository` facets are reached via the same cast the real providers
     // use, exactly like `SqliteProgressRepository` really implements every one of them at once.
@@ -127,7 +150,11 @@ function AuthProbe() {
 
 function SyncProbe() {
   const sync = useSyncStatus();
-  return <Text testID="sync-status">{`${sync.status}:${sync.pending}:${sync.errorKind}`}</Text>;
+  return (
+    <Text testID="sync-status">
+      {`${sync.status}:${sync.pending}:${sync.errorKind}:${sync.courseUpdate.status}`}
+    </Text>
+  );
 }
 
 describe("AuthProvider/SyncProvider with cloud sync disabled", () => {
@@ -185,6 +212,10 @@ describe("AuthProvider/SyncProvider with cloud sync disabled", () => {
     // No scheduler was ever constructed, which is a direct proxy for "no timer was ever requested":
     // the only place this codebase calls `setTimeout` for sync is inside `SyncScheduler` itself.
     expect(MockSyncScheduler).not.toHaveBeenCalled();
+    // Same proxy for curriculum sync: no scheduler means no check, no manifest request, and no
+    // download — the whole feature is inert rather than merely quiet.
+    expect(MockCourseSyncScheduler).not.toHaveBeenCalled();
+    expect(mockCreateSupabaseCourseRemote).not.toHaveBeenCalled();
     expect(addEventListenerSpy).not.toHaveBeenCalled();
     // Connectivity is watched only to resume sync; with no sync at all there is nothing to resume, and a
     // local-only build has no business subscribing to the device's network or querying its state.
@@ -234,7 +265,9 @@ describe("AuthProvider/SyncProvider with cloud sync disabled", () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByTestId("sync-status")).toHaveTextContent("signed-out:0:null"),
+      // `idle` for curriculum sync, not `offline` or `attention`: nothing is wrong, nothing is
+      // pending, and nothing was ever asked of the network.
+      expect(screen.getByTestId("sync-status")).toHaveTextContent("signed-out:0:null:idle"),
     );
   });
 });

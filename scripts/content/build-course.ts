@@ -1,10 +1,13 @@
 /// <reference types="node" />
 
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
+import { canonicalizeRelease } from "../../src/data/course/canonicalize";
 import { parseAuthoredModules, parseCourseRelease } from "../../src/data/course/schema";
+import type { CourseModule, CourseRelease } from "../../src/data/course/types";
+import { calculateNodeReleaseChecksum } from "./node-checksum";
 
 const moduleFiles = [
   "content/module-01-foundations.json",
@@ -13,53 +16,62 @@ const moduleFiles = [
   "content/module-04-textures.json",
 ];
 
-const root = resolve(import.meta.dirname, "../..");
+// `process.cwd()` rather than `import.meta.dirname`: npm scripts and Jest both run from the repo
+// root, and `import.meta` is unreliable under Jest's CommonJS transform (it comes back with
+// `dirname`/`url` undefined instead of throwing on the property access, but `resolve(undefined, …)`
+// still throws).
+const root = process.cwd();
 const outputFile = resolve(root, "assets/course/bundled-course.json");
 
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-        .map(([key, child]) => [key, canonicalize(child)]),
-    );
-  }
-  return value;
-}
-
-function buildRelease() {
+/** Loads and validates the version-controlled authoring JSON, ordered by module position. */
+export function loadAuthoredModules(): CourseModule[] {
   const authoredModules = moduleFiles.map((filename) =>
     JSON.parse(readFileSync(resolve(root, filename), "utf8")),
   );
-  const modules = parseAuthoredModules(authoredModules).toSorted(
+  return parseAuthoredModules(authoredModules).toSorted(
     (left, right) => left.position - right.position,
   );
+}
+
+/** Builds the bundled, checksummed release seeded on-device for a fully offline first run. */
+export function buildBundledRelease(): CourseRelease {
+  const modules = loadAuthoredModules();
   const releaseBody = {
     id: "bundled-2026-08-04",
     schemaVersion: 1 as const,
     minimumAppVersion: "1.0.0",
     modules,
   };
-  const checksum = createHash("sha256")
-    .update(JSON.stringify(canonicalize(releaseBody)))
-    .digest("hex");
+  const checksum = calculateNodeReleaseChecksum(releaseBody);
 
   return parseCourseRelease({ ...releaseBody, checksum });
 }
 
-const generated = `${JSON.stringify(canonicalize(buildRelease()), null, 2)}\n`;
+function main(): void {
+  const generated = `${JSON.stringify(JSON.parse(canonicalizeRelease(buildBundledRelease())), null, 2)}\n`;
 
-if (process.argv.includes("--check")) {
-  const tracked = existsSync(outputFile) ? readFileSync(outputFile, "utf8") : undefined;
-  if (tracked !== generated) {
-    console.error("Bundled course is stale. Run `npm run content:build`.");
-    process.exitCode = 1;
+  if (process.argv.includes("--check")) {
+    const tracked = existsSync(outputFile) ? readFileSync(outputFile, "utf8") : undefined;
+    if (tracked !== generated) {
+      console.error("Bundled course is stale. Run `npm run content:build`.");
+      process.exitCode = 1;
+    } else {
+      console.log("Bundled course is up to date.");
+    }
   } else {
-    console.log("Bundled course is up to date.");
+    mkdirSync(dirname(outputFile), { recursive: true });
+    writeFileSync(outputFile, generated, "utf8");
+    console.log(`Wrote ${outputFile}`);
   }
-} else {
-  mkdirSync(dirname(outputFile), { recursive: true });
-  writeFileSync(outputFile, generated, "utf8");
-  console.log(`Wrote ${outputFile}`);
+}
+
+// Guard so importing this module (the publisher reuses `loadAuthoredModules`, and tests import it
+// too) never triggers a build/check as a side effect of import — only running it directly does.
+const isMain =
+  typeof import.meta.url === "string" && process.argv[1]
+    ? fileURLToPath(import.meta.url) === resolve(process.argv[1])
+    : false;
+
+if (isMain) {
+  main();
 }

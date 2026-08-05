@@ -57,6 +57,7 @@
     "web": "expo start --web",
     "content:build": "tsx scripts/content/build-course.ts",
     "content:check": "tsx scripts/content/build-course.ts --check",
+    "content:publish": "tsx scripts/content/publish-course.ts",
     "lint": "expo lint",
     "test": "jest",
     "test:watch": "jest --watch"

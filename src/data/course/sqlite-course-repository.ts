@@ -167,6 +167,18 @@ export class SqliteCourseRepository implements CourseRepository {
     };
   }
 
+  /**
+   * Tells subscribers the active release changed, so screens re-read the curriculum.
+   *
+   * Called by {@link ../course/release-installer.ReleaseInstaller} after — and only after — an
+   * activation commits: a repository cannot observe `app_metadata.active_release_id` changing
+   * underneath it, and notifying from inside the installer's transaction would let a listener read
+   * (or fail to read) a release that a later rollback erases.
+   */
+  onActiveReleaseChanged(): void {
+    this.notifySubscribers();
+  }
+
   protected notifySubscribers(): void {
     for (const listener of this.listeners) {
       listener();
