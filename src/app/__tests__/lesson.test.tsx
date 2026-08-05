@@ -29,7 +29,7 @@ jest.mock("../../components/live-shader-preview", () => {
   };
 });
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import bundledCourse from "../../../assets/course/bundled-course.json";
 
@@ -41,6 +41,10 @@ import type { CourseRepository } from "../../data/course/course-repository";
 import { parseCourseRelease } from "../../data/course/schema";
 import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
 import type { ProgressMutation, ProgressRepository } from "../../data/progress/progress-repository";
+import {
+  STUB_BUNDLED_RELEASE_ID,
+  STUB_RELEASE_INSTALLER,
+} from "../../data/course/testing/stub-release-installer";
 
 const mockRouter = { back: jest.fn(), push: jest.fn(), replace: jest.fn() };
 let mockSearchParams: Record<string, string> = {};
@@ -73,7 +77,18 @@ const publishedLessonIds = release.modules
 class FakeCourseRepository implements CourseRepository {
   private readonly listeners = new Set<() => void>();
 
-  constructor(private readonly courseRelease: CourseRelease) {}
+  constructor(private courseRelease: CourseRelease) {}
+
+  /**
+   * Stands in for `SqliteCourseRepository.onActiveReleaseChanged()` after a downloaded release is
+   * activated: the curriculum behind every read is replaced, and subscribers are told once.
+   */
+  activateRelease(next: CourseRelease): void {
+    this.courseRelease = next;
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
 
   async getActiveRelease(): Promise<CourseRelease> {
     return this.courseRelease;
@@ -167,7 +182,14 @@ async function renderRoute(
 
   await render(
     <DataContext.Provider
-      value={{ courseRepository, progressRepository, retry: () => {}, status: "ready" }}
+      value={{
+        courseRepository,
+        progressRepository,
+        releaseInstaller: STUB_RELEASE_INSTALLER,
+        bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
+        retry: () => {},
+        status: "ready",
+      }}
     >
       <CourseProvider>
         <ProgressProvider>
@@ -178,6 +200,8 @@ async function renderRoute(
   );
 
   await waitFor(() => expect(screen.queryByText("Loading lesson…")).toBeNull());
+
+  return { courseRepository, progressRepository };
 }
 
 const moduleOneLessonIds = findModule("coordinate-foundations").lessons.map((lesson) => lesson.id);
@@ -285,6 +309,89 @@ describe("lesson route", () => {
     expect(screen.queryByText("Lesson complete")).toBeNull();
     expect(screen.getByText("Mark lesson complete")).toBeTruthy();
     expect(screen.queryByText("Completed · Tap to undo")).toBeNull();
+  });
+
+  describe("when a newly activated release changes the published lesson set", () => {
+    /** The bundled release with `mutate` applied to its modules, still a valid parsed release. */
+    function releaseWithModules(modules: CourseModule[]): CourseRelease {
+      return { ...release, modules };
+    }
+
+    /** Module 1 with only its first two lessons, so lessons 3..5 no longer exist anywhere. */
+    function withModuleOneTruncated(): CourseRelease {
+      return releaseWithModules(
+        release.modules.map((module) =>
+          module.id !== "coordinate-foundations"
+            ? module
+            : {
+                ...module,
+                lessons: module.lessons.filter((lesson) => lesson.position <= 2),
+              },
+        ),
+      );
+    }
+
+    test("falls back to the current unlocked lesson when the open lesson was removed", async () => {
+      // Open lesson 3 of Module 1 with lessons 1-2 complete, then publish a release that drops it.
+      const { courseRepository } = await renderRoute({
+        completedLessonIds: moduleOneLessonIds.slice(0, 2),
+        lessonId: moduleOneLessonIds[2],
+      });
+      expect(screen.getByText("3 of 5")).toBeTruthy();
+
+      await act(async () => {
+        courseRepository.activateRelease(withModuleOneTruncated());
+      });
+
+      // Truncating Module 1 leaves it fully complete, so the learner's current lesson is now the
+      // first lesson of Module 2 — resolved and rendered, never an error state.
+      await waitFor(() => expect(screen.getByText("Step & Smoothstep")).toBeTruthy());
+      expect(screen.getByText("Module 02")).toBeTruthy();
+      expect(screen.getByText("1 of 5")).toBeTruthy();
+      expect(screen.queryByText("This lesson is not available yet.")).toBeNull();
+    });
+
+    test("falls back to a reviewable last lesson when the removal completes the course", async () => {
+      // The -1 case: with every remaining lesson complete, no module has a "next incomplete" lesson,
+      // so the fallback has to resolve to a last lesson to review rather than to index -1.
+      const { courseRepository } = await renderRoute({
+        completedLessonIds: publishedLessonIds,
+        lessonId: moduleOneLessonIds[2],
+      });
+
+      await act(async () => {
+        courseRepository.activateRelease(withModuleOneTruncated());
+      });
+
+      await waitFor(() => expect(screen.getByText("Color & Light Challenge")).toBeTruthy());
+      expect(screen.getByText("Module 03")).toBeTruthy();
+      expect(screen.getByText("4 of 4")).toBeTruthy();
+      expect(screen.queryByText("This lesson is not available yet.")).toBeNull();
+    });
+
+    test("reports the lesson as unavailable, without crashing, when every lesson is gone", async () => {
+      const { courseRepository } = await renderRoute({ lessonId: moduleOneLessonIds[0] });
+
+      await act(async () => {
+        // A release with no published lessons at all: `featuredLesson` is null and the fallback has
+        // nothing to resolve to. The route must say so rather than throw on a -1 index.
+        courseRepository.activateRelease(
+          releaseWithModules(
+            release.modules.map((module) => ({
+              ...module,
+              status: "planned" as const,
+              lessons: [],
+              plannedLessonCount: 0,
+              plannedTopics: [],
+            })),
+          ),
+        );
+      });
+
+      await waitFor(() =>
+        expect(screen.getByText("This lesson is not available yet.")).toBeTruthy(),
+      );
+    });
   });
 
   test("goes back from the lesson header", async () => {

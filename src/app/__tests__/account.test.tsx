@@ -59,6 +59,10 @@ function buildSync(overrides: SyncOverrides = {}): ReturnType<typeof useSyncStat
     errorKind: null,
     lastSuccessAt: null,
     retrySync: jest.fn(),
+    // Curriculum sync is a separate concern with a separate state (see `sync-context.tsx`); this
+    // screen reports progress sync, so the default is simply "nothing has been checked".
+    courseUpdate: { status: "idle", updatedReleaseId: null, requiredAppVersion: null },
+    checkForCourseUpdate: jest.fn(),
     ...overrides,
   };
 }

@@ -32,6 +32,10 @@ import type { CourseRepository } from "../../data/course/course-repository";
 import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
 import type { ProgressRepository } from "../../data/progress/progress-repository";
 import { isCloudSyncEnabled } from "../../data/supabase/client";
+import {
+  STUB_BUNDLED_RELEASE_ID,
+  STUB_RELEASE_INSTALLER,
+} from "../../data/course/testing/stub-release-installer";
 
 const mockRouter = { back: jest.fn(), push: jest.fn(), replace: jest.fn() };
 
@@ -185,6 +189,8 @@ function buildDataValue(
 ): DataContextValue {
   return {
     status: "ready",
+    releaseInstaller: STUB_RELEASE_INSTALLER,
+    bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
     courseRepository: new FakeCourseRepository(courseReadError),
     progressRepository: new FakeProgressRepository(completedLessonIds),
     retry: jest.fn(),

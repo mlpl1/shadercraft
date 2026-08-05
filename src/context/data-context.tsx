@@ -13,7 +13,9 @@ import Constants from "expo-constants";
 import bundledCourse from "../../assets/course/bundled-course.json";
 import { SplashScreen } from "../components/splash-screen";
 import type { CourseRepository } from "../data/course/course-repository";
+import { ReleaseInstaller } from "../data/course/release-installer";
 import { SqliteCourseRepository } from "../data/course/sqlite-course-repository";
+import type { CourseReleaseInstallerLike } from "../data/sync/course-sync-engine";
 import { openShadercraftDatabase } from "../data/database/client";
 import type { DatabaseDriver } from "../data/database/driver";
 import { LATEST_SCHEMA_VERSION } from "../data/database/migrations";
@@ -46,6 +48,18 @@ type DataState =
       status: "ready";
       courseRepository: CourseRepository;
       progressRepository: ProgressRepository;
+      /**
+       * The one installer downloaded releases go through, already wired to notify
+       * `courseRepository`'s subscribers after an activation commits. Built here rather than by
+       * whoever downloads a release, because this is the only place that holds the database driver —
+       * and keeping it here is what stops a second installer existing with no observer attached.
+       */
+      releaseInstaller: CourseReleaseInstallerLike;
+      /**
+       * The release this build shipped with. Travels with the installer because cleanup must never
+       * delete it, and only the app bundle knows which installed release is the bundled one.
+       */
+      bundledReleaseId: string;
     };
 
 export type DataContextValue = DataState & { retry: () => void };
@@ -105,7 +119,13 @@ export function DataProvider({
 
       // 5. Expose repositories only after all steps succeed.
       if (!cancelled) {
-        setState({ status: "ready", courseRepository, progressRepository });
+        setState({
+          status: "ready",
+          courseRepository,
+          progressRepository,
+          releaseInstaller: new ReleaseInstaller(driver, courseRepository),
+          bundledReleaseId: bundledCourse.id,
+        });
       }
     }
 

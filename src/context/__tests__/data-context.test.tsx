@@ -24,7 +24,8 @@ import { openShadercraftDatabase } from "../../data/database/client";
 import { installBundledRelease } from "../../data/database/seed";
 import type { DatabaseDriver } from "../../data/database/driver";
 import { importLegacyProgress } from "../../data/progress/legacy-import";
-import { DataProvider, useData } from "../data-context";
+import { DataProvider, useData, type DataContextValue } from "../data-context";
+import bundledCourse from "../../../assets/course/bundled-course.json";
 
 // `openShadercraftDatabase`'s real signature resolves an `ExpoSqliteDriver` (a concrete class with
 // a private field), but the fakes here only need to satisfy the `DatabaseDriver` interface it's
@@ -104,6 +105,46 @@ describe("DataProvider", () => {
     expect(mockInstallBundledRelease).toHaveBeenCalledTimes(1);
     expect(mockImportLegacyProgress).toHaveBeenCalledTimes(1);
     expect(fakeDriver.close).not.toHaveBeenCalled();
+  });
+
+  test("exposes a release installer wired to invalidate the course repository", async () => {
+    // The one wiring that makes an activated remote release reach Course, Home and an open lesson:
+    // `DataProvider` is the only place that holds the driver, so it is the only place that can hand
+    // the installer the repository whose subscribers have to be told.
+    const fakeDriver = createFakeDriver();
+    mockOpenShadercraftDatabase.mockResolvedValue(fakeDriver);
+
+    let captured: DataContextValue | null = null;
+    function Capture() {
+      captured = useData();
+      return null;
+    }
+
+    await render(
+      <DataProvider minimumSplashMs={0}>
+        <Probe />
+        <Capture />
+      </DataProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("ready")).toBeTruthy());
+
+    const data = captured as unknown as DataContextValue;
+    if (data.status !== "ready") throw new Error("expected a ready DataContextValue");
+    expect(data.bundledReleaseId).toBe(bundledCourse.id);
+
+    let invalidations = 0;
+    data.courseRepository.subscribe(() => {
+      invalidations += 1;
+    });
+
+    // The fake driver reports nothing installed and no active release, so this is an activation.
+    await act(async () => {
+      await expect(
+        data.releaseInstaller.stageAndActivate(bundledCourse, { verifyChecksum: false }),
+      ).resolves.toEqual({ status: "activated", releaseId: bundledCourse.id });
+    });
+
+    expect(invalidations).toBe(1);
   });
 
   test("advances the splash phase log as each real init step completes", async () => {

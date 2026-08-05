@@ -16,6 +16,10 @@ import type { ProgressRepository } from "../../data/progress/progress-repository
 import { CourseProvider, useCourse } from "../course-context";
 import { DataContext, type DataContextValue } from "../data-context";
 import { ProgressProvider, useProgress } from "../progress-context";
+import {
+  STUB_BUNDLED_RELEASE_ID,
+  STUB_RELEASE_INSTALLER,
+} from "../../data/course/testing/stub-release-installer";
 
 function buildLesson(id: string, moduleId: string, position: number): CourseLesson {
   return {
@@ -161,6 +165,8 @@ describe("course and progress providers", () => {
     fakeProgressRepository = createFakeProgressRepository();
     dataValue = {
       status: "ready",
+      releaseInstaller: STUB_RELEASE_INSTALLER,
+      bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
       courseRepository: fakeCourseRepository,
       progressRepository: fakeProgressRepository,
       retry: jest.fn(),

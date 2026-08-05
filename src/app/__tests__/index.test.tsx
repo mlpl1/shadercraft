@@ -24,6 +24,10 @@ import { ProgressProvider } from "../../context/progress-context";
 import type { CourseRepository } from "../../data/course/course-repository";
 import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
 import type { ProgressRepository } from "../../data/progress/progress-repository";
+import {
+  STUB_BUNDLED_RELEASE_ID,
+  STUB_RELEASE_INSTALLER,
+} from "../../data/course/testing/stub-release-installer";
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ back: jest.fn(), push: jest.fn(), replace: jest.fn() }),
@@ -151,6 +155,8 @@ class FakeProgressRepository implements ProgressRepository {
 function buildDataValue(courseReadError?: Error): DataContextValue {
   return {
     status: "ready",
+    releaseInstaller: STUB_RELEASE_INSTALLER,
+    bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
     courseRepository: new FakeCourseRepository(courseReadError),
     progressRepository: new FakeProgressRepository(),
     retry: jest.fn(),
