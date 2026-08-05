@@ -21,6 +21,8 @@ The project is currently an early working prototype built with Expo and React Na
   checksummed, version-controlled content release
 - Optional Supabase accounts and background cross-device progress synchronization, reachable from
   an account icon on the Course screen; disabled by default and entirely inert until configured
+- Remote curriculum publishing: an immutable, checksummed course release can be published to
+  Supabase and picked up by installed apps in the background, without an app-store update
 
 Modules 01, 02, and 03 are published and contain 14 interactive lessons in total (five, five,
 and four respectively). Every published module concludes with a layered shader challenge.
@@ -41,6 +43,10 @@ Completing Shape Synthesis unlocks Color & Light. Module 04, Procedural Textures
 - [Supabase](https://supabase.com) for optional accounts and progress sync (see
   [`docs/data/progress-sync.md`](docs/data/progress-sync.md)); off by default, and never reached
   by any screen unless explicitly enabled
+- Supabase also hosts immutable, published curriculum releases a device can download and activate
+  in the background (see
+  [`docs/data/curriculum-publishing.md`](docs/data/curriculum-publishing.md)); reads are open to
+  every client, publishing is restricted to a service-role credential held only by CI
 - TypeScript and the React Compiler
 
 ## Requirements
@@ -89,6 +95,7 @@ the installed application.
 | `npm run web` | Start the web version |
 | `npm run content:build` | Regenerate `assets/course/bundled-course.json` from `content/module-*.json` |
 | `npm run content:check` | Fail if the tracked bundled course is stale |
+| `npm run content:publish -- --release <id>` | Publish authored content to Supabase as a new immutable release (requires `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`; see [`docs/data/curriculum-publishing.md`](docs/data/curriculum-publishing.md)) |
 | `npm test` | Run the Jest suite |
 | `npm run test:watch` | Run the Jest suite in watch mode |
 | `npx tsc --noEmit` | Run the TypeScript check without emitting files |
@@ -146,11 +153,24 @@ launch. See [`docs/data/local-curriculum.md`](docs/data/local-curriculum.md) for
 authoring workflow: which files to edit, the `content:build` / `content:check` commands, what
 the schema validates, and the constraints around preview capabilities and release checksums.
 
+A validated, checksummed release can also be published to Supabase and picked up by installed apps
+in the background, without an app-store update. See
+[`docs/data/curriculum-publishing.md`](docs/data/curriculum-publishing.md) for the immutability
+contract, the pull-request and manual-publish CI workflows
+(`.github/workflows/content-check.yml`, `.github/workflows/publish-course.yml`), compatibility
+rules, and rollback by publishing a prior payload under a new release id. Two current limitations
+documented there: a learner on a build too old for the active release gets no on-screen message
+(the check just quietly fails to install), and a device that updates the app and then stays offline
+can be stranded on the app update's own bundled curriculum instead of a newer one it had already
+downloaded — no progress is lost either way, since progress is keyed by lesson id.
+
 ## Roadmap
 
 - Editable GLSL with debounced shader recompilation and compiler feedback
 - Configured linting (`expo lint` runs, but the project has no committed ESLint
   setup yet and currently reports pre-existing violations)
+- Surface `requires-app-update` to the learner instead of silently declining to install (see
+  [`docs/data/curriculum-publishing.md`](docs/data/curriculum-publishing.md))
 
 ## Contributing
 
