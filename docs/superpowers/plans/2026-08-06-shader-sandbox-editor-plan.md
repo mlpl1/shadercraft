@@ -83,7 +83,7 @@ import {
 } from "../shader-source";
 
 describe("wrapMainImageBody", () => {
-  it("reports an offset matching the prologue it emitted", () => {
+  it("reports an offset matching the prologue it emitted", async () => {
     const { source, lineOffset } = wrapMainImageBody("  fragColor = vec4(1.0);");
     const prologue = source.split("\n").slice(0, lineOffset);
 
@@ -96,7 +96,7 @@ describe("wrapMainImageBody", () => {
     ]);
   });
 
-  it("places the body's first line directly after the prologue", () => {
+  it("places the body's first line directly after the prologue", async () => {
     const { source, lineOffset } = wrapMainImageBody("float a = 1.0;\nfloat b = 2.0;");
     const lines = source.split("\n");
 
@@ -104,7 +104,7 @@ describe("wrapMainImageBody", () => {
     expect(lines[lineOffset + 1]).toBe("float b = 2.0;");
   });
 
-  it("writes gl_FragColor through a local rather than passing it as an out argument", () => {
+  it("writes gl_FragColor through a local rather than passing it as an out argument", async () => {
     const { source } = wrapMainImageBody("fragColor = vec4(1.0);");
 
     expect(source).toContain("mainImage(shadercraftColor, gl_FragCoord.xy);");
@@ -112,13 +112,13 @@ describe("wrapMainImageBody", () => {
     expect(source).not.toContain("mainImage(gl_FragColor");
   });
 
-  it("closes mainImage before declaring main", () => {
+  it("closes mainImage before declaring main", async () => {
     const { source } = wrapMainImageBody("fragColor = vec4(1.0);");
 
     expect(source.indexOf("}")).toBeLessThan(source.indexOf("void main()"));
   });
 
-  it("declares no version directive and no stage-level in/out", () => {
+  it("declares no version directive and no stage-level in/out", async () => {
     const { source } = wrapMainImageBody("fragColor = vec4(1.0);");
 
     expect(source).not.toContain("#version");
@@ -127,7 +127,7 @@ describe("wrapMainImageBody", () => {
 });
 
 describe("parseCompileLog", () => {
-  it("subtracts the prologue offset from a standard ERROR line", () => {
+  it("subtracts the prologue offset from a standard ERROR line", async () => {
     const errors = parseCompileLog(
       "ERROR: 0:7: 'foo' : undeclared identifier",
       SHADER_BODY_LINE_OFFSET,
@@ -142,7 +142,7 @@ describe("parseCompileLog", () => {
     ]);
   });
 
-  it("returns one entry per diagnostic line", () => {
+  it("returns one entry per diagnostic line", async () => {
     const errors = parseCompileLog(
       "ERROR: 0:5: 'x' : undeclared identifier\nERROR: 0:9: ';' : syntax error",
       SHADER_BODY_LINE_OFFSET,
@@ -151,14 +151,14 @@ describe("parseCompileLog", () => {
     expect(errors.map((error) => error.line)).toEqual([1, 5]);
   });
 
-  it("clamps a diagnostic inside the prologue to line 1 and keeps its raw text", () => {
+  it("clamps a diagnostic inside the prologue to line 1 and keeps its raw text", async () => {
     const errors = parseCompileLog("ERROR: 0:2: 'iTime' : redefinition", SHADER_BODY_LINE_OFFSET);
 
     expect(errors[0].line).toBe(1);
     expect(errors[0].raw).toBe("ERROR: 0:2: 'iTime' : redefinition");
   });
 
-  it("parses a bare file:line diagnostic with no severity prefix", () => {
+  it("parses a bare file:line diagnostic with no severity prefix", async () => {
     const errors = parseCompileLog("0:8: L0001: syntax error", SHADER_BODY_LINE_OFFSET);
 
     expect(errors[0]).toEqual({
@@ -168,7 +168,7 @@ describe("parseCompileLog", () => {
     });
   });
 
-  it("keeps a line it cannot parse, with a null line number", () => {
+  it("keeps a line it cannot parse, with a null line number", async () => {
     const errors = parseCompileLog("Compilation failed", SHADER_BODY_LINE_OFFSET);
 
     expect(errors).toEqual([
@@ -176,13 +176,13 @@ describe("parseCompileLog", () => {
     ]);
   });
 
-  it("keeps warnings so they are not silently dropped", () => {
+  it("keeps warnings so they are not silently dropped", async () => {
     const errors = parseCompileLog("WARNING: 0:6: 'x' : unused", SHADER_BODY_LINE_OFFSET);
 
     expect(errors[0].line).toBe(2);
   });
 
-  it("survives CRLF endings, blank lines and trailing null terminators", () => {
+  it("survives CRLF endings, blank lines and trailing null terminators", async () => {
     const errors = parseCompileLog(
       "ERROR: 0:5: 'a' : bad\r\n\r\nERROR: 0:6: 'b' : bad\r\n\u0000",
       SHADER_BODY_LINE_OFFSET,
@@ -194,7 +194,7 @@ describe("parseCompileLog", () => {
     expect(errors[0].message).toBe("'a' : bad");
   });
 
-  it("returns nothing for an empty log", () => {
+  it("returns nothing for an empty log", async () => {
     expect(parseCompileLog("", SHADER_BODY_LINE_OFFSET)).toEqual([]);
   });
 });
@@ -343,7 +343,7 @@ Create `src/shaders/__tests__/fake-gl.test.ts`:
 import { createFakeGl } from "../testing/fake-gl";
 
 describe("createFakeGl", () => {
-  it("reports a compiled shader as successful by default", () => {
+  it("reports a compiled shader as successful by default", async () => {
     const gl = createFakeGl();
     const shader = gl.createShader(gl.FRAGMENT_SHADER);
 
@@ -353,7 +353,7 @@ describe("createFakeGl", () => {
     expect(gl.getShaderParameter(shader, gl.COMPILE_STATUS)).toBe(true);
   });
 
-  it("fails compilation and returns the scripted log when told to", () => {
+  it("fails compilation and returns the scripted log when told to", async () => {
     const gl = createFakeGl({ failShaderCompile: true, shaderLog: "ERROR: 0:7: nope" });
     const shader = gl.createShader(gl.FRAGMENT_SHADER);
 
@@ -363,7 +363,7 @@ describe("createFakeGl", () => {
     expect(gl.getShaderInfoLog(shader)).toBe("ERROR: 0:7: nope");
   });
 
-  it("fails linking independently of compilation", () => {
+  it("fails linking independently of compilation", async () => {
     const gl = createFakeGl({ failProgramLink: true, programLog: "ERROR: link failed" });
     const program = gl.createProgram();
 
@@ -373,7 +373,7 @@ describe("createFakeGl", () => {
     expect(gl.getProgramInfoLog(program)).toBe("ERROR: link failed");
   });
 
-  it("tracks created and deleted objects so leaks are observable", () => {
+  it("tracks created and deleted objects so leaks are observable", async () => {
     const gl = createFakeGl();
     const shader = gl.createShader(gl.VERTEX_SHADER);
     const program = gl.createProgram();
@@ -388,7 +388,7 @@ describe("createFakeGl", () => {
     expect(gl.deletedCount()).toBe(2);
   });
 
-  it("records uniform writes and draw calls", () => {
+  it("records uniform writes and draw calls", async () => {
     const gl = createFakeGl();
     const program = gl.createProgram();
     const location = gl.getUniformLocation(program, "iTime");
@@ -571,14 +571,14 @@ const BODY = "fragColor = vec4(1.0);";
 const host = (gl: FakeGl) => new ShaderProgramHost(gl as never);
 
 describe("ShaderProgramHost", () => {
-  it("compiles a body and reports success", () => {
+  it("compiles a body and reports success", async () => {
     const gl = createFakeGl();
     const result = host(gl).setBody(BODY);
 
     expect(result).toEqual({ ok: true });
   });
 
-  it("returns mapped errors instead of throwing when compilation fails", () => {
+  it("returns mapped errors instead of throwing when compilation fails", async () => {
     const gl = createFakeGl({
       failShaderCompile: true,
       shaderLog: "ERROR: 0:5: 'x' : undeclared identifier",
@@ -593,7 +593,7 @@ describe("ShaderProgramHost", () => {
     expect(result.showingLastWorking).toBe(false);
   });
 
-  it("returns errors instead of throwing when linking fails", () => {
+  it("returns errors instead of throwing when linking fails", async () => {
     const gl = createFakeGl({ failProgramLink: true, programLog: "ERROR: link failed" });
 
     const result = host(gl).setBody(BODY);
@@ -603,7 +603,7 @@ describe("ShaderProgramHost", () => {
     expect(result.rawLog).toBe("ERROR: link failed");
   });
 
-  it("still has a program to render after a failed recompile", () => {
+  it("still has a program to render after a failed recompile", async () => {
     let failing = false;
     const gl = createFakeGl();
     // Swap the compile verdict after the first successful compile.
@@ -624,7 +624,7 @@ describe("ShaderProgramHost", () => {
     expect(subject.hasProgram()).toBe(true);
   });
 
-  it("deletes the superseded program so repeated edits do not leak", () => {
+  it("deletes the superseded program so repeated edits do not leak", async () => {
     const gl = createFakeGl();
     const subject = host(gl);
 
@@ -636,21 +636,21 @@ describe("ShaderProgramHost", () => {
     expect(gl.liveObjectCount()).toBe(2);
   });
 
-  it("deletes shaders after a successful link", () => {
+  it("deletes shaders after a successful link", async () => {
     const gl = createFakeGl();
     host(gl).setBody(BODY);
 
     expect(gl.deletedCount()).toBe(2);
   });
 
-  it("deletes the shader it created when compilation fails", () => {
+  it("deletes the shader it created when compilation fails", async () => {
     const gl = createFakeGl({ failShaderCompile: true });
     host(gl).setBody(BODY);
 
     expect(gl.liveObjectCount()).toBe(0);
   });
 
-  it("skips recompilation when the body has not changed", () => {
+  it("skips recompilation when the body has not changed", async () => {
     const gl = createFakeGl();
     const subject = host(gl);
 
@@ -661,7 +661,7 @@ describe("ShaderProgramHost", () => {
     expect(gl.createdCount()).toBe(afterFirst);
   });
 
-  it("does not compile an empty body", () => {
+  it("does not compile an empty body", async () => {
     const gl = createFakeGl();
     const subject = host(gl);
 
@@ -672,7 +672,7 @@ describe("ShaderProgramHost", () => {
     expect(gl.createdCount()).toBe(0);
   });
 
-  it("writes iResolution and iTime and draws when a program exists", () => {
+  it("writes iResolution and iTime and draws when a program exists", async () => {
     const gl = createFakeGl();
     const subject = host(gl);
     subject.setBody(BODY);
@@ -686,7 +686,7 @@ describe("ShaderProgramHost", () => {
     expect(gl.drawCount()).toBe(1);
   });
 
-  it("does not draw when nothing has compiled", () => {
+  it("does not draw when nothing has compiled", async () => {
     const gl = createFakeGl();
 
     host(gl).render(0, 400, 300);
@@ -694,7 +694,7 @@ describe("ShaderProgramHost", () => {
     expect(gl.drawCount()).toBe(0);
   });
 
-  it("releases every object on dispose", () => {
+  it("releases every object on dispose", async () => {
     const gl = createFakeGl();
     const subject = host(gl);
     subject.setBody(BODY);
@@ -1178,32 +1178,32 @@ describe("GlslInput", () => {
     expect(screen.getByTestId("glsl-gutter")).toHaveTextContent("3");
   });
 
-  it("reports edits to the caller", () => {
+  it("reports edits to the caller", async () => {
     const onChange = jest.fn();
     await render(<GlslInput errors={[]} initialValue="a;" onChange={onChange} />);
 
-    fireEvent.changeText(screen.getByTestId("glsl-input"), "b;");
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "b;");
 
     expect(onChange).toHaveBeenCalledWith("b;");
   });
 
-  it("inserts a symbol at the caret and reports the result", () => {
+  it("inserts a symbol at the caret and reports the result", async () => {
     const onChange = jest.fn();
     await render(<GlslInput errors={[]} initialValue="vec2 p = ;" onChange={onChange} />);
 
-    fireEvent(screen.getByTestId("glsl-input"), "selectionChange", {
+    await fireEvent(screen.getByTestId("glsl-input"), "selectionChange", {
       nativeEvent: { selection: { start: 9, end: 9 } },
     });
-    fireEvent.press(screen.getByText("vec2"));
+    await fireEvent.press(screen.getByText("vec2"));
 
     expect(onChange).toHaveBeenCalledWith("vec2 p = vec2;");
   });
 
-  it("appends a symbol when the caret position is unknown", () => {
+  it("appends a symbol when the caret position is unknown", async () => {
     const onChange = jest.fn();
     await render(<GlslInput errors={[]} initialValue="a" onChange={onChange} />);
 
-    fireEvent.press(screen.getByText(";"));
+    await fireEvent.press(screen.getByText(";"));
 
     expect(onChange).toHaveBeenCalledWith("a;");
   });
@@ -2026,7 +2026,7 @@ describe("BottomNavigation", () => {
   it("navigates to the editor route", async () => {
     await render(<BottomNavigation activeItem="home" />);
 
-    fireEvent.press(screen.getByText("Editor"));
+    await fireEvent.press(screen.getByText("Editor"));
 
     expect(replace).toHaveBeenCalledWith("/editor");
   });
@@ -2034,7 +2034,7 @@ describe("BottomNavigation", () => {
   it("does not navigate when the active tab is pressed", async () => {
     await render(<BottomNavigation activeItem="editor" />);
 
-    fireEvent.press(screen.getByText("Editor"));
+    await fireEvent.press(screen.getByText("Editor"));
 
     expect(replace).not.toHaveBeenCalled();
   });
@@ -2042,7 +2042,7 @@ describe("BottomNavigation", () => {
   it("navigates between home and course", async () => {
     await render(<BottomNavigation activeItem="editor" />);
 
-    fireEvent.press(screen.getByText("Course"));
+    await fireEvent.press(screen.getByText("Course"));
 
     expect(replace).toHaveBeenCalledWith("/course");
   });
@@ -2185,7 +2185,7 @@ describe("EditorScreen", () => {
     await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
 
-    fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.25);");
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.25);");
     expect(repository.updateSource).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -2203,7 +2203,7 @@ describe("EditorScreen", () => {
     await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
 
-    fireEvent.changeText(screen.getByTestId("glsl-input"), "a");
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "a");
     await act(async () => {
       jest.advanceTimersByTime(200);
     });
@@ -2216,7 +2216,7 @@ describe("EditorScreen", () => {
     await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
 
-    fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.75);");
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.75);");
     await act(async () => {
       jest.advanceTimersByTime(1000);
     });
@@ -2489,29 +2489,29 @@ describe("PreviewControls", () => {
     expect(screen.getByLabelText("Resume preview")).toBeTruthy();
   });
 
-  it("reports a pause toggle", () => {
+  it("reports a pause toggle", async () => {
     const current = props();
     await render(<PreviewControls {...current} />);
 
-    fireEvent.press(screen.getByLabelText("Pause preview"));
+    await fireEvent.press(screen.getByLabelText("Pause preview"));
 
     expect(current.onTogglePause).toHaveBeenCalled();
   });
 
-  it("reports a restart", () => {
+  it("reports a restart", async () => {
     const current = props();
     await render(<PreviewControls {...current} />);
 
-    fireEvent.press(screen.getByLabelText("Restart preview"));
+    await fireEvent.press(screen.getByLabelText("Restart preview"));
 
     expect(current.onRestart).toHaveBeenCalled();
   });
 
-  it("reports a collapse toggle and labels it by current state", () => {
+  it("reports a collapse toggle and labels it by current state", async () => {
     const current = props({ collapsed: true });
     await render(<PreviewControls {...current} />);
 
-    fireEvent.press(screen.getByLabelText("Show preview"));
+    await fireEvent.press(screen.getByLabelText("Show preview"));
 
     expect(current.onToggleCollapse).toHaveBeenCalled();
   });
@@ -2675,10 +2675,10 @@ Append to `src/app/__tests__/editor.test.tsx`:
     await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("sandbox")).toBeTruthy());
 
-    fireEvent.press(screen.getByLabelText("Hide preview"));
+    await fireEvent.press(screen.getByLabelText("Hide preview"));
     expect(screen.queryByTestId("sandbox")).toBeNull();
 
-    fireEvent.press(screen.getByLabelText("Show preview"));
+    await fireEvent.press(screen.getByLabelText("Show preview"));
     expect(screen.getByTestId("sandbox")).toBeTruthy();
   });
 ```
@@ -2751,60 +2751,60 @@ describe("SketchListSheet", () => {
     );
   });
 
-  it("selects another sketch", () => {
+  it("selects another sketch", async () => {
     const current = props();
     await render(<SketchListSheet {...current} />);
 
-    fireEvent.press(screen.getByText("Beta"));
+    await fireEvent.press(screen.getByText("Beta"));
 
     expect(current.onSelect).toHaveBeenCalledWith("b");
   });
 
-  it("creates a new sketch", () => {
+  it("creates a new sketch", async () => {
     const current = props();
     await render(<SketchListSheet {...current} />);
 
-    fireEvent.press(screen.getByText("New sketch"));
+    await fireEvent.press(screen.getByText("New sketch"));
 
     expect(current.onCreate).toHaveBeenCalled();
   });
 
-  it("renames a sketch through its inline field", () => {
+  it("renames a sketch through its inline field", async () => {
     const current = props();
     await render(<SketchListSheet {...current} />);
 
-    fireEvent.press(screen.getByTestId("sketch-rename-a"));
-    fireEvent.changeText(screen.getByTestId("sketch-title-input"), "Renamed");
-    fireEvent(screen.getByTestId("sketch-title-input"), "submitEditing");
+    await fireEvent.press(screen.getByTestId("sketch-rename-a"));
+    await fireEvent.changeText(screen.getByTestId("sketch-title-input"), "Renamed");
+    await fireEvent(screen.getByTestId("sketch-title-input"), "submitEditing");
 
     expect(current.onRename).toHaveBeenCalledWith("a", "Renamed");
   });
 
-  it("ignores a rename to an empty title", () => {
+  it("ignores a rename to an empty title", async () => {
     const current = props();
     await render(<SketchListSheet {...current} />);
 
-    fireEvent.press(screen.getByTestId("sketch-rename-a"));
-    fireEvent.changeText(screen.getByTestId("sketch-title-input"), "   ");
-    fireEvent(screen.getByTestId("sketch-title-input"), "submitEditing");
+    await fireEvent.press(screen.getByTestId("sketch-rename-a"));
+    await fireEvent.changeText(screen.getByTestId("sketch-title-input"), "   ");
+    await fireEvent(screen.getByTestId("sketch-title-input"), "submitEditing");
 
     expect(current.onRename).not.toHaveBeenCalled();
   });
 
-  it("deletes a sketch", () => {
+  it("deletes a sketch", async () => {
     const current = props();
     await render(<SketchListSheet {...current} />);
 
-    fireEvent.press(screen.getByTestId("sketch-delete-b"));
+    await fireEvent.press(screen.getByTestId("sketch-delete-b"));
 
     expect(current.onDelete).toHaveBeenCalledWith("b");
   });
 
-  it("refuses to delete the last remaining sketch", () => {
+  it("refuses to delete the last remaining sketch", async () => {
     const current = { ...props(), sketches: [sketch("a", "Alpha")] };
     await render(<SketchListSheet {...current} />);
 
-    fireEvent.press(screen.getByTestId("sketch-delete-a"));
+    await fireEvent.press(screen.getByTestId("sketch-delete-a"));
 
     expect(current.onDelete).not.toHaveBeenCalled();
   });
@@ -3173,9 +3173,9 @@ Append to `src/app/__tests__/editor.test.tsx`:
     await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("open-sketch-list")).toBeTruthy());
 
-    fireEvent.press(screen.getByTestId("open-sketch-list"));
+    await fireEvent.press(screen.getByTestId("open-sketch-list"));
     await act(async () => {
-      fireEvent.press(screen.getByText("Two"));
+      await fireEvent.press(screen.getByText("Two"));
     });
 
     expect(screen.getByTestId("glsl-input").props.defaultValue).toBe("fragColor = vec4(0.2);");
