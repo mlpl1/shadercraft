@@ -308,7 +308,7 @@ export function parseCompileLog(log: string, lineOffset: number): CompileError[]
 
 Run: `npx jest src/shaders/__tests__/shader-source.test.ts`
 
-Expected: PASS, 14 tests.
+Expected: PASS, 13 tests.
 
 - [ ] **Step 5: Typecheck and commit**
 
