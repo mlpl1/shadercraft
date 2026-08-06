@@ -162,6 +162,67 @@ describe("EditorScreen", () => {
     expect(repository.updateSource).not.toHaveBeenCalled();
   });
 
+  it("switches to another sketch and shows its source", async () => {
+    sketches = [
+      {
+        id: "sketch-1",
+        title: "One",
+        source: "fragColor = vec4(0.1);",
+        createdAt: "2026-08-06T00:00:00.000Z",
+        updatedAt: "2026-08-06T00:02:00.000Z",
+      },
+      {
+        id: "sketch-2",
+        title: "Two",
+        source: "fragColor = vec4(0.2);",
+        createdAt: "2026-08-06T00:00:00.000Z",
+        updatedAt: "2026-08-06T00:01:00.000Z",
+      },
+    ];
+
+    await render(<EditorScreen />);
+    await waitFor(() => expect(screen.getByTestId("open-sketch-list")).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId("open-sketch-list"));
+    await act(async () => {
+      await fireEvent.press(screen.getByText("Two"));
+    });
+
+    expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.2);");
+  });
+
+  it("opens a replacement after the open sketch is deleted", async () => {
+    sketches = [
+      {
+        id: "sketch-1",
+        title: "One",
+        source: "fragColor = vec4(0.1);",
+        createdAt: "2026-08-06T00:00:00.000Z",
+        updatedAt: "2026-08-06T00:02:00.000Z",
+      },
+      {
+        id: "sketch-2",
+        title: "Two",
+        source: "fragColor = vec4(0.2);",
+        createdAt: "2026-08-06T00:00:00.000Z",
+        updatedAt: "2026-08-06T00:01:00.000Z",
+      },
+    ];
+    repository.delete.mockImplementation(async (_profileId: string, id: string) => {
+      sketches = sketches.filter((sketch) => sketch.id !== id);
+    });
+
+    await render(<EditorScreen />);
+    await waitFor(() => expect(screen.getByTestId("open-sketch-list")).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId("open-sketch-list"));
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Delete One"));
+    });
+
+    expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.2);");
+  });
+
   it("unmounts the preview when collapsed and restores it on demand", async () => {
     await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("sandbox")).toBeTruthy());

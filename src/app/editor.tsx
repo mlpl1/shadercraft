@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/bottom-navigation";
 import { GlslInput } from "../components/glsl-input";
 import { PreviewControls } from "../components/preview-controls";
 import { ShaderSandbox } from "../components/shader-sandbox";
-import { Colors, Spacing } from "../constants/theme";
+import { SketchListSheet } from "../components/sketch-list-sheet";
+import { Colors, Radius, Spacing } from "../constants/theme";
 import { useAuth } from "../context/auth-context";
 import { useData } from "../context/data-context";
 import type { Sketch } from "../data/sketches/sketch-repository";
@@ -29,6 +30,8 @@ export default function EditorScreen() {
   const sketchRepository = data.status === "ready" ? data.sketchRepository : null;
 
   const [sketch, setSketch] = useState<Sketch | null>(null);
+  const [sketches, setSketches] = useState<Sketch[]>([]);
+  const [isListOpen, setIsListOpen] = useState(false);
   const [compiledSource, setCompiledSource] = useState("");
   const [errors, setErrors] = useState<CompileError[]>([]);
   const [showingLastWorking, setShowingLastWorking] = useState(false);
@@ -58,7 +61,13 @@ export default function EditorScreen() {
         existing[0] ??
         (await sketchRepository.create(profileId, STARTER_SKETCH_TITLE, STARTER_SKETCH_SOURCE));
 
+      // Re-read rather than reusing `existing`: on a first run the create above inserted a row the
+      // list call could not have seen. Every await finishes before the cancellation guard, so an
+      // unmount mid-load cannot land state on a dead component.
+      const all = existing.length > 0 ? existing : await sketchRepository.list(profileId);
+
       if (cancelled) return;
+      setSketches(all);
       setSketch(opened);
       setCompiledSource(opened.source);
     })();
@@ -109,6 +118,77 @@ export default function EditorScreen() {
     [flushSave],
   );
 
+  /**
+   * Every mutation flushes the pending autosave first, then re-reads the list so ordering stays
+   * correct — `updatedAt DESC` is only meaningful once the write it depends on has landed.
+   */
+  const openSketch = useCallback(
+    async (id: string) => {
+      await flushSave();
+      if (!sketchRepository || !profileId) return;
+
+      const next = await sketchRepository.get(profileId, id);
+      if (!next) return;
+
+      setSketches(await sketchRepository.list(profileId));
+      setSketch(next);
+      setCompiledSource(next.source);
+      setErrors([]);
+      setIsListOpen(false);
+    },
+    [flushSave, profileId, sketchRepository],
+  );
+
+  const createSketch = useCallback(async () => {
+    await flushSave();
+    if (!sketchRepository || !profileId) return;
+
+    const created = await sketchRepository.create(
+      profileId,
+      STARTER_SKETCH_TITLE,
+      STARTER_SKETCH_SOURCE,
+    );
+
+    setSketches(await sketchRepository.list(profileId));
+    setSketch(created);
+    setCompiledSource(created.source);
+    setErrors([]);
+    setIsListOpen(false);
+  }, [flushSave, profileId, sketchRepository]);
+
+  const renameSketch = useCallback(
+    async (id: string, title: string) => {
+      if (!sketchRepository || !profileId) return;
+
+      await sketchRepository.rename(profileId, id, title);
+      setSketches(await sketchRepository.list(profileId));
+      setSketch((current) => (current && current.id === id ? { ...current, title } : current));
+    },
+    [profileId, sketchRepository],
+  );
+
+  const deleteSketch = useCallback(
+    async (id: string) => {
+      if (!sketchRepository || !profileId) return;
+
+      // A pending autosave for the sketch being deleted must not resurrect it after the delete.
+      if (sketchRef.current?.id === id) pendingSourceRef.current = null;
+
+      await sketchRepository.delete(profileId, id);
+      const remaining = await sketchRepository.list(profileId);
+      setSketches(remaining);
+
+      // Deleting the open sketch would leave the editor with nothing to show, so fall through to
+      // whatever is now most recent.
+      if (sketchRef.current?.id === id && remaining[0]) {
+        setSketch(remaining[0]);
+        setCompiledSource(remaining[0].source);
+        setErrors([]);
+      }
+    },
+    [profileId, sketchRepository],
+  );
+
   const handleCompileResult = useCallback((result: HostCompileResult) => {
     if (result.ok) {
       setErrors([]);
@@ -134,10 +214,22 @@ export default function EditorScreen() {
   return (
     <SafeAreaView edges={["top"]} style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>Editor</Text>
-        <Text numberOfLines={1} style={styles.title}>
-          {sketch.title}
-        </Text>
+        <View style={styles.headerText}>
+          <Text style={styles.eyebrow}>Editor</Text>
+          <Text numberOfLines={1} style={styles.title}>
+            {sketch.title}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityLabel="Sketches"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={() => setIsListOpen(true)}
+          style={({ pressed }) => [styles.headerAction, pressed && styles.headerActionPressed]}
+          testID="open-sketch-list"
+        >
+          <Text style={styles.headerActionText}>Sketches</Text>
+        </Pressable>
       </View>
 
       <PreviewControls
@@ -165,9 +257,35 @@ export default function EditorScreen() {
       )}
       {saveError !== null && <Text style={styles.saveError}>{saveError}</Text>}
 
-      <GlslInput errors={errors} initialValue={sketch.source} onChange={handleChange} />
+      {/* `key` forces a remount when the open sketch changes: GlslInput seeds its buffer from
+          `initialValue` once, so without this, switching sketches would leave the old text on screen. */}
+      <GlslInput
+        errors={errors}
+        initialValue={sketch.source}
+        key={sketch.id}
+        onChange={handleChange}
+      />
 
       <BottomNavigation activeItem="editor" />
+
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setIsListOpen(false)}
+        transparent
+        visible={isListOpen}
+      >
+        <View style={styles.modalBackdrop}>
+          <SketchListSheet
+            activeSketchId={sketch.id}
+            onClose={() => setIsListOpen(false)}
+            onCreate={() => void createSketch()}
+            onDelete={(id) => void deleteSketch(id)}
+            onRename={(id, title) => void renameSketch(id, title)}
+            onSelect={(id) => void openSketch(id)}
+            sketches={sketches}
+          />
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -178,8 +296,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
+  },
+  headerText: {
+    flex: 1,
+  },
+  headerAction: {
+    borderColor: Colors.border,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  headerActionPressed: {
+    backgroundColor: Colors.surfaceRaised,
+  },
+  headerActionText: {
+    color: Colors.textMuted,
+    fontSize: 12,
+  },
+  modalBackdrop: {
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    flex: 1,
+    justifyContent: "flex-end",
   },
   eyebrow: {
     color: Colors.textSubtle,
