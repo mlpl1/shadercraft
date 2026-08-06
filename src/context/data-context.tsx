@@ -23,6 +23,8 @@ import { installBundledRelease } from "../data/database/seed";
 import { importLegacyProgress } from "../data/progress/legacy-import";
 import type { ProgressRepository } from "../data/progress/progress-repository";
 import { SqliteProgressRepository } from "../data/progress/sqlite-progress-repository";
+import type { SketchRepository } from "../data/sketches/sketch-repository";
+import { SqliteSketchRepository } from "../data/sketches/sqlite-sketch-repository";
 
 /**
  * The real initialization steps, in execution order. The splash screen renders these verbatim as
@@ -48,6 +50,11 @@ type DataState =
       status: "ready";
       courseRepository: CourseRepository;
       progressRepository: ProgressRepository;
+      /**
+       * Learner-authored shader sketches, read by the editor. Local-only: nothing synchronizes these,
+       * so unlike the repositories above it has no remote counterpart.
+       */
+      sketchRepository: SketchRepository;
       /**
        * The one installer downloaded releases go through, already wired to notify
        * `courseRepository`'s subscribers after an activation commits. Built here rather than by
@@ -105,6 +112,7 @@ export function DataProvider({
       // 3. Create the SQLite repositories.
       const courseRepository = new SqliteCourseRepository(driver);
       const progressRepository = new SqliteProgressRepository(driver, courseRepository);
+      const sketchRepository = new SqliteSketchRepository(driver);
 
       // 4. Run legacy progress import.
       await importLegacyProgress(AsyncStorage, progressRepository);
@@ -123,6 +131,7 @@ export function DataProvider({
           status: "ready",
           courseRepository,
           progressRepository,
+          sketchRepository,
           releaseInstaller: new ReleaseInstaller(driver, courseRepository),
           bundledReleaseId: bundledCourse.id,
         });

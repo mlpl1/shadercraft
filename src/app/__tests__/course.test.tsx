@@ -32,6 +32,7 @@ import type { CourseRepository } from "../../data/course/course-repository";
 import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
 import type { ProgressRepository } from "../../data/progress/progress-repository";
 import { isCloudSyncEnabled } from "../../data/supabase/client";
+import { createFakeSketchRepository } from "../../data/sketches/testing/fake-sketch-repository";
 import {
   STUB_BUNDLED_RELEASE_ID,
   STUB_RELEASE_INSTALLER,
@@ -193,6 +194,7 @@ function buildDataValue(
     bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
     courseRepository: new FakeCourseRepository(courseReadError),
     progressRepository: new FakeProgressRepository(completedLessonIds),
+    sketchRepository: createFakeSketchRepository(),
     retry: jest.fn(),
   };
 }

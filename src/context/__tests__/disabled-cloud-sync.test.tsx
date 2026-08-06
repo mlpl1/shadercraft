@@ -62,6 +62,7 @@ import { SyncScheduler } from "../../data/sync/sync-scheduler";
 import { AuthProvider, useAuth } from "../auth-context";
 import { DataContext, type DataContextValue } from "../data-context";
 import { SyncProvider, useSyncStatus } from "../sync-context";
+import { createFakeSketchRepository } from "../../data/sketches/testing/fake-sketch-repository";
 import {
   STUB_BUNDLED_RELEASE_ID,
   STUB_RELEASE_INSTALLER,
@@ -136,6 +137,7 @@ function buildDataValue(repository: FakeRepository): DataContextValue {
     // `ProfileStore`/`ProgressSyncRepository` facets are reached via the same cast the real providers
     // use, exactly like `SqliteProgressRepository` really implements every one of them at once.
     progressRepository: repository as unknown as ProgressRepository,
+    sketchRepository: createFakeSketchRepository(),
     // Neither `AuthProvider` nor `SyncProvider` ever reads this; only `ProgressRepository` matters
     // for this suite.
     courseRepository: {} as unknown as CourseRepository,

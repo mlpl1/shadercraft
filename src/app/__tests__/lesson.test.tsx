@@ -41,6 +41,7 @@ import type { CourseRepository } from "../../data/course/course-repository";
 import { parseCourseRelease } from "../../data/course/schema";
 import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
 import type { ProgressMutation, ProgressRepository } from "../../data/progress/progress-repository";
+import { createFakeSketchRepository } from "../../data/sketches/testing/fake-sketch-repository";
 import {
   STUB_BUNDLED_RELEASE_ID,
   STUB_RELEASE_INSTALLER,
@@ -185,6 +186,7 @@ async function renderRoute(
       value={{
         courseRepository,
         progressRepository,
+        sketchRepository: createFakeSketchRepository(),
         releaseInstaller: STUB_RELEASE_INSTALLER,
         bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
         retry: () => {},

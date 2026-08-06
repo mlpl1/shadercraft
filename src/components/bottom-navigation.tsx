@@ -1,4 +1,4 @@
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import type { SymbolViewProps } from "expo-symbols";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -59,10 +59,7 @@ export function BottomNavigation({ activeItem }: BottomNavigationProps) {
       return;
     }
 
-    Alert.alert(
-      "Editor is coming next",
-      "The course and first lesson are ready. The shader editor is the next workspace to build.",
-    );
+    router.replace("/editor");
   };
 
   return (

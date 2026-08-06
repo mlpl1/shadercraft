@@ -24,6 +24,7 @@ import { ProgressProvider } from "../../context/progress-context";
 import type { CourseRepository } from "../../data/course/course-repository";
 import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
 import type { ProgressRepository } from "../../data/progress/progress-repository";
+import { createFakeSketchRepository } from "../../data/sketches/testing/fake-sketch-repository";
 import {
   STUB_BUNDLED_RELEASE_ID,
   STUB_RELEASE_INSTALLER,
@@ -159,6 +160,7 @@ function buildDataValue(courseReadError?: Error): DataContextValue {
     bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
     courseRepository: new FakeCourseRepository(courseReadError),
     progressRepository: new FakeProgressRepository(),
+    sketchRepository: createFakeSketchRepository(),
     retry: jest.fn(),
   };
 }

@@ -65,6 +65,7 @@ import type { SyncResult } from "../../data/sync/progress-sync-engine";
 import { useAuth } from "../auth-context";
 import { DataContext, type DataContextValue } from "../data-context";
 import { SyncProvider, useSyncStatus } from "../sync-context";
+import { createFakeSketchRepository } from "../../data/sketches/testing/fake-sketch-repository";
 import {
   STUB_BUNDLED_RELEASE_ID,
   STUB_RELEASE_INSTALLER,
@@ -238,6 +239,7 @@ function buildDataValue(repository: FakeRepository): DataContextValue {
     releaseInstaller: STUB_RELEASE_INSTALLER,
     bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
     progressRepository: repository as unknown as ProgressRepository,
+    sketchRepository: createFakeSketchRepository(),
     courseRepository: {} as unknown as CourseRepository,
     retry: jest.fn(),
   };
