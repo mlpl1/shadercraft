@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/bottom-navigation";
 import { GlslInput } from "../components/glsl-input";
+import { PreviewControls } from "../components/preview-controls";
 import { ShaderSandbox } from "../components/shader-sandbox";
 import { Colors, Spacing } from "../constants/theme";
 import { useAuth } from "../context/auth-context";
@@ -32,6 +33,9 @@ export default function EditorScreen() {
   const [errors, setErrors] = useState<CompileError[]>([]);
   const [showingLastWorking, setShowingLastWorking] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [restartToken, setRestartToken] = useState(0);
 
   const compileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,9 +140,27 @@ export default function EditorScreen() {
         </Text>
       </View>
 
-      <ShaderSandbox height={200} onCompileResult={handleCompileResult} source={compiledSource} />
+      <PreviewControls
+        collapsed={collapsed}
+        onRestart={() => setRestartToken((token) => token + 1)}
+        onToggleCollapse={() => setCollapsed((value) => !value)}
+        onTogglePause={() => setPaused((value) => !value)}
+        paused={paused}
+      />
 
-      {showingLastWorking && (
+      {/* Collapsing unmounts the sandbox, which releases the GL context and stops the frame loop —
+          the point of the control is to reclaim the screen and the GPU, not just to hide pixels. */}
+      {!collapsed && (
+        <ShaderSandbox
+          height={200}
+          onCompileResult={handleCompileResult}
+          paused={paused}
+          restartToken={restartToken}
+          source={compiledSource}
+        />
+      )}
+
+      {showingLastWorking && !collapsed && (
         <Text style={styles.staleBadge}>Showing the last version that compiled</Text>
       )}
       {saveError !== null && <Text style={styles.saveError}>{saveError}</Text>}

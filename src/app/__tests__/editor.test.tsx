@@ -162,6 +162,26 @@ describe("EditorScreen", () => {
     expect(repository.updateSource).not.toHaveBeenCalled();
   });
 
+  it("unmounts the preview when collapsed and restores it on demand", async () => {
+    await render(<EditorScreen />);
+    await waitFor(() => expect(screen.getByTestId("sandbox")).toBeTruthy());
+
+    await fireEvent.press(screen.getByLabelText("Hide preview"));
+    expect(screen.queryByTestId("sandbox")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText("Show preview"));
+    expect(screen.getByTestId("sandbox")).toBeTruthy();
+  });
+
+  it("keeps the editor usable while the preview is collapsed", async () => {
+    await render(<EditorScreen />);
+    await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
+
+    await fireEvent.press(screen.getByLabelText("Hide preview"));
+
+    expect(screen.getByTestId("glsl-input")).toBeTruthy();
+  });
+
   it("surfaces a save failure without discarding the buffer", async () => {
     repository.updateSource.mockRejectedValueOnce(new Error("disk full"));
     await render(<EditorScreen />);
