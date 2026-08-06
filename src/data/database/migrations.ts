@@ -146,11 +146,38 @@ const CREATE_INITIAL_SCHEMA = `
     WHERE merged_at IS NULL;
 `;
 
+/**
+ * Learner-authored shader sketches. Partitioned by profile exactly as `lesson_progress` is, so
+ * switching accounts shows that account's work — and so cloud sync stays possible later without a
+ * second migration. Nothing enqueues `sync_outbox` rows for these: sketches are local-only, and
+ * queueing mutations no server accepts would trip the sync attention state.
+ */
+const CREATE_SKETCHES = `
+  CREATE TABLE sketches (
+    id TEXT PRIMARY KEY NOT NULL,
+    profile_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    source TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (profile_id) REFERENCES learner_profiles(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX idx_sketches_profile_updated_at
+    ON sketches(profile_id, updated_at DESC);
+`;
+
 const migrations: readonly DatabaseMigration[] = [
   {
     version: 1,
     async migrate(driver) {
       await driver.exec(CREATE_INITIAL_SCHEMA);
+    },
+  },
+  {
+    version: 2,
+    async migrate(driver) {
+      await driver.exec(CREATE_SKETCHES);
     },
   },
 ];

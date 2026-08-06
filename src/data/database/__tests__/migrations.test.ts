@@ -32,7 +32,8 @@ describe("database migrations", () => {
   });
 
   test("selects only migrations newer than the current schema", () => {
-    expect(getPendingMigrations(0).map((migration) => migration.version)).toEqual([1]);
+    expect(getPendingMigrations(0).map((migration) => migration.version)).toEqual([1, 2]);
+    expect(getPendingMigrations(1).map((migration) => migration.version)).toEqual([2]);
     expect(getPendingMigrations(LATEST_SCHEMA_VERSION)).toEqual([]);
     expect(() => getPendingMigrations(LATEST_SCHEMA_VERSION + 1)).toThrow(/newer schema/i);
   });
@@ -41,7 +42,7 @@ describe("database migrations", () => {
     await migrateDatabase(driver);
 
     expect(await driver.first<{ user_version: number }>("PRAGMA user_version")).toEqual({
-      user_version: 1,
+      user_version: 2,
     });
 
     const tables = await driver.all<{ name: string }>(
@@ -56,9 +57,50 @@ describe("database migrations", () => {
       "lesson_sections",
       "lessons",
       "modules",
+      "sketches",
       "sync_outbox",
       "sync_state",
     ]);
+  });
+
+  test("adds the sketches table in migration 2, cascading from the owning profile", async () => {
+    await migrateDatabase(driver);
+
+    const columns = await driver.all<TableInfoRow>("PRAGMA table_info(sketches)");
+    expect(columns.map(({ name }) => name).sort()).toEqual([
+      "created_at",
+      "id",
+      "profile_id",
+      "source",
+      "title",
+      "updated_at",
+    ]);
+    // Every column is required: a sketch with no source could not be compiled or shown.
+    expect(columns.every(({ notnull }) => notnull === 1)).toBe(true);
+
+    const foreignKeys = await driver.all<ForeignKeyRow>("PRAGMA foreign_key_list(sketches)");
+    expect(foreignKeys).toHaveLength(1);
+    expect(foreignKeys[0]).toMatchObject({
+      from: "profile_id",
+      table: "learner_profiles",
+      to: "id",
+      on_delete: "CASCADE",
+    });
+
+    const indexes = await driver.all<IndexRow>(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'sketches'",
+    );
+    expect(indexes.map(({ name }) => name)).toContain("idx_sketches_profile_updated_at");
+  });
+
+  test("applies migration 2 to a database already at version 1", async () => {
+    await migrateDatabase(driver);
+    // A second run must be a no-op rather than an error.
+    await migrateDatabase(driver);
+
+    expect(await driver.first<{ user_version: number }>("PRAGMA user_version")).toEqual({
+      user_version: 2,
+    });
   });
 
   test.each([
