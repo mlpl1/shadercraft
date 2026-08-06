@@ -17,6 +17,9 @@ The project is currently an early working prototype built with Expo and React Na
 - Module unlocking derived from the shared progress state
 - Reversible completion for accidentally completed lessons
 - Guided completion summary with review and course-navigation actions
+- Shader editor: write GLSL, watch it compile and render live, and keep sketches per profile — with
+  per-line compile errors, and the last working version staying on screen while you type (see
+  [`docs/data/shader-sandbox.md`](docs/data/shader-sandbox.md))
 - Fully offline curriculum and progress, backed by an on-device SQLite database seeded from a
   checksummed, version-controlled content release
 - Optional Supabase accounts and background cross-device progress synchronization, reachable from
@@ -34,7 +37,10 @@ Completing Shape Synthesis unlocks Color & Light. Module 04, Procedural Textures
 - [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/)
 - React Native 0.86 and React 19.2
 - [Expo Router](https://docs.expo.dev/versions/v57.0.0/sdk/router/) for file-based navigation
-- [Expo GLView](https://docs.expo.dev/versions/v57.0.0/sdk/gl-view/) for live shader rendering
+- [Expo GLView](https://docs.expo.dev/versions/v57.0.0/sdk/gl-view/) for live shader rendering,
+  including runtime compilation of learner-authored GLSL ES 1.00 (see
+  [`docs/data/shader-sandbox.md`](docs/data/shader-sandbox.md); note that `expo-gl` does not work with
+  remote debugging enabled)
 - [`expo-sqlite`](https://docs.expo.dev/versions/v57.0.0/sdk/sqlite/) for the local curriculum
   and progress database, the only runtime data source screens read from
 - Zod-validated JSON content, compiled into a checksummed bundled release (see
