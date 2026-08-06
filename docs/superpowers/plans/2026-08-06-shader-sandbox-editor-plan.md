@@ -955,23 +955,24 @@ jest.mock("expo-gl", () => {
 });
 
 describe("ShaderSandbox", () => {
-  it("renders a GL surface", () => {
-    render(<ShaderSandbox source="fragColor = vec4(1.0);" />);
+  it("renders a GL surface", async () => {
+    await render(<ShaderSandbox source="fragColor = vec4(1.0);" />);
 
     expect(screen.getByTestId("gl-view")).toBeTruthy();
   });
 
-  it("shows a placeholder until a program has compiled", () => {
-    render(<ShaderSandbox source="fragColor = vec4(1.0);" />);
+  it("shows a placeholder until a program has compiled", async () => {
+    await render(<ShaderSandbox source="fragColor = vec4(1.0);" />);
 
     expect(screen.getByText("Preview starts once your shader compiles")).toBeTruthy();
   });
 
-  it("honours an explicit height", () => {
-    render(<ShaderSandbox height={120} source="fragColor = vec4(1.0);" />);
+  it("honours an explicit height", async () => {
+    await render(<ShaderSandbox height={120} source="fragColor = vec4(1.0);" />);
 
+    // The style prop is an array — the base stylesheet entry plus the height override.
     expect(screen.getByTestId("shader-sandbox").props.style).toEqual(
-      expect.objectContaining({ height: 120 }),
+      expect.arrayContaining([expect.objectContaining({ height: 120 })]),
     );
   });
 });
@@ -1164,14 +1165,14 @@ import { GlslInput } from "../glsl-input";
 const noop = () => undefined;
 
 describe("GlslInput", () => {
-  it("renders the initial source", () => {
-    render(<GlslInput errors={[]} initialValue="float a = 1.0;" onChange={noop} />);
+  it("renders the initial source", async () => {
+    await render(<GlslInput errors={[]} initialValue="float a = 1.0;" onChange={noop} />);
 
     expect(screen.getByTestId("glsl-input").props.defaultValue).toBe("float a = 1.0;");
   });
 
-  it("numbers every logical line", () => {
-    render(<GlslInput errors={[]} initialValue={"a;\nb;\nc;"} onChange={noop} />);
+  it("numbers every logical line", async () => {
+    await render(<GlslInput errors={[]} initialValue={"a;\nb;\nc;"} onChange={noop} />);
 
     expect(screen.getByTestId("glsl-gutter")).toHaveTextContent("1");
     expect(screen.getByTestId("glsl-gutter")).toHaveTextContent("3");
@@ -1179,7 +1180,7 @@ describe("GlslInput", () => {
 
   it("reports edits to the caller", () => {
     const onChange = jest.fn();
-    render(<GlslInput errors={[]} initialValue="a;" onChange={onChange} />);
+    await render(<GlslInput errors={[]} initialValue="a;" onChange={onChange} />);
 
     fireEvent.changeText(screen.getByTestId("glsl-input"), "b;");
 
@@ -1188,7 +1189,7 @@ describe("GlslInput", () => {
 
   it("inserts a symbol at the caret and reports the result", () => {
     const onChange = jest.fn();
-    render(<GlslInput errors={[]} initialValue="vec2 p = ;" onChange={onChange} />);
+    await render(<GlslInput errors={[]} initialValue="vec2 p = ;" onChange={onChange} />);
 
     fireEvent(screen.getByTestId("glsl-input"), "selectionChange", {
       nativeEvent: { selection: { start: 9, end: 9 } },
@@ -1200,15 +1201,15 @@ describe("GlslInput", () => {
 
   it("appends a symbol when the caret position is unknown", () => {
     const onChange = jest.fn();
-    render(<GlslInput errors={[]} initialValue="a" onChange={onChange} />);
+    await render(<GlslInput errors={[]} initialValue="a" onChange={onChange} />);
 
     fireEvent.press(screen.getByText(";"));
 
     expect(onChange).toHaveBeenCalledWith("a;");
   });
 
-  it("lists errors with their line numbers", () => {
-    render(
+  it("lists errors with their line numbers", async () => {
+    await render(
       <GlslInput
         errors={[{ line: 2, message: "'x' : undeclared identifier", raw: "ERROR: 0:6: …" }]}
         initialValue={"a;\nb;"}
@@ -1220,8 +1221,8 @@ describe("GlslInput", () => {
     expect(screen.getByText("'x' : undeclared identifier")).toBeTruthy();
   });
 
-  it("shows an unlocated error without inventing a line number", () => {
-    render(
+  it("shows an unlocated error without inventing a line number", async () => {
+    await render(
       <GlslInput
         errors={[{ line: null, message: "Compilation failed", raw: "Compilation failed" }]}
         initialValue="a;"
@@ -1233,8 +1234,8 @@ describe("GlslInput", () => {
     expect(screen.queryByText(/^Line /)).toBeNull();
   });
 
-  it("disables the keyboard behaviours that corrupt source code", () => {
-    render(<GlslInput errors={[]} initialValue="a;" onChange={noop} />);
+  it("disables the keyboard behaviours that corrupt source code", async () => {
+    await render(<GlslInput errors={[]} initialValue="a;" onChange={noop} />);
     const input = screen.getByTestId("glsl-input");
 
     expect(input.props.autoCorrect).toBe(false);
@@ -2022,24 +2023,24 @@ describe("BottomNavigation", () => {
     replace.mockClear();
   });
 
-  it("navigates to the editor route", () => {
-    render(<BottomNavigation activeItem="home" />);
+  it("navigates to the editor route", async () => {
+    await render(<BottomNavigation activeItem="home" />);
 
     fireEvent.press(screen.getByText("Editor"));
 
     expect(replace).toHaveBeenCalledWith("/editor");
   });
 
-  it("does not navigate when the active tab is pressed", () => {
-    render(<BottomNavigation activeItem="editor" />);
+  it("does not navigate when the active tab is pressed", async () => {
+    await render(<BottomNavigation activeItem="editor" />);
 
     fireEvent.press(screen.getByText("Editor"));
 
     expect(replace).not.toHaveBeenCalled();
   });
 
-  it("navigates between home and course", () => {
-    render(<BottomNavigation activeItem="editor" />);
+  it("navigates between home and course", async () => {
+    await render(<BottomNavigation activeItem="editor" />);
 
     fireEvent.press(screen.getByText("Course"));
 
@@ -2149,7 +2150,7 @@ describe("EditorScreen", () => {
   });
 
   it("creates and opens a starter sketch on first run", async () => {
-    render(<EditorScreen />);
+    await render(<EditorScreen />);
 
     await waitFor(() => {
       expect(repository.create).toHaveBeenCalledWith(
@@ -2172,7 +2173,7 @@ describe("EditorScreen", () => {
       },
     ];
 
-    render(<EditorScreen />);
+    await render(<EditorScreen />);
 
     await waitFor(() => {
       expect(screen.getByTestId("sandbox")).toHaveTextContent("fragColor = vec4(0.5);");
@@ -2181,7 +2182,7 @@ describe("EditorScreen", () => {
   });
 
   it("autosaves an edit after the debounce elapses", async () => {
-    render(<EditorScreen />);
+    await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
 
     fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.25);");
@@ -2199,7 +2200,7 @@ describe("EditorScreen", () => {
   });
 
   it("does not autosave before the debounce elapses", async () => {
-    render(<EditorScreen />);
+    await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
 
     fireEvent.changeText(screen.getByTestId("glsl-input"), "a");
@@ -2212,7 +2213,7 @@ describe("EditorScreen", () => {
 
   it("surfaces a save failure without discarding the buffer", async () => {
     repository.updateSource.mockRejectedValueOnce(new Error("disk full"));
-    render(<EditorScreen />);
+    await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
 
     fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.75);");
@@ -2476,21 +2477,21 @@ const props = (overrides: Partial<Parameters<typeof PreviewControls>[0]> = {}) =
 });
 
 describe("PreviewControls", () => {
-  it("offers to pause while running", () => {
-    render(<PreviewControls {...props()} />);
+  it("offers to pause while running", async () => {
+    await render(<PreviewControls {...props()} />);
 
     expect(screen.getByLabelText("Pause preview")).toBeTruthy();
   });
 
-  it("offers to resume while paused", () => {
-    render(<PreviewControls {...props({ paused: true })} />);
+  it("offers to resume while paused", async () => {
+    await render(<PreviewControls {...props({ paused: true })} />);
 
     expect(screen.getByLabelText("Resume preview")).toBeTruthy();
   });
 
   it("reports a pause toggle", () => {
     const current = props();
-    render(<PreviewControls {...current} />);
+    await render(<PreviewControls {...current} />);
 
     fireEvent.press(screen.getByLabelText("Pause preview"));
 
@@ -2499,7 +2500,7 @@ describe("PreviewControls", () => {
 
   it("reports a restart", () => {
     const current = props();
-    render(<PreviewControls {...current} />);
+    await render(<PreviewControls {...current} />);
 
     fireEvent.press(screen.getByLabelText("Restart preview"));
 
@@ -2508,15 +2509,15 @@ describe("PreviewControls", () => {
 
   it("reports a collapse toggle and labels it by current state", () => {
     const current = props({ collapsed: true });
-    render(<PreviewControls {...current} />);
+    await render(<PreviewControls {...current} />);
 
     fireEvent.press(screen.getByLabelText("Show preview"));
 
     expect(current.onToggleCollapse).toHaveBeenCalled();
   });
 
-  it("labels the collapse control as hiding while the preview is showing", () => {
-    render(<PreviewControls {...props()} />);
+  it("labels the collapse control as hiding while the preview is showing", async () => {
+    await render(<PreviewControls {...props()} />);
 
     expect(screen.getByLabelText("Hide preview")).toBeTruthy();
   });
@@ -2671,7 +2672,7 @@ Append to `src/app/__tests__/editor.test.tsx`:
 
 ```tsx
   it("unmounts the preview when collapsed and restores it on demand", async () => {
-    render(<EditorScreen />);
+    await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("sandbox")).toBeTruthy());
 
     fireEvent.press(screen.getByLabelText("Hide preview"));
@@ -2735,15 +2736,15 @@ const props = () => ({
 });
 
 describe("SketchListSheet", () => {
-  it("lists every sketch", () => {
-    render(<SketchListSheet {...props()} />);
+  it("lists every sketch", async () => {
+    await render(<SketchListSheet {...props()} />);
 
     expect(screen.getByText("Alpha")).toBeTruthy();
     expect(screen.getByText("Beta")).toBeTruthy();
   });
 
-  it("marks the active sketch", () => {
-    render(<SketchListSheet {...props()} />);
+  it("marks the active sketch", async () => {
+    await render(<SketchListSheet {...props()} />);
 
     expect(screen.getByTestId("sketch-row-a").props.accessibilityState).toEqual(
       expect.objectContaining({ selected: true }),
@@ -2752,7 +2753,7 @@ describe("SketchListSheet", () => {
 
   it("selects another sketch", () => {
     const current = props();
-    render(<SketchListSheet {...current} />);
+    await render(<SketchListSheet {...current} />);
 
     fireEvent.press(screen.getByText("Beta"));
 
@@ -2761,7 +2762,7 @@ describe("SketchListSheet", () => {
 
   it("creates a new sketch", () => {
     const current = props();
-    render(<SketchListSheet {...current} />);
+    await render(<SketchListSheet {...current} />);
 
     fireEvent.press(screen.getByText("New sketch"));
 
@@ -2770,7 +2771,7 @@ describe("SketchListSheet", () => {
 
   it("renames a sketch through its inline field", () => {
     const current = props();
-    render(<SketchListSheet {...current} />);
+    await render(<SketchListSheet {...current} />);
 
     fireEvent.press(screen.getByTestId("sketch-rename-a"));
     fireEvent.changeText(screen.getByTestId("sketch-title-input"), "Renamed");
@@ -2781,7 +2782,7 @@ describe("SketchListSheet", () => {
 
   it("ignores a rename to an empty title", () => {
     const current = props();
-    render(<SketchListSheet {...current} />);
+    await render(<SketchListSheet {...current} />);
 
     fireEvent.press(screen.getByTestId("sketch-rename-a"));
     fireEvent.changeText(screen.getByTestId("sketch-title-input"), "   ");
@@ -2792,7 +2793,7 @@ describe("SketchListSheet", () => {
 
   it("deletes a sketch", () => {
     const current = props();
-    render(<SketchListSheet {...current} />);
+    await render(<SketchListSheet {...current} />);
 
     fireEvent.press(screen.getByTestId("sketch-delete-b"));
 
@@ -2801,7 +2802,7 @@ describe("SketchListSheet", () => {
 
   it("refuses to delete the last remaining sketch", () => {
     const current = { ...props(), sketches: [sketch("a", "Alpha")] };
-    render(<SketchListSheet {...current} />);
+    await render(<SketchListSheet {...current} />);
 
     fireEvent.press(screen.getByTestId("sketch-delete-a"));
 
@@ -3169,7 +3170,7 @@ Append to `src/app/__tests__/editor.test.tsx`:
       },
     ];
 
-    render(<EditorScreen />);
+    await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("open-sketch-list")).toBeTruthy());
 
     fireEvent.press(screen.getByTestId("open-sketch-list"));
