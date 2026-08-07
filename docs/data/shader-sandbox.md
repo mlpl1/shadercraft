@@ -154,11 +154,9 @@ Three harness details that cost time to rediscover:
 ## Further reading
 
 - [`docs/data/local-curriculum.md`](local-curriculum.md) — how curriculum content is authored today.
-  Lesson previews still index a hardcoded `u_mode` chain in `live-shader-preview.tsx` via
-  `previewKey`, so the code a lesson displays is a hand-written paraphrase of a branch the learner
-  never sees, with nothing checking that the two agree. Moving lessons onto this sandbox retires both
-  `preview-registry.ts` and that chain, and is what lets new lessons ship as content rather than as an
-  app release.
+  Lessons render on this sandbox directly: each stage carries a complete `mainImage` body rather
+  than a hand-written paraphrase of a hidden branch, so the code a lesson displays is always the
+  code that renders. That is what lets new lessons ship as content rather than as an app release.
 - [`expo-gl` SDK 57](https://docs.expo.dev/versions/v57.0.0/sdk/gl-view/) — `GLView`,
   `onContextCreate`, `endFrameEXP()`, the WebGL2 caveat, and the remote-debugging limitation. Included
   in Expo Go, so no development build is needed.

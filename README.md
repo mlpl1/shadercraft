@@ -8,11 +8,14 @@ The project is currently an early working prototype built with Expo and React Na
 
 ## Current features
 
-- Home dashboard and four-module curriculum browser
-- Complete Module 01, Module 02, and Module 03 learning paths with sequential unlocking
-- Interactive lessons spanning UV coordinates, time, transforms, distance fields, color mixing, luma, procedural palettes, and lighting
+- Home dashboard and eleven-module curriculum browser, spanning two acts (2D fundamentals, then
+  3D ray marching), with sequential module and lesson unlocking
+- Module 1, Fragments & Coordinates, is published; Modules 2–11 are `planned` and show a
+  topic-list roadmap card until they ship real lessons
+- Each lesson is a short progression of 3–5 stages, and every stage carries a complete, runnable
+  GLSL shader that the live sandbox compiles and renders as the learner reads it — never a
+  paraphrase of code the learner cannot see
 - Live `expo-gl` fragment shader with animated output
-- Normalized and centered UV experiments that update both preview and GLSL source
 - Persistent lesson completion and course progress
 - Module unlocking derived from the shared progress state
 - Reversible completion for accidentally completed lessons
@@ -27,10 +30,11 @@ The project is currently an early working prototype built with Expo and React Na
 - Remote curriculum publishing: an immutable, checksummed course release can be published to
   Supabase and picked up by installed apps in the background, without an app-store update
 
-Modules 01, 02, and 03 are published and contain 14 interactive lessons in total (five, five,
-and four respectively). Every published module concludes with a layered shader challenge.
-Completing Shape Synthesis unlocks Color & Light. Module 04, Procedural Textures, is currently
-`planned`: it shows a five-topic roadmap card and stays unopenable until it ships real lessons.
+Module 1, Fragments & Coordinates, is published. Modules 2 through 11 are `planned`: each shows a
+roadmap card with a topic list and stays unopenable until it ships real lessons. See
+[`docs/data/local-curriculum.md`](docs/data/local-curriculum.md) for the authoring model and
+[`docs/superpowers/specs/2026-08-06-curriculum-syllabus-design.md`](docs/superpowers/specs/2026-08-06-curriculum-syllabus-design.md)
+for the full eleven-module arc.
 
 ## Technology
 
@@ -115,7 +119,7 @@ src/
 ├── constants/    Shared visual theme
 ├── context/      React providers exposing the course and progress repositories
 ├── data/         SQLite lifecycle, course/progress repositories, and content schema
-└── shaders/      The preview capability registry and GLSL previews
+└── shaders/      The GLSL sandbox: wrapper assembly, compile, and error reporting
 ```
 
 The Android native project is stored in `android/`. Static images and app icons are stored in
@@ -153,11 +157,11 @@ sync rows during development.
 
 ## Curriculum content
 
-The lesson content (copy, GLSL snippets, and preview wiring) is authored as JSON under
+The lesson content (prose and complete, runnable GLSL stages) is authored as JSON under
 `content/`, one file per module, and compiled into the SQLite seed the app installs on first
 launch. See [`docs/data/local-curriculum.md`](docs/data/local-curriculum.md) for the full
 authoring workflow: which files to edit, the `content:build` / `content:check` commands, what
-the schema validates, and the constraints around preview capabilities and release checksums.
+the schema validates, and the constraints around a stage's shader source and release checksums.
 
 A validated, checksummed release can also be published to Supabase and picked up by installed apps
 in the background, without an app-store update. See
