@@ -9,8 +9,6 @@ const PREVIEW_HEIGHT = 200;
 
 type LessonStageBlockProps = {
   stage: LessonStage;
-  /** 1-based, for the block's eyebrow. */
-  position: number;
   /** Whether this block's GL context has been created. One-way: the workspace never unsets it. */
   isMounted: boolean;
   /** Whether the block is on screen. Drives the sandbox's render loop. */
@@ -18,20 +16,16 @@ type LessonStageBlockProps = {
 };
 
 /**
- * One stage read whole: its render, its source, its prose.
+ * One stage read whole, in the order an article reads: heading, then the thing it produced, then
+ * the code and the explanation.
  *
  * Owns no scroll logic and makes no visibility decision — it is told what it is. That keeps the
  * arithmetic in one testable place and this component trivial.
  */
-export function LessonStageBlock({
-  stage,
-  position,
-  isMounted,
-  isVisible,
-}: LessonStageBlockProps) {
+export function LessonStageBlock({ stage, isMounted, isVisible }: LessonStageBlockProps) {
   return (
     <View style={styles.block}>
-      <Text style={styles.eyebrow}>Stage {position}</Text>
+      <Text style={styles.title}>{stage.title}</Text>
 
       {isMounted ? (
         <ShaderSandbox active={isVisible} height={PREVIEW_HEIGHT} source={stage.source} />
@@ -42,7 +36,6 @@ export function LessonStageBlock({
 
       <StageSourceView source={stage.source} />
 
-      <Text style={styles.title}>{stage.title}</Text>
       <Text style={styles.body}>{stage.body}</Text>
     </View>
   );
@@ -53,19 +46,14 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     marginBottom: Spacing.xxxl,
   },
-  eyebrow: {
-    color: Colors.textSubtle,
-    fontSize: 11,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-  },
   placeholder: {
     backgroundColor: Colors.surfaceRaised,
     height: PREVIEW_HEIGHT,
   },
   title: {
     color: Colors.text,
-    fontSize: 17,
+    // Leads the block now rather than captioning it, so it carries a little more weight.
+    fontSize: 18,
     fontWeight: "600",
   },
   body: {

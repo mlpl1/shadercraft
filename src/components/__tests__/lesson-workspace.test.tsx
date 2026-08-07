@@ -160,8 +160,10 @@ describe("lesson workspace", () => {
   it("renders every stage's title, body and source", async () => {
     await renderWorkspace();
 
-    expect(screen.getByText("Stage 1")).toBeTruthy();
-    expect(screen.getByText("Stage 4")).toBeTruthy();
+    expect(screen.getByText(fragmentShaderLesson.stages[0].title)).toBeTruthy();
+    expect(
+      screen.getByText(fragmentShaderLesson.stages[fragmentShaderLesson.stages.length - 1].title),
+    ).toBeTruthy();
     expect(screen.getAllByTestId("stage-source")).toHaveLength(4);
   });
 

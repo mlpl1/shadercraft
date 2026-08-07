@@ -26,12 +26,11 @@ const STAGE: LessonStage = {
 };
 
 describe("LessonStageBlock", () => {
-  it("renders the stage's ordinal, title, body and source", async () => {
+  it("renders the stage's title, body and source", async () => {
     await render(
-      <LessonStageBlock isMounted isVisible position={2} stage={STAGE} />,
+      <LessonStageBlock isMounted isVisible stage={STAGE} />,
     );
 
-    expect(screen.getByText("Stage 2")).toBeTruthy();
     expect(screen.getByText("Divide by the resolution")).toBeTruthy();
     expect(screen.getByText(/real teaching prose/)).toBeTruthy();
     expect(screen.getByTestId("stage-source")).toBeTruthy();
@@ -39,7 +38,7 @@ describe("LessonStageBlock", () => {
 
   it("renders a sandbox once mounted", async () => {
     await render(
-      <LessonStageBlock isMounted isVisible position={1} stage={STAGE} />,
+      <LessonStageBlock isMounted isVisible stage={STAGE} />,
     );
 
     expect(screen.getByTestId("sandbox")).toHaveTextContent(/^active:fragColor/);
@@ -47,7 +46,7 @@ describe("LessonStageBlock", () => {
 
   it("renders a placeholder instead of a sandbox before mounting", async () => {
     await render(
-      <LessonStageBlock isMounted={false} isVisible={false} position={1} stage={STAGE} />,
+      <LessonStageBlock isMounted={false} isVisible={false} stage={STAGE} />,
     );
 
     expect(screen.queryByTestId("sandbox")).toBeNull();
@@ -56,7 +55,7 @@ describe("LessonStageBlock", () => {
 
   it("marks a mounted but off-screen sandbox inactive", async () => {
     await render(
-      <LessonStageBlock isMounted isVisible={false} position={1} stage={STAGE} />,
+      <LessonStageBlock isMounted isVisible={false} stage={STAGE} />,
     );
 
     expect(screen.getByTestId("sandbox")).toHaveTextContent(/^inactive:/);
@@ -64,10 +63,10 @@ describe("LessonStageBlock", () => {
 
   it("still shows the source while the preview is unmounted", async () => {
     await render(
-      <LessonStageBlock isMounted={false} isVisible={false} position={3} stage={STAGE} />,
+      <LessonStageBlock isMounted={false} isVisible={false} stage={STAGE} />,
     );
 
     expect(screen.getByTestId("stage-source")).toBeTruthy();
-    expect(screen.getByText("Stage 3")).toBeTruthy();
+    expect(screen.getByText("Divide by the resolution")).toBeTruthy();
   });
 });

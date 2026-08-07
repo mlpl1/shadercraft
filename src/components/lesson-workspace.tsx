@@ -265,7 +265,6 @@ export function LessonWorkspace({
                 <LessonStageBlock
                   isMounted={visibility.mounted[index] === true}
                   isVisible={visibility.visible[index] === true}
-                  position={index + 1}
                   stage={item}
                 />
               </View>
