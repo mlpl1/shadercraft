@@ -16,6 +16,16 @@ const MONOSPACE_LINE_HEIGHT = 20;
  *
  * Horizontal scroll rather than wrapping, for the same reason as the editor: a wrapped line would
  * desynchronize the gutter from the line numbers.
+ *
+ * The code column is one `Text` holding the whole source rather than one per line, which matters for
+ * two reasons. An empty `Text` lays out at zero height while its gutter number keeps a full line, so
+ * per-line rendering silently dropped every blank line out of alignment — invisible until Module 3
+ * became the first content to leave blank lines between logical groups. And selection cannot cross
+ * `Text` boundaries, so per-line rendering capped a learner at copying one line at a time.
+ *
+ * Alignment survives the merge because nothing here wraps: the horizontal `ScrollView` leaves the
+ * text unconstrained, so one source line always occupies exactly one line box of
+ * {@link MONOSPACE_LINE_HEIGHT}, matching the gutter entry beside it.
  */
 export function StageSourceView({ source }: StageSourceViewProps) {
   const lines = source.split("\n");
@@ -36,11 +46,11 @@ export function StageSourceView({ source }: StageSourceViewProps) {
         style={styles.codeScroll}
       >
         <View style={styles.codeLines}>
-          {lines.map((line, index) => (
-            <Text key={index} style={styles.codeLine}>
-              {line}
-            </Text>
-          ))}
+          {/* `selectable` is also how a learner copies: long-press raises the platform selection
+              toolbar, whose Copy action needs no clipboard dependency of our own. */}
+          <Text selectable style={styles.codeLine} testID="stage-source-code">
+            {source}
+          </Text>
         </View>
       </ScrollView>
     </View>
