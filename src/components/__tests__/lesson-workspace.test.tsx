@@ -188,6 +188,34 @@ describe("lesson workspace", () => {
     expect(screen.getAllByTestId("sandbox").length).toBe(mountedAfterScroll);
   });
 
+  it("tolerates stage blocks reporting layout out of index order", async () => {
+    // React Native gives no ordering guarantee between sibling `onLayout` callbacks. Firing them
+    // highest-index-first is the ordering most likely to produce a hole in `boundsRef` if bounds
+    // aren't pre-sized — a hole `computeStageVisibility` would throw on. If the workspace doesn't
+    // pre-size, this test fails with that thrown error rather than a false assertion.
+    await renderWorkspace();
+
+    const scroll = screen.getByTestId("lesson-scroll");
+    await fireEvent(scroll, "layout", { nativeEvent: { layout: { height: 600, width: 400 } } });
+
+    const blocks = [...screen.getAllByTestId(/^stage-block-/).entries()].reverse();
+    for (const [index, block] of blocks) {
+      await fireEvent(block, "layout", {
+        nativeEvent: { layout: { y: index * 400, height: 400, width: 400 } },
+      });
+    }
+
+    await fireEvent.scroll(scroll, {
+      nativeEvent: {
+        contentOffset: { y: 700, x: 0 },
+        contentSize: { height: blocks.length * 400, width: 400 },
+        layoutMeasurement: { height: 600, width: 400 },
+      },
+    });
+
+    expect(screen.getAllByTestId("sandbox").length).toBeGreaterThan(1);
+  });
+
   it("stops the loop on previews that scrolled off-screen", async () => {
     await renderWorkspace();
     await measureAndScroll({ scrollY: 1400 });

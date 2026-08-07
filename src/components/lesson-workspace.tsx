@@ -90,14 +90,19 @@ export function LessonWorkspace({
     visible: stages.map((_stage, index) => index === 0),
   }));
 
-  const boundsRef = useRef<StageBounds[]>([]);
+  // Pre-sized so every index is always occupied. React Native gives no ordering guarantee between
+  // sibling `onLayout` callbacks, so without this a block that reports before an earlier-index block
+  // would leave a hole at that earlier index; `computeStageVisibility`'s `for...of` destructures each
+  // element and throws on a hole. `height: 0` already reads as "unmeasured" to that function, so a
+  // freshly seeded entry is indistinguishable from one that just hasn't been measured yet.
+  const boundsRef = useRef<StageBounds[]>(stages.map(() => ({ top: 0, height: 0 })));
   const scrollYRef = useRef(0);
   const viewportHeightRef = useRef(0);
 
   // A new lesson invalidates every measurement. Reusing them would drive mount decisions from the
   // previous lesson's geometry — the same shape of bug as the stage index that used to leak here.
   useEffect(() => {
-    boundsRef.current = [];
+    boundsRef.current = stages.map(() => ({ top: 0, height: 0 }));
     scrollYRef.current = 0;
     setVisibility({
       mounted: stages.map((_stage, index) => index === 0),
@@ -114,8 +119,16 @@ export function LessonWorkspace({
 
     setVisibility((previous) => {
       const mounted = shouldMount.map((next, index) => next || previous.mounted[index] === true);
-      const sameMounted = mounted.every((value, index) => value === previous.mounted[index]);
-      const sameVisible = isVisible.every((value, index) => value === previous.visible[index]);
+      // Length-checked first: `.every()` alone only walks the *new* array's indices, so a shorter
+      // array (not every block measured yet, or a lesson change mid-flight) would silently ignore
+      // `previous`'s trailing elements — and an empty new array would look vacuously "same" — letting
+      // a genuinely stale `previous` be returned instead of the fresh state.
+      const sameMounted =
+        mounted.length === previous.mounted.length &&
+        mounted.every((value, index) => value === previous.mounted[index]);
+      const sameVisible =
+        isVisible.length === previous.visible.length &&
+        isVisible.every((value, index) => value === previous.visible[index]);
 
       // Returning the previous object tells React to skip the re-render. Without this the component
       // would re-render on every scroll frame, which is exactly the cost this layout must not add.
