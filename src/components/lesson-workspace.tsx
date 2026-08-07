@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppIcon } from "./app-icon";
 import { LessonCompletionSheet } from "./lesson-completion-sheet";
-import { ShaderSandbox } from "./shader-sandbox";
-import { StageSourceView } from "./stage-source-view";
+import { LessonStageBlock } from "./lesson-stage-block";
+import { computeStageVisibility, type StageBounds } from "./lesson-stage-visibility";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import type { CourseLesson } from "../data/course/types";
 
@@ -30,7 +30,6 @@ type FailedAction = "complete" | "undo";
 type WorkspaceState = {
   /** The lesson the rest of this state belongs to, so switching lesson starts fresh. */
   lessonId: string;
-  stageIndex: number;
   failedAction: FailedAction | null;
   isCompletionVisible: boolean;
 };
@@ -40,7 +39,6 @@ function freshState(lesson: CourseLesson): WorkspaceState {
     failedAction: null,
     isCompletionVisible: false,
     lessonId: lesson.id,
-    stageIndex: 0,
   };
 }
 
@@ -49,11 +47,10 @@ function byPosition<T extends { position: number }>(items: readonly T[]): T[] {
 }
 
 /**
- * Renders one course lesson: its concept copy, the live GLSL workspace (one stage's shader running
- * in the sandbox, with forward/back navigation between stages), and the completion action. Every
- * piece of content comes from the supplied `CourseLesson`, so this component works for every
- * published lesson of every module. Progress writes are owned by the caller; a rejected write is
- * surfaced here as a retryable error.
+ * Renders one course lesson as a single scrolling page: its concept copy, every stage's live GLSL
+ * preview and source in reading order, and the completion action. Every piece of content comes from
+ * the supplied `CourseLesson`, so this component works for every published lesson of every module.
+ * Progress writes are owned by the caller; a rejected write is surfaced here as a retryable error.
  */
 export function LessonWorkspace({
   completed,
@@ -82,7 +79,49 @@ export function LessonWorkspace({
   };
 
   const stages = byPosition(lesson.stages);
-  const stage = stages[workspace.stageIndex] ?? stages[0];
+
+  /**
+   * Which blocks have a mounted preview, and which are on screen. `mounted` is one-way: a block that
+   * scrolls out keeps its context and only loses its render loop, so scrolling back is free.
+   */
+  const [visibility, setVisibility] = useState(() => ({
+    // Block 0 mounts unconditionally so an opened lesson is never blank while layout settles.
+    mounted: stages.map((_stage, index) => index === 0),
+    visible: stages.map((_stage, index) => index === 0),
+  }));
+
+  const boundsRef = useRef<StageBounds[]>([]);
+  const scrollYRef = useRef(0);
+  const viewportHeightRef = useRef(0);
+
+  // A new lesson invalidates every measurement. Reusing them would drive mount decisions from the
+  // previous lesson's geometry — the same shape of bug as the stage index that used to leak here.
+  useEffect(() => {
+    boundsRef.current = [];
+    scrollYRef.current = 0;
+    setVisibility({
+      mounted: stages.map((_stage, index) => index === 0),
+      visible: stages.map((_stage, index) => index === 0),
+    });
+  }, [lesson.id, stages.length]);
+
+  const recomputeVisibility = useCallback(() => {
+    const { shouldMount, isVisible } = computeStageVisibility(
+      boundsRef.current,
+      scrollYRef.current,
+      viewportHeightRef.current,
+    );
+
+    setVisibility((previous) => {
+      const mounted = shouldMount.map((next, index) => next || previous.mounted[index] === true);
+      const sameMounted = mounted.every((value, index) => value === previous.mounted[index]);
+      const sameVisible = isVisible.every((value, index) => value === previous.visible[index]);
+
+      // Returning the previous object tells React to skip the re-render. Without this the component
+      // would re-render on every scroll frame, which is exactly the cost this layout must not add.
+      return sameMounted && sameVisible ? previous : { mounted, visible: isVisible };
+    });
+  }, []);
 
   const moduleNumeral = `Module ${String(modulePosition).padStart(2, "0")}`;
   const isFinalLesson = lessonIndex >= lessonCount - 1;
@@ -158,8 +197,18 @@ export function LessonWorkspace({
 
           <ScrollView
             contentContainerStyle={styles.content}
+            onLayout={(event) => {
+              viewportHeightRef.current = event.nativeEvent.layout.height;
+              recomputeVisibility();
+            }}
+            onScroll={(event) => {
+              scrollYRef.current = event.nativeEvent.contentOffset.y;
+              recomputeVisibility();
+            }}
             overScrollMode="never"
+            scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
+            testID="lesson-scroll"
           >
             <View style={styles.intro}>
               <Text style={styles.eyebrow}>Concept</Text>
@@ -167,45 +216,27 @@ export function LessonWorkspace({
               <Text style={styles.lede}>{lesson.intro}</Text>
             </View>
 
-            <View style={styles.workspace}>
-              <ShaderSandbox height={200} source={stage.source} />
-
-              <StageSourceView source={stage.source} />
-
-              <View style={styles.stageBar}>
-                <Pressable
-                  accessibilityLabel="Previous stage"
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: workspace.stageIndex === 0 }}
-                  disabled={workspace.stageIndex === 0}
-                  onPress={() =>
-                    update((previous) => ({ stageIndex: Math.max(0, previous.stageIndex - 1) }))
-                  }
+            <View style={styles.stages}>
+              {stages.map((item, index) => (
+                <View
+                  key={item.id}
+                  onLayout={(event) => {
+                    boundsRef.current[index] = {
+                      top: event.nativeEvent.layout.y,
+                      height: event.nativeEvent.layout.height,
+                    };
+                    recomputeVisibility();
+                  }}
+                  testID={`stage-block-${index}`}
                 >
-                  <Text style={styles.stageNav}>Back</Text>
-                </Pressable>
-
-                <Text style={styles.stageCount}>
-                  Stage {workspace.stageIndex + 1} of {stages.length}
-                </Text>
-
-                <Pressable
-                  accessibilityLabel="Next stage"
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: workspace.stageIndex === stages.length - 1 }}
-                  disabled={workspace.stageIndex === stages.length - 1}
-                  onPress={() =>
-                    update((previous) => ({
-                      stageIndex: Math.min(stages.length - 1, previous.stageIndex + 1),
-                    }))
-                  }
-                >
-                  <Text style={styles.stageNav}>Next</Text>
-                </Pressable>
-              </View>
-
-              <Text style={styles.stageTitle}>{stage.title}</Text>
-              <Text style={styles.stageBody}>{stage.body}</Text>
+                  <LessonStageBlock
+                    isMounted={visibility.mounted[index] === true}
+                    isVisible={visibility.visible[index] === true}
+                    position={index + 1}
+                    stage={item}
+                  />
+                </View>
+              ))}
             </View>
 
             <Text style={styles.takeaway}>{lesson.takeaway}</Text>
@@ -349,21 +380,9 @@ const styles = StyleSheet.create({
     lineHeight: 37,
   },
   lede: { marginTop: Spacing.md, color: Colors.textMuted, fontSize: 15, lineHeight: 23 },
-  workspace: { marginTop: 34, gap: Spacing.lg },
-  stageBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  stages: {
+    gap: Spacing.xl,
   },
-  stageNav: { color: Colors.accent, fontSize: 13, fontWeight: "800" },
-  stageCount: {
-    color: Colors.textSubtle,
-    fontFamily: "monospace",
-    fontSize: 11,
-    textTransform: "uppercase",
-  },
-  stageTitle: { color: Colors.text, fontSize: 20, fontWeight: "800" },
-  stageBody: { marginTop: Spacing.sm, color: Colors.textMuted, fontSize: 14, lineHeight: 22 },
   takeaway: {
     marginTop: Spacing.xxl,
     color: Colors.textMuted,

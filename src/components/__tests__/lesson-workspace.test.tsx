@@ -15,8 +15,12 @@ jest.mock("../shader-sandbox", () => {
   const { Text, View } = require("react-native") as typeof import("react-native");
 
   return {
-    ShaderSandbox: ({ source }: { source: string }) =>
-      React.createElement(View, { testID: "sandbox" }, React.createElement(Text, null, source)),
+    ShaderSandbox: ({ source, active }: { source: string; active?: boolean }) =>
+      React.createElement(
+        View,
+        { testID: "sandbox" },
+        React.createElement(Text, null, `${active === false ? "inactive" : "active"}:${source}`),
+      ),
   };
 });
 
@@ -102,6 +106,31 @@ async function renderWorkspace(overrides: Partial<LessonWorkspaceProps> = {}) {
   return { props, view };
 }
 
+/**
+ * The component cannot know any block's position until `onLayout` fires, and no test environment
+ * fires it. This supplies plausible geometry — a 600pt viewport over four 400pt blocks — then scrolls.
+ */
+async function measureAndScroll({ scrollY }: { scrollY: number }) {
+  const scroll = screen.getByTestId("lesson-scroll");
+
+  await fireEvent(scroll, "layout", { nativeEvent: { layout: { height: 600, width: 400 } } });
+
+  const blocks = screen.getAllByTestId(/^stage-block-/);
+  for (const [index, block] of blocks.entries()) {
+    await fireEvent(block, "layout", {
+      nativeEvent: { layout: { y: index * 400, height: 400, width: 400 } },
+    });
+  }
+
+  await fireEvent.scroll(scroll, {
+    nativeEvent: {
+      contentOffset: { y: scrollY, x: 0 },
+      contentSize: { height: blocks.length * 400, width: 400 },
+      layoutMeasurement: { height: 600, width: 400 },
+    },
+  });
+}
+
 async function pressAlertAction(alertSpy: jest.SpiedFunction<typeof Alert.alert>, index: number) {
   const buttons = alertSpy.mock.calls[0][2];
   await act(async () => {
@@ -120,53 +149,66 @@ describe("lesson workspace", () => {
     expect(screen.getByText(`1 of ${fragmentsModule.lessons.length}`)).toBeTruthy();
   });
 
-  it("opens on the first stage", async () => {
+  it("renders every stage's title, body and source", async () => {
     await renderWorkspace();
 
-    expect(screen.getByText("Stage 1 of 4")).toBeTruthy();
-    expect(screen.getByTestId("sandbox")).toHaveTextContent(/vec4\(0\.85/);
+    expect(screen.getByText("Stage 1")).toBeTruthy();
+    expect(screen.getByText("Stage 4")).toBeTruthy();
+    expect(screen.getAllByTestId("stage-source")).toHaveLength(4);
   });
 
-  it("advances to the next stage and shows its source", async () => {
+  it("has no stage pager", async () => {
     await renderWorkspace();
 
-    await fireEvent.press(screen.getByLabelText("Next stage"));
-
-    expect(screen.getByText("Stage 2 of 4")).toBeTruthy();
-    expect(screen.getByTestId("sandbox")).toHaveTextContent(/400\.0/);
+    expect(screen.queryByLabelText("Next stage")).toBeNull();
+    expect(screen.queryByLabelText("Previous stage")).toBeNull();
+    expect(screen.queryByText(/Stage \d+ of \d+/)).toBeNull();
   });
 
-  it("goes back, reverting the rendered source", async () => {
+  it("mounts the first stage's preview before any scrolling", async () => {
     await renderWorkspace();
 
-    await fireEvent.press(screen.getByLabelText("Next stage"));
-    await fireEvent.press(screen.getByLabelText("Previous stage"));
-
-    expect(screen.getByText("Stage 1 of 4")).toBeTruthy();
-    expect(screen.getByTestId("sandbox")).toHaveTextContent(/vec4\(0\.85/);
+    expect(screen.getAllByTestId("sandbox")).toHaveLength(1);
   });
 
-  it("shows the current stage's source as readable code, and advances it with the stage", async () => {
+  it("mounts a later stage once it comes within reach", async () => {
     await renderWorkspace();
+    await measureAndScroll({ scrollY: 700 });
 
-    // The code shown to the learner is exactly the source the sandbox above it is compiling —
-    // never a paraphrase of it.
-    expect(screen.getByTestId("stage-source")).toHaveTextContent(/vec4\(0\.85/);
-
-    await fireEvent.press(screen.getByLabelText("Next stage"));
-
-    expect(screen.getByTestId("stage-source")).toHaveTextContent(/400\.0/);
+    expect(screen.getAllByTestId("sandbox").length).toBeGreaterThan(1);
   });
 
-  it("disables previous on the first stage and next on the last", async () => {
+  it("keeps a stage mounted after it scrolls back out of view", async () => {
     await renderWorkspace();
-    expect(screen.getByLabelText("Previous stage").props.accessibilityState.disabled).toBe(true);
+    await measureAndScroll({ scrollY: 700 });
+    const mountedAfterScroll = screen.getAllByTestId("sandbox").length;
 
-    for (let i = 0; i < 3; i += 1) {
-      await fireEvent.press(screen.getByLabelText("Next stage"));
-    }
+    await measureAndScroll({ scrollY: 0 });
 
-    expect(screen.getByLabelText("Next stage").props.accessibilityState.disabled).toBe(true);
+    expect(screen.getAllByTestId("sandbox").length).toBe(mountedAfterScroll);
+  });
+
+  it("stops the loop on previews that scrolled off-screen", async () => {
+    await renderWorkspace();
+    await measureAndScroll({ scrollY: 1400 });
+
+    // `node.props.children` on the testID'd wrapper View is the `Text` element, not its rendered
+    // string — RN's `Text` is itself a composite component under this jest preset, one level below
+    // the host node the query returns. Asserting through `queryAllByText` reaches the actual string
+    // regardless of that nesting and keeps the same intent: some mounted preview reports itself
+    // inactive once it has scrolled off-screen.
+    expect(screen.queryAllByText(/^inactive:/).length).toBeGreaterThan(0);
+  });
+
+  it("resets mounted previews when the lesson changes", async () => {
+    // `otherLesson` is defined at module scope in this file and has two stages.
+    const { props, view } = await renderWorkspace();
+    await measureAndScroll({ scrollY: 700 });
+    expect(screen.getAllByTestId("sandbox").length).toBeGreaterThan(1);
+
+    await view.rerender(<LessonWorkspace {...props} lesson={otherLesson} />);
+
+    expect(screen.getAllByTestId("sandbox")).toHaveLength(1);
   });
 
   it("shows the current stage's title and body", async () => {
@@ -181,21 +223,6 @@ describe("lesson workspace", () => {
 
     expect(screen.getByText(/One function, run once per pixel/)).toBeTruthy();
     expect(screen.getByText(/Swap uv.x and uv.y/)).toBeTruthy();
-  });
-
-  it("resets to the first stage when the lesson prop changes", async () => {
-    const { props, view } = await renderWorkspace();
-
-    await fireEvent.press(screen.getByLabelText("Next stage"));
-    await fireEvent.press(screen.getByLabelText("Next stage"));
-    expect(screen.getByText("Stage 3 of 4")).toBeTruthy();
-
-    // Same component instance, new `lesson` prop — exactly what `router.replace`-driven lesson
-    // navigation produces, since `LessonWorkspace` is never remounted with a fresh `key`.
-    await view.rerender(<LessonWorkspace {...props} lesson={otherLesson} />);
-
-    expect(screen.getByText("Stage 1 of 2")).toBeTruthy();
-    expect(screen.getByTestId("sandbox")).toHaveTextContent(/vec4\(0\.1, 0\.2, 0\.3/);
   });
 
   test("zero-pads the module numeral in the header", async () => {
