@@ -22,6 +22,7 @@
 - **3–5 stages per lesson**, enforced.
 - Nothing under `src/data` may import React or `expo-gl`.
 - Run before every commit: `npm test`, `npx tsc --noEmit`, and `npm run content:check`.
+- **One declared exception, and only one.** Task 1 necessarily commits red: `src/components/__tests__/lesson-workspace.test.tsx` and `src/app/__tests__/lesson.test.tsx` fail to load, and `tsc` reports errors confined to `lesson-workspace.tsx` and its test, because the workspace still reads `lesson.presets` until Task 2 rewrites it. Tasks 1 and 2 together restore green. Task 1 must still leave `content:check` passing and every other suite green. No other task may commit red.
 
 ## Scope Decision, and One Deviation From The Spec
 
@@ -643,6 +644,7 @@ git commit -m "feat(content): carry runnable shader stages instead of preview ke
 **Files:**
 - Modify: `src/components/lesson-workspace.tsx`
 - Test: `src/components/__tests__/lesson-workspace.test.tsx`
+- Test: `src/app/__tests__/lesson.test.tsx` — its `findModule` helper reaches into the old lesson shape and fails to load after Task 1. It must be updated here; Task 1 correctly left it alone as out of scope.
 
 **Interfaces:**
 - Consumes: `LessonStage`, `CourseLesson` from `../data/course/types`; `ShaderSandbox` from `./shader-sandbox`.
