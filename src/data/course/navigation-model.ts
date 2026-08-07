@@ -106,17 +106,30 @@ function buildModuleViewModel(
   };
 }
 
+/** The statuses a learner can actually act on — every other module is a roadmap card, not a target. */
+const OPENABLE_STATUSES: readonly NavigationModuleStatus[] = ["available", "in-progress", "complete"];
+
 function selectFeatured(
   modules: readonly NavigationModuleViewModel[],
 ): { module: NavigationModuleViewModel; lesson: NavigationLessonViewModel } | null {
-  const publishedModules = byPosition(modules.filter((module) => module.status !== "planned"));
-  if (publishedModules.length === 0) {
+  // An allow-list, not `!== "planned"`. `buildModuleViewModel` gives "locked" precedence over
+  // "planned", so a planned module that is also locked reports "locked" and slips through a
+  // deny-list — and having no lessons, it then aborts the whole selection. That is what stranded
+  // Home on "Loading curriculum…" once Module 1 was the only published module: modules 3+ were
+  // planned *and* locked, so the first non-complete match was an empty module.
+  //
+  // Filtering positively also stops a locked published module being featured, which would offer
+  // the learner a lesson they are not allowed to open yet.
+  const openableModules = byPosition(
+    modules.filter((module) => OPENABLE_STATUSES.includes(module.status)),
+  );
+  if (openableModules.length === 0) {
     return null;
   }
 
   const currentModule =
-    publishedModules.find((module) => module.status !== "complete") ??
-    publishedModules[publishedModules.length - 1];
+    openableModules.find((module) => module.status !== "complete") ??
+    openableModules[openableModules.length - 1];
 
   const orderedLessons = byPosition(currentModule.lessons);
   if (orderedLessons.length === 0) {
