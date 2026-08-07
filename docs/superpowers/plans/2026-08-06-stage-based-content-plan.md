@@ -17,7 +17,7 @@
 - **Every stage's `source` is a complete `mainImage` body.** No `precision`, no `main()`, no `#version`, no `gl_FragColor`.
 - **GLSL ES 1.00 only.** No stage-level `in`/`out`, no `texture(`.
 - **`iResolution` (vec3) and `iTime` (float) are the only uniforms.** No `iMouse`, `iFrame`, `iTimeDelta`.
-- **No lesson may use a technique a later lesson introduces.** Module 1 has no `step`, `smoothstep`, `mix`, `clamp`, `length`-based shapes, or branching.
+- **No lesson may use a technique a later lesson introduces.** Module 1 has no `step`, `smoothstep`, `mix`, `clamp`, no SDF shape functions, and no branching. `length()` is permitted in Module 1 purely as a *measurement* — showing that a radial gradient goes elliptical on a non-square screen — because measuring a distance is not making a shape. Module 3 introduces it as a shape tool. Any stage relying on this carve-out must say so in its body.
 - **Word minimums per lesson:** intro ≥ 40 words, each stage body ≥ 40, takeaway ≥ 20. Enforced by the schema, not by good intentions.
 - **3–5 stages per lesson**, enforced.
 - Nothing under `src/data` may import React or `expo-gl`.
