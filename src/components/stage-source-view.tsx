@@ -1,4 +1,6 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Colors, Radius, Spacing } from "../constants/theme";
 
@@ -7,6 +9,9 @@ type StageSourceViewProps = {
 };
 
 const MONOSPACE_LINE_HEIGHT = 20;
+
+/** How long the button confirms a copy before returning to its resting label. */
+const COPIED_FEEDBACK_MS = 1600;
 
 /**
  * Read-only, line-numbered view of a stage's shader source — the same body `ShaderSandbox` above
@@ -26,9 +31,33 @@ const MONOSPACE_LINE_HEIGHT = 20;
  * Alignment survives the merge because nothing here wraps: the horizontal `ScrollView` leaves the
  * text unconstrained, so one source line always occupies exactly one line box of
  * {@link MONOSPACE_LINE_HEIGHT}, matching the gutter entry beside it.
+ *
+ * The copy button overlays the code rather than sitting above it, so it costs no vertical space in a
+ * lesson that already stacks a preview, a listing and prose per stage.
  */
 export function StageSourceView({ source }: StageSourceViewProps) {
   const lines = source.split("\n");
+  const [copied, setCopied] = useState(false);
+
+  // Cleared on unmount so a copy made just before a stage scrolls away cannot set state on a gone
+  // component, and reset whenever the source changes so one stage's confirmation never appears to
+  // belong to another's listing.
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    setCopied(false);
+    return () => {
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+    };
+  }, [source]);
+
+  const copy = useCallback(() => {
+    // Deliberately not awaited: the confirmation is about the learner's tap, and on iOS and Android
+    // this always resolves true anyway, so gating the label on the promise would only add latency.
+    void Clipboard.setStringAsync(source);
+    setCopied(true);
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+    resetTimer.current = setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS);
+  }, [source]);
 
   return (
     <View style={styles.container} testID="stage-source">
@@ -53,6 +82,17 @@ export function StageSourceView({ source }: StageSourceViewProps) {
           </Text>
         </View>
       </ScrollView>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={copied ? "Code copied" : "Copy code"}
+        hitSlop={Spacing.sm}
+        onPress={copy}
+        style={styles.copyButton}
+        testID="stage-source-copy"
+      >
+        <Text style={styles.copyLabel}>{copied ? "Copied" : "Copy"}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -90,5 +130,21 @@ const styles = StyleSheet.create({
     fontFamily: "monospace",
     fontSize: 13,
     lineHeight: MONOSPACE_LINE_HEIGHT,
+  },
+  copyButton: {
+    position: "absolute",
+    top: Spacing.xs,
+    right: Spacing.xs,
+    backgroundColor: Colors.background,
+    borderColor: Colors.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+  },
+  copyLabel: {
+    color: Colors.textSubtle,
+    fontSize: 12,
+    fontWeight: "600",
   },
 });

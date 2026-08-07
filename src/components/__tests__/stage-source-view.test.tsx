@@ -1,10 +1,23 @@
-import { render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 
 import { StageSourceView } from "../stage-source-view";
+
+// Typed with its parameter rather than inferred from a bare thunk: `jest.fn(() => …)` infers a
+// zero-argument signature, which type-checks the call away and would have let an assertion on the
+// copied text pass while checking nothing.
+const mockSetStringAsync = jest.fn((_text: string) => Promise.resolve(true));
+
+jest.mock("expo-clipboard", () => ({
+  setStringAsync: (text: string) => mockSetStringAsync(text),
+}));
 
 // Blank lines between logical groups, the shape Module 3's stages introduced and the shape that
 // broke the previous per-line rendering.
 const SOURCE = "vec2 uv = fragCoord / iResolution.xy;\n\nfloat d = length(uv);\n\nfragColor = vec4(d);";
+
+beforeEach(() => {
+  mockSetStringAsync.mockClear();
+});
 
 it("renders the source as a single selectable node so a selection can span lines", async () => {
   await render(<StageSourceView source={SOURCE} />);
@@ -29,5 +42,50 @@ it("numbers every line including the blank ones", async () => {
   expect(SOURCE.split("\n")).toHaveLength(5);
   for (const number of ["1", "2", "3", "4", "5"]) {
     expect(screen.getByText(number)).toBeTruthy();
+  }
+});
+
+it("copies the whole source, not the visible portion of it", async () => {
+  await render(<StageSourceView source={SOURCE} />);
+
+  await fireEvent.press(screen.getByTestId("stage-source-copy"));
+
+  // The listing scrolls horizontally and is often taller than the viewport, so what a learner can see
+  // is not what they mean to copy.
+  expect(mockSetStringAsync).toHaveBeenCalledWith(SOURCE);
+});
+
+it("confirms the copy, then returns to its resting label", async () => {
+  jest.useFakeTimers();
+  try {
+    await render(<StageSourceView source={SOURCE} />);
+    expect(screen.getByTestId("stage-source-copy")).toHaveTextContent("Copy");
+
+    await fireEvent.press(screen.getByTestId("stage-source-copy"));
+    expect(screen.getByTestId("stage-source-copy")).toHaveTextContent("Copied");
+
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+    expect(screen.getByTestId("stage-source-copy")).toHaveTextContent("Copy");
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it("drops a pending confirmation when the stage's source changes", async () => {
+  jest.useFakeTimers();
+  try {
+    const view = await render(<StageSourceView source={SOURCE} />);
+    await fireEvent.press(screen.getByTestId("stage-source-copy"));
+    expect(screen.getByTestId("stage-source-copy")).toHaveTextContent("Copied");
+
+    // Stage blocks are recycled as a lesson scrolls, so a confirmation left standing would read as
+    // belonging to a listing the learner never copied.
+    await view.rerender(<StageSourceView source="fragColor = vec4(1.0);" />);
+
+    expect(screen.getByTestId("stage-source-copy")).toHaveTextContent("Copy");
+  } finally {
+    jest.useRealTimers();
   }
 });
