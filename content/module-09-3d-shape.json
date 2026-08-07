@@ -1,0 +1,14 @@
+{
+  "id": "three-d-shape-and-space",
+  "position": 9,
+  "status": "planned",
+  "title": "3D Shape & Space",
+  "description": "Describe and combine three-dimensional shapes in ray-marched space.",
+  "plannedLessonCount": 3,
+  "plannedTopics": [
+    "Box and torus SDFs",
+    "Smooth minimum",
+    "Repetition and transforms in 3D"
+  ],
+  "lessons": []
+}

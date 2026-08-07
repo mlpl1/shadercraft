@@ -1,31 +1,16 @@
 import { z } from "zod";
 
-import { getPreviewParameterType, isPreviewKey } from "../../shaders/preview-registry";
 import type { CourseModule, CourseRelease } from "./types";
 
 const idPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const lessonPresetSchema = z
-  .object({
-    id: z.string(),
-    position: z.number().int().positive(),
-    label: z.string(),
-    previewKey: z.string(),
-    previewParameters: z.record(z.string(), z.union([z.boolean(), z.number(), z.string()])),
-    value: z.string(),
-    previewValueLabel: z.string().optional(),
-    filename: z.string(),
-    codeLines: z.array(z.string()),
-    highlightedLines: z.array(z.number().int()),
-  })
-  .strict();
-
-const lessonSectionSchema = z
+const lessonStageSchema = z
   .object({
     id: z.string(),
     position: z.number().int().positive(),
     title: z.string(),
     body: z.string(),
+    source: z.string(),
   })
   .strict();
 
@@ -37,15 +22,9 @@ const courseLessonSchema = z
     title: z.string(),
     shortTitle: z.string(),
     intro: z.string(),
-    conceptTitle: z.string(),
-    conceptLede: z.string(),
-    tryHint: z.string(),
     takeaway: z.string(),
-    previewCaption: z.string().min(1),
-    defaultPresetId: z.string().optional(),
-    introEyebrow: z.string().min(1).optional(),
-    presets: z.array(lessonPresetSchema).min(1),
-    sections: z.array(lessonSectionSchema).min(1),
+    tryThis: z.string().optional(),
+    stages: z.array(lessonStageSchema),
   })
   .strict();
 
@@ -106,21 +85,49 @@ function validateContiguousPositions(
 }
 
 /**
- * Rejects authored preview parameters the installed app cannot act on. Content controls which
- * supported parameters a preset opts into; it can never introduce a preview behavior this build
- * does not implement, nor author a supported one as the wrong type.
+ * Tokens that must never appear in an authored stage. The first four belong to the wrapper the app
+ * supplies (see `docs/data/shader-sandbox.md`); the rest name capability this build does not provide
+ * — GLSL ES 3.00 sampling, and three Shadertoy uniforms the sandbox deliberately omits.
+ *
+ * This is the job the preview registry used to do. Content could never name a preview behaviour the
+ * app lacked; it now cannot name a uniform or language feature the app lacks either.
  */
-function validatePreviewParameters(
-  presetId: string,
-  previewParameters: Record<string, boolean | number | string>,
-): void {
-  for (const [name, value] of Object.entries(previewParameters)) {
-    const expectedType = getPreviewParameterType(name);
-    if (!expectedType) {
-      fail(`Unsupported preview parameter ${name} on preset ${presetId}`);
-    }
-    if (typeof value !== expectedType) {
-      fail(`Preview parameter ${name} on preset ${presetId} must be a ${expectedType}`);
+export const SHADER_SOURCE_FORBIDDEN_TOKENS = [
+  "#version",
+  "precision",
+  "void main(",
+  "gl_FragColor",
+  "texture(",
+  "iMouse",
+  "iFrame",
+  "iTimeDelta",
+] as const;
+
+const MIN_INTRO_WORDS = 40;
+const MIN_STAGE_BODY_WORDS = 40;
+const MIN_TAKEAWAY_WORDS = 20;
+
+function countWords(value: string): number {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
+/**
+ * Enforces the depth the syllabus design committed to numerically. The previous curriculum averaged
+ * ~165 words per lesson while reading as finished, so the floor is checked rather than trusted.
+ */
+function validateWordCount(value: string, minimum: number, label: string): void {
+  if (countWords(value) < minimum) {
+    fail(`${label} must be at least ${minimum} words`);
+  }
+}
+
+function validateStageSource(stageId: string, source: string): void {
+  if (source.trim().length === 0) {
+    fail(`Stage ${stageId} source must not be empty`);
+  }
+  for (const token of SHADER_SOURCE_FORBIDDEN_TOKENS) {
+    if (source.includes(token)) {
+      fail(`Stage ${stageId} source must not contain ${token}`);
     }
   }
 }
@@ -128,8 +135,7 @@ function validatePreviewParameters(
 function validateModules(modules: CourseModule[]): void {
   const moduleIds = new Set<string>();
   const lessonIds = new Set<string>();
-  const presetIds = new Set<string>();
-  const sectionIds = new Set<string>();
+  const stageIds = new Set<string>();
 
   validateContiguousPositions(modules, "module");
 
@@ -158,31 +164,19 @@ function validateModules(modules: CourseModule[]): void {
       if (lesson.moduleId !== module.id) {
         fail(`Lesson ${lesson.id} must belong to module ${module.id}`);
       }
-      validateContiguousPositions(lesson.presets, "preset");
-      validateContiguousPositions(lesson.sections, "section");
 
-      for (const preset of lesson.presets) {
-        validateUniqueId(presetIds, preset.id, "preset");
-        if (!isPreviewKey(preset.previewKey)) {
-          fail(`Invalid preview key: ${preset.previewKey}`);
-        }
-        validatePreviewParameters(preset.id, preset.previewParameters);
-        for (const highlightedLine of preset.highlightedLines) {
-          if (highlightedLine < 1 || highlightedLine > preset.codeLines.length) {
-            fail(`Highlighted line must be between 1 and ${preset.codeLines.length}`);
-          }
-        }
+      validateWordCount(lesson.intro, MIN_INTRO_WORDS, `Lesson ${lesson.id} intro`);
+      validateWordCount(lesson.takeaway, MIN_TAKEAWAY_WORDS, `Lesson ${lesson.id} takeaway`);
+
+      if (lesson.stages.length < 3 || lesson.stages.length > 5) {
+        fail(`Lesson ${lesson.id} must have between 3 and 5 stages`);
       }
+      validateContiguousPositions(lesson.stages, "stage");
 
-      if (
-        lesson.defaultPresetId !== undefined &&
-        !lesson.presets.some((preset) => preset.id === lesson.defaultPresetId)
-      ) {
-        fail(`Unknown default preset ${lesson.defaultPresetId} for lesson ${lesson.id}`);
-      }
-
-      for (const section of lesson.sections) {
-        validateUniqueId(sectionIds, section.id, "section");
+      for (const stage of lesson.stages) {
+        validateUniqueId(stageIds, stage.id, "stage");
+        validateWordCount(stage.body, MIN_STAGE_BODY_WORDS, `Stage ${stage.id} body`);
+        validateStageSource(stage.id, stage.source);
       }
     }
   }

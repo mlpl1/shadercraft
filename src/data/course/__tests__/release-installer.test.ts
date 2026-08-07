@@ -97,9 +97,8 @@ async function countRows(driver: NodeSqliteDriver, releaseId: string): Promise<n
        (SELECT COUNT(*) FROM content_releases WHERE id = ?)
      + (SELECT COUNT(*) FROM modules WHERE release_id = ?)
      + (SELECT COUNT(*) FROM lessons WHERE release_id = ?)
-     + (SELECT COUNT(*) FROM lesson_presets WHERE release_id = ?)
-     + (SELECT COUNT(*) FROM lesson_sections WHERE release_id = ?) AS total`,
-    [releaseId, releaseId, releaseId, releaseId, releaseId],
+     + (SELECT COUNT(*) FROM lesson_stages WHERE release_id = ?) AS total`,
+    [releaseId, releaseId, releaseId, releaseId],
   );
   return row?.total ?? 0;
 }
@@ -200,11 +199,11 @@ describe("release installer", () => {
     expect(notifications).toBe(0);
   });
 
-  test("rejects invalid highlighted lines before any SQL write", async () => {
+  test("rejects a stage source violating the sandbox contract before any SQL write", async () => {
     const counting = new CountingTransactionDriver(":memory:");
     await migrateDatabase(counting);
     counting.transactionCount = 0;
-    const invalid = derivedRelease("remote-bad-highlight", (release) => ({
+    const invalid = derivedRelease("remote-bad-source", (release) => ({
       ...release,
       modules: release.modules.map((module) => ({
         ...module,
@@ -212,10 +211,8 @@ describe("release installer", () => {
           lessonIndex === 0
             ? {
                 ...lesson,
-                presets: lesson.presets.map((preset, presetIndex) =>
-                  presetIndex === 0
-                    ? { ...preset, highlightedLines: [preset.codeLines.length + 5] }
-                    : preset,
+                stages: lesson.stages.map((stage, stageIndex) =>
+                  stageIndex === 0 ? { ...stage, source: "gl_FragColor = vec4(1.0);" } : stage,
                 ),
               }
             : lesson,
@@ -226,31 +223,24 @@ describe("release installer", () => {
     try {
       await expect(
         new ReleaseInstaller(counting).stageAndActivate(invalid),
-      ).rejects.toThrow(/Highlighted line must be between/i);
+      ).rejects.toThrow(/must not contain gl_FragColor/i);
       expect(counting.transactionCount).toBe(0);
-      await expect(countRows(counting, "remote-bad-highlight")).resolves.toBe(0);
+      await expect(countRows(counting, "remote-bad-source")).resolves.toBe(0);
     } finally {
       await counting.close();
     }
   });
 
-  test("rejects an unknown preview key before any SQL write", async () => {
+  test("rejects a lesson with too few stages before any SQL write", async () => {
     const counting = new CountingTransactionDriver(":memory:");
     await migrateDatabase(counting);
     counting.transactionCount = 0;
-    const invalid = derivedRelease("remote-bad-preview", (release) => ({
+    const invalid = derivedRelease("remote-bad-stage-count", (release) => ({
       ...release,
       modules: release.modules.map((module) => ({
         ...module,
         lessons: module.lessons.map((lesson, lessonIndex) =>
-          lessonIndex === 0
-            ? {
-                ...lesson,
-                presets: lesson.presets.map((preset, presetIndex) =>
-                  presetIndex === 0 ? { ...preset, previewKey: "not-a-preview" } : preset,
-                ),
-              }
-            : lesson,
+          lessonIndex === 0 ? { ...lesson, stages: lesson.stages.slice(0, 2) } : lesson,
         ),
       })),
     }));
@@ -258,9 +248,9 @@ describe("release installer", () => {
     try {
       await expect(
         new ReleaseInstaller(counting).stageAndActivate(invalid),
-      ).rejects.toThrow(/Invalid preview key: not-a-preview/);
+      ).rejects.toThrow(/between 3 and 5 stages/i);
       expect(counting.transactionCount).toBe(0);
-      await expect(countRows(counting, "remote-bad-preview")).resolves.toBe(0);
+      await expect(countRows(counting, "remote-bad-stage-count")).resolves.toBe(0);
     } finally {
       await counting.close();
     }

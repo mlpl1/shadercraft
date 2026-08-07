@@ -10,10 +10,17 @@ import type { CourseModule, CourseRelease } from "../../src/data/course/types";
 import { calculateNodeReleaseChecksum } from "./node-checksum";
 
 const moduleFiles = [
-  "content/module-01-foundations.json",
-  "content/module-02-shapes.json",
-  "content/module-03-color-light.json",
-  "content/module-04-textures.json",
+  "content/module-01-fragments.json",
+  "content/module-02-shaping.json",
+  "content/module-03-distance-fields.json",
+  "content/module-04-colour.json",
+  "content/module-05-space.json",
+  "content/module-06-noise.json",
+  "content/module-07-composition.json",
+  "content/module-08-raymarching.json",
+  "content/module-09-3d-shape.json",
+  "content/module-10-lighting.json",
+  "content/module-11-performance.json",
 ];
 
 // `process.cwd()` rather than `import.meta.dirname`: npm scripts and Jest both run from the repo
@@ -37,7 +44,7 @@ export function loadAuthoredModules(): CourseModule[] {
 export function buildBundledRelease(): CourseRelease {
   const modules = loadAuthoredModules();
   const releaseBody = {
-    id: "bundled-2026-08-04",
+    id: "bundled-2026-08-06",
     schemaVersion: 1 as const,
     minimumAppVersion: "1.0.0",
     modules,

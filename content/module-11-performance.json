@@ -1,0 +1,14 @@
+{
+  "id": "performance-and-craft",
+  "position": 11,
+  "status": "planned",
+  "title": "Performance & Craft",
+  "description": "Keep ray-marched shaders fast and precise.",
+  "plannedLessonCount": 3,
+  "plannedTopics": [
+    "Step count and precision",
+    "The cost of branching",
+    "Knowing when to stop"
+  ],
+  "lessons": []
+}

@@ -1,0 +1,16 @@
+{
+  "id": "space",
+  "position": 5,
+  "status": "planned",
+  "title": "Space",
+  "description": "Transform, tile, and vary coordinate space before a shape is ever evaluated.",
+  "plannedLessonCount": 5,
+  "plannedTopics": [
+    "Moving the coordinate system",
+    "Rotation and scale",
+    "Polar coordinates",
+    "Tiling with fract",
+    "Cell identity"
+  ],
+  "lessons": []
+}

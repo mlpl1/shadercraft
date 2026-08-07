@@ -1,23 +1,17 @@
-import type { ShaderPreviewKey } from "../../shaders/preview-registry";
-
 export type ModuleStatus = "published" | "planned";
 
-export type LessonPreset = {
+/**
+ * One step in a lesson's build-up. `source` is a complete, runnable `mainImage` body — not a
+ * fragment and not a diff against the previous stage. That duplicates code between neighbouring
+ * stages deliberately: it is what lets the sandbox compile any stage directly, lets a learner edit
+ * one and see it run, and guarantees the code on screen is the code that renders.
+ */
+export type LessonStage = {
   id: string;
   position: number;
-  label: string;
-  previewKey: ShaderPreviewKey;
-  previewParameters: Record<string, boolean | number | string>;
-  value: string;
-  /**
-   * Overrides the preview footer's value line when present, falling back to the default
-   * `label · value` composition when absent. Lets a preset author bespoke footer copy without
-   * changing `value`, which is also rendered on the preset's own chip.
-   */
-  previewValueLabel?: string;
-  filename: string;
-  codeLines: string[];
-  highlightedLines: number[];
+  title: string;
+  body: string;
+  source: string;
 };
 
 export type CourseLesson = {
@@ -27,18 +21,10 @@ export type CourseLesson = {
   title: string;
   shortTitle: string;
   intro: string;
-  conceptTitle: string;
-  conceptLede: string;
-  tryHint: string;
   takeaway: string;
-  /** Footer caption for the live preview, authored per lesson. */
-  previewCaption: string;
-  /** Preset the lesson opens on; the lowest-positioned preset when absent. */
-  defaultPresetId?: string;
-  /** Overrides the lesson intro's eyebrow label; falls back to "Concept" when absent. */
-  introEyebrow?: string;
-  presets: LessonPreset[];
-  sections: { id: string; position: number; title: string; body: string }[];
+  /** Optional invitation to experiment. No target, no solution, nothing checks it. */
+  tryThis?: string;
+  stages: LessonStage[];
 };
 
 export type CourseModule = {

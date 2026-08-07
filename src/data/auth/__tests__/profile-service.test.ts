@@ -3,8 +3,13 @@ import { createProgressRepositoryTestContext } from "../../progress/__tests__/pr
 import type { SqliteProgressRepository } from "../../progress/sqlite-progress-repository";
 import { createProfileService, type ProfileService } from "../profile-service";
 
-/** Two published lessons the guest completes, plus one it explicitly uncompletes. */
-const LESSON_A = "coordinate-systems-uv-space";
+/**
+ * `LESSON_A` is the bundled release's sole currently published lesson. `LESSON_B` and `LESSON_C`
+ * are legacy/unpublished ids the guest also completes (`LESSON_C` is then explicitly uncompleted)
+ * so mutation counts and raw completion rows still exercise more than one lesson, even though
+ * `getCompletedLessonIds()` — which filters to published lessons — only ever surfaces `LESSON_A`.
+ */
+const LESSON_A = "what-a-fragment-shader-is";
 const LESSON_B = "colors-fragment-output";
 const LESSON_C = "uniforms-time";
 
@@ -73,7 +78,7 @@ describe("local profile service", () => {
       [LESSON_B]: true,
       [LESSON_C]: false,
     });
-    await expect(repository.getCompletedLessonIds()).resolves.toEqual([LESSON_A, LESSON_B]);
+    await expect(repository.getCompletedLessonIds()).resolves.toEqual([LESSON_A]);
 
     // 3. The guest's own mutations are marked merged so they can never upload or be re-imported.
     const guestOutbox = await readOutbox(guest.id);
@@ -116,7 +121,7 @@ describe("local profile service", () => {
       [LESSON_B]: true,
       [LESSON_C]: false,
     });
-    await expect(repository.getCompletedLessonIds()).resolves.toEqual([LESSON_A, LESSON_B]);
+    await expect(repository.getCompletedLessonIds()).resolves.toEqual([LESSON_A]);
     await expect(repository.isLessonCompleted(LESSON_C)).resolves.toBe(false);
     await expect(repository.getPendingMutations()).resolves.toHaveLength(3);
   });
@@ -174,7 +179,7 @@ describe("local profile service", () => {
     const restarted = createRepository();
 
     await expect(restarted.getActiveProfileId()).resolves.toBe(userOne.id);
-    await expect(restarted.getCompletedLessonIds()).resolves.toEqual([LESSON_A, LESSON_B]);
+    await expect(restarted.getCompletedLessonIds()).resolves.toEqual([LESSON_A]);
   });
 
   test("refuses to demote a signed-in device to a guest via activateAnonymous", async () => {

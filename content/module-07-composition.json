@@ -1,0 +1,14 @@
+{
+  "id": "composition",
+  "position": 7,
+  "status": "planned",
+  "title": "Composition",
+  "description": "Assemble independent parts into one deliberate image.",
+  "plannedLessonCount": 3,
+  "plannedTopics": [
+    "Layers and order",
+    "Masks as reusable signals",
+    "Assembling a finished piece"
+  ],
+  "lessons": []
+}

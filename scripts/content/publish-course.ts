@@ -32,22 +32,20 @@ export type PublishDeps = {
   log?: (message: string) => void;
 };
 
-type ReleaseCounts = { modules: number; lessons: number; presets: number; sections: number };
+type ReleaseCounts = { modules: number; lessons: number; stages: number };
 
 function countRelease(release: CourseRelease): ReleaseCounts {
   let lessons = 0;
-  let presets = 0;
-  let sections = 0;
+  let stages = 0;
 
   for (const module of release.modules) {
     for (const lesson of module.lessons) {
       lessons += 1;
-      presets += lesson.presets.length;
-      sections += lesson.sections.length;
+      stages += lesson.stages.length;
     }
   }
 
-  return { modules: release.modules.length, lessons, presets, sections };
+  return { modules: release.modules.length, lessons, stages };
 }
 
 /**

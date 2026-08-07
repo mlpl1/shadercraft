@@ -57,13 +57,16 @@ describe("SQLite progress repository", () => {
     expect(await repository.isLessonCompleted("color-mixing")).toBe(false);
   });
 
-  test("returns completed lesson IDs in curriculum order regardless of completion order", async () => {
-    await repository.setLessonCompleted("colors-fragment-output", true);
-    await repository.setLessonCompleted("coordinate-systems-uv-space", true);
+  test("returns only published, completed lesson IDs", async () => {
+    // The bundled release currently authors only one published lesson, so ordering against a
+    // second published lesson is covered separately with a fabricated release
+    // (see navigation-model.test.ts and domain.test.ts for curriculum-order coverage on synthetic
+    // fixtures). This still exercises the "published-only" filter itself.
+    await repository.setLessonCompleted("retired-legacy-lesson", true);
+    await repository.setLessonCompleted("what-a-fragment-shader-is", true);
 
     await expect(repository.getCompletedLessonIds()).resolves.toEqual([
-      "coordinate-systems-uv-space",
-      "colors-fragment-output",
+      "what-a-fragment-shader-is",
     ]);
   });
 

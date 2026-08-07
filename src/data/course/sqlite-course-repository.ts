@@ -1,13 +1,7 @@
 import type { DatabaseDriver } from "../database/driver";
 import { parseCourseRelease } from "./schema";
 import type { CourseRepository } from "./course-repository";
-import type {
-  CourseLesson,
-  CourseModule,
-  CourseRelease,
-  LessonPreset,
-  ModuleStatus,
-} from "./types";
+import type { CourseLesson, CourseModule, CourseRelease, ModuleStatus } from "./types";
 
 type ReleaseRow = {
   id: string;
@@ -33,35 +27,17 @@ type LessonRow = {
   title: string;
   short_title: string;
   intro: string;
-  concept_title: string;
-  concept_lede: string;
-  try_hint: string;
   takeaway: string;
-  preview_caption: string;
-  default_preset_id: string | null;
-  intro_eyebrow: string | null;
+  try_this: string | null;
 };
 
-type PresetRow = {
-  id: string;
-  lesson_id: string;
-  position: number;
-  label: string;
-  preview_key: LessonPreset["previewKey"];
-  preview_parameters_json: string;
-  value: string;
-  preview_value_label: string | null;
-  filename: string;
-  code_lines_json: string;
-  highlighted_lines_json: string;
-};
-
-type SectionRow = {
+type StageRow = {
   id: string;
   lesson_id: string;
   position: number;
   title: string;
   body: string;
+  source: string;
 };
 
 export class SqliteCourseRepository implements CourseRepository {
@@ -82,7 +58,7 @@ export class SqliteCourseRepository implements CourseRepository {
       throw new Error("No active course release is installed");
     }
 
-    const [moduleRows, lessonRows, presetRows, sectionRows] = await Promise.all([
+    const [moduleRows, lessonRows, stageRows] = await Promise.all([
       this.driver.all<ModuleRow>(
         `SELECT id, position, status, title, description, planned_lesson_count,
                 planned_topics_json
@@ -92,34 +68,22 @@ export class SqliteCourseRepository implements CourseRepository {
         [release.id],
       ),
       this.driver.all<LessonRow>(
-        `SELECT id, module_id, position, title, short_title, intro, concept_title,
-                concept_lede, try_hint, takeaway, preview_caption, default_preset_id,
-                intro_eyebrow
+        `SELECT id, module_id, position, title, short_title, intro, takeaway, try_this
          FROM lessons
          WHERE release_id = ?
          ORDER BY module_id, position`,
         [release.id],
       ),
-      this.driver.all<PresetRow>(
-        `SELECT id, lesson_id, position, label, preview_key,
-                preview_parameters_json, value, preview_value_label, filename, code_lines_json,
-                highlighted_lines_json
-         FROM lesson_presets
-         WHERE release_id = ?
-         ORDER BY lesson_id, position`,
-        [release.id],
-      ),
-      this.driver.all<SectionRow>(
-        `SELECT id, lesson_id, position, title, body
-         FROM lesson_sections
+      this.driver.all<StageRow>(
+        `SELECT id, lesson_id, position, title, body, source
+         FROM lesson_stages
          WHERE release_id = ?
          ORDER BY lesson_id, position`,
         [release.id],
       ),
     ]);
 
-    const presetsByLesson = groupBy(presetRows, ({ lesson_id }) => lesson_id);
-    const sectionsByLesson = groupBy(sectionRows, ({ lesson_id }) => lesson_id);
+    const stagesByLesson = groupBy(stageRows, ({ lesson_id }) => lesson_id);
     const lessonsByModule = groupBy(lessonRows, ({ module_id }) => module_id);
 
     const modules: CourseModule[] = moduleRows.map((module) => ({
@@ -131,7 +95,7 @@ export class SqliteCourseRepository implements CourseRepository {
       plannedLessonCount: module.planned_lesson_count,
       plannedTopics: parseJson<string[]>(module.planned_topics_json),
       lessons: (lessonsByModule.get(module.id) ?? []).map((lesson) =>
-        toLesson(lesson, presetsByLesson, sectionsByLesson),
+        toLesson(lesson, stagesByLesson),
       ),
     }));
 
@@ -188,8 +152,7 @@ export class SqliteCourseRepository implements CourseRepository {
 
 function toLesson(
   lesson: LessonRow,
-  presetsByLesson: ReadonlyMap<string, PresetRow[]>,
-  sectionsByLesson: ReadonlyMap<string, SectionRow[]>,
+  stagesByLesson: ReadonlyMap<string, StageRow[]>,
 ): CourseLesson {
   return {
     id: lesson.id,
@@ -198,37 +161,15 @@ function toLesson(
     title: lesson.title,
     shortTitle: lesson.short_title,
     intro: lesson.intro,
-    conceptTitle: lesson.concept_title,
-    conceptLede: lesson.concept_lede,
-    tryHint: lesson.try_hint,
     takeaway: lesson.takeaway,
-    previewCaption: lesson.preview_caption,
-    // An unauthored default preset is absent rather than null, matching the authored release shape.
-    ...(lesson.default_preset_id === null
-      ? {}
-      : { defaultPresetId: lesson.default_preset_id }),
-    ...(lesson.intro_eyebrow === null ? {} : { introEyebrow: lesson.intro_eyebrow }),
-    presets: (presetsByLesson.get(lesson.id) ?? []).map((preset) => ({
-      id: preset.id,
-      position: preset.position,
-      label: preset.label,
-      previewKey: preset.preview_key,
-      previewParameters: parseJson<LessonPreset["previewParameters"]>(
-        preset.preview_parameters_json,
-      ),
-      value: preset.value,
-      ...(preset.preview_value_label === null
-        ? {}
-        : { previewValueLabel: preset.preview_value_label }),
-      filename: preset.filename,
-      codeLines: parseJson<string[]>(preset.code_lines_json),
-      highlightedLines: parseJson<number[]>(preset.highlighted_lines_json),
-    })),
-    sections: (sectionsByLesson.get(lesson.id) ?? []).map((section) => ({
-      id: section.id,
-      position: section.position,
-      title: section.title,
-      body: section.body,
+    // An unauthored tryThis is absent rather than null, matching the authored release shape.
+    ...(lesson.try_this === null ? {} : { tryThis: lesson.try_this }),
+    stages: (stagesByLesson.get(lesson.id) ?? []).map((stage) => ({
+      id: stage.id,
+      position: stage.position,
+      title: stage.title,
+      body: stage.body,
+      source: stage.source,
     })),
   };
 }

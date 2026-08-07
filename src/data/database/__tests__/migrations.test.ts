@@ -32,8 +32,7 @@ describe("database migrations", () => {
   });
 
   test("selects only migrations newer than the current schema", () => {
-    expect(getPendingMigrations(0).map((migration) => migration.version)).toEqual([1, 2]);
-    expect(getPendingMigrations(1).map((migration) => migration.version)).toEqual([2]);
+    expect(getPendingMigrations(0).map((migration) => migration.version)).toEqual([1]);
     expect(getPendingMigrations(LATEST_SCHEMA_VERSION)).toEqual([]);
     expect(() => getPendingMigrations(LATEST_SCHEMA_VERSION + 1)).toThrow(/newer schema/i);
   });
@@ -42,7 +41,7 @@ describe("database migrations", () => {
     await migrateDatabase(driver);
 
     expect(await driver.first<{ user_version: number }>("PRAGMA user_version")).toEqual({
-      user_version: 2,
+      user_version: 1,
     });
 
     const tables = await driver.all<{ name: string }>(
@@ -52,9 +51,8 @@ describe("database migrations", () => {
       "app_metadata",
       "content_releases",
       "learner_profiles",
-      "lesson_presets",
       "lesson_progress",
-      "lesson_sections",
+      "lesson_stages",
       "lessons",
       "modules",
       "sketches",
@@ -63,7 +61,27 @@ describe("database migrations", () => {
     ]);
   });
 
-  test("adds the sketches table in migration 2, cascading from the owning profile", async () => {
+  test("lesson_stages cascades from its lesson and carries required source", async () => {
+    await migrateDatabase(driver);
+
+    const columns = await driver.all<TableInfoRow>("PRAGMA table_info(lesson_stages)");
+    expect(columns.map(({ name }) => name).sort()).toEqual([
+      "body",
+      "id",
+      "lesson_id",
+      "position",
+      "release_id",
+      "source",
+      "title",
+    ]);
+    expect(columns.every(({ notnull }) => notnull === 1)).toBe(true);
+
+    const foreignKeys = await driver.all<ForeignKeyRow>("PRAGMA foreign_key_list(lesson_stages)");
+    expect(foreignKeys.map(({ from }) => from).sort()).toEqual(["lesson_id", "release_id"]);
+    expect(foreignKeys[0].on_delete).toBe("CASCADE");
+  });
+
+  test("adds the sketches table, cascading from the owning profile", async () => {
     await migrateDatabase(driver);
 
     const columns = await driver.all<TableInfoRow>("PRAGMA table_info(sketches)");
@@ -93,21 +111,20 @@ describe("database migrations", () => {
     expect(indexes.map(({ name }) => name)).toContain("idx_sketches_profile_updated_at");
   });
 
-  test("applies migration 2 to a database already at version 1", async () => {
+  test("re-running the migration chain is a no-op", async () => {
     await migrateDatabase(driver);
     // A second run must be a no-op rather than an error.
     await migrateDatabase(driver);
 
     expect(await driver.first<{ user_version: number }>("PRAGMA user_version")).toEqual({
-      user_version: 2,
+      user_version: 1,
     });
   });
 
   test.each([
     ["modules", ["release_id", "id"]],
     ["lessons", ["release_id", "id"]],
-    ["lesson_presets", ["release_id", "id"]],
-    ["lesson_sections", ["release_id", "id"]],
+    ["lesson_stages", ["release_id", "id"]],
     ["lesson_progress", ["profile_id", "lesson_id"]],
     ["sync_outbox", ["profile_id", "mutation_id"]],
     ["sync_state", ["profile_id", "resource"]],
@@ -126,8 +143,7 @@ describe("database migrations", () => {
   test.each([
     ["modules", "content_releases", ["release_id"], ["id"]],
     ["lessons", "modules", ["release_id", "module_id"], ["release_id", "id"]],
-    ["lesson_presets", "lessons", ["release_id", "lesson_id"], ["release_id", "id"]],
-    ["lesson_sections", "lessons", ["release_id", "lesson_id"], ["release_id", "id"]],
+    ["lesson_stages", "lessons", ["release_id", "lesson_id"], ["release_id", "id"]],
   ])(
     "cascades deletion from %s to its staged %s rows",
     async (childTable, parentTable, fromColumns, toColumns) => {

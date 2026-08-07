@@ -1,0 +1,16 @@
+{
+  "id": "distance-fields",
+  "position": 3,
+  "status": "planned",
+  "title": "Distance Fields",
+  "description": "Describe a shape as a reusable field and give it any edge treatment.",
+  "plannedLessonCount": 5,
+  "plannedTopics": [
+    "Distance as a field",
+    "A circle you control",
+    "Boxes and rounded boxes",
+    "Combining shapes",
+    "Edges that survive scaling"
+  ],
+  "lessons": []
+}

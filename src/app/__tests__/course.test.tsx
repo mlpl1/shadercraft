@@ -54,13 +54,8 @@ function buildLesson(id: string, moduleId: string, position: number, title: stri
     title,
     shortTitle: title,
     intro: "",
-    conceptTitle: "",
-    conceptLede: "",
-    tryHint: "",
     takeaway: "",
-    previewCaption: "Preview",
-    presets: [],
-    sections: [],
+    stages: [],
   };
 }
 

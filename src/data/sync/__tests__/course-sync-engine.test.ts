@@ -427,8 +427,8 @@ describe("course sync engine", () => {
     await expectBundledStillActive();
   });
 
-  test("refuses a downloaded payload using a preview capability this build does not implement", async () => {
-    const next = derivedRelease("remote-unknown-preview", (release) => ({
+  test("refuses a downloaded payload using a shader capability this build does not implement", async () => {
+    const next = derivedRelease("remote-unknown-uniform", (release) => ({
       ...release,
       modules: release.modules.map((module, moduleIndex) =>
         moduleIndex !== 0
@@ -440,10 +440,10 @@ describe("course sync engine", () => {
                   ? lesson
                   : {
                       ...lesson,
-                      presets: lesson.presets.map((preset, presetIndex) =>
-                        presetIndex !== 0
-                          ? preset
-                          : { ...preset, previewKey: "arbitrary-remote-shader" },
+                      stages: lesson.stages.map((stage, stageIndex) =>
+                        stageIndex !== 0
+                          ? stage
+                          : { ...stage, source: "fragColor = vec4(iMouse.xy, 0.0, 1.0);" },
                       ),
                     },
               ),
@@ -451,7 +451,7 @@ describe("course sync engine", () => {
       ),
     }));
     remoteFake.state.manifest = manifestFor(next);
-    remoteFake.state.releases.set("remote-unknown-preview", next);
+    remoteFake.state.releases.set("remote-unknown-uniform", next);
 
     await expect(buildEngine().checkForUpdate()).resolves.toEqual<CourseSyncResult>({
       kind: "failed",
@@ -499,38 +499,65 @@ describe("course sync engine", () => {
   });
 
   test("recalculates the progress percentage when the published lesson set changes", async () => {
-    const module = bundledRelease.modules[0];
-    const completedLessonIds = module.lessons
+    // The bundled release currently authors only one published lesson, so this test grows module
+    // one to four lessons by cloning its sole authored lesson (re-suffixing every id, including
+    // each clone's stage ids, so the release-wide uniqueness checks still pass) — independent of
+    // how many lessons the real curriculum happens to have.
+    const baseLesson = bundledRelease.modules[0].lessons[0];
+    const clones = [1, 2, 3, 4].map((position) => ({
+      ...baseLesson,
+      id: `${baseLesson.id}-clone-${position}`,
+      position,
+      stages: baseLesson.stages.map((stage) => ({
+        ...stage,
+        id: `${stage.id}-clone-${position}`,
+      })),
+    }));
+
+    const withFourLessons = derivedRelease("remote-four-lessons", (release) => ({
+      ...release,
+      modules: release.modules.map((candidate, index) =>
+        index !== 0 ? candidate : { ...candidate, lessons: clones },
+      ),
+    }));
+    remoteFake.state.manifest = manifestFor(withFourLessons);
+    remoteFake.state.releases.set("remote-four-lessons", withFourLessons);
+    await expect(buildEngine().checkForUpdate()).resolves.toEqual<CourseSyncResult>({
+      kind: "updated",
+      releaseId: "remote-four-lessons",
+    });
+
+    const completedLessonIds = clones
       .filter((lesson) => lesson.position <= 3)
       .map((lesson) => lesson.id);
 
-    // 3 of the bundled release's 14 published lessons.
+    // 3 of 4 published lessons.
     expect(
       getProgressPercent({ modules: await repository.getModules() }, completedLessonIds),
-    ).toBe(21);
+    ).toBe(75);
 
-    // The new release drops that module's lessons 3..5, so one completed lesson no longer exists and
-    // the denominator shrinks from 14 to 11.
-    const next = derivedRelease("remote-fewer-lessons", (release) => ({
+    // The next release drops lessons 3 and 4, so one completed lesson no longer exists and the
+    // denominator shrinks from 4 to 2.
+    const withTwoLessons = derivedRelease("remote-fewer-lessons", (release) => ({
       ...release,
       modules: release.modules.map((candidate, index) =>
         index !== 0
           ? candidate
-          : { ...candidate, lessons: candidate.lessons.filter((lesson) => lesson.position <= 2) },
+          : { ...candidate, lessons: clones.filter((lesson) => lesson.position <= 2) },
       ),
     }));
-    remoteFake.state.manifest = manifestFor(next);
-    remoteFake.state.releases.set("remote-fewer-lessons", next);
+    remoteFake.state.manifest = manifestFor(withTwoLessons);
+    remoteFake.state.releases.set("remote-fewer-lessons", withTwoLessons);
 
     await expect(buildEngine().checkForUpdate()).resolves.toEqual<CourseSyncResult>({
       kind: "updated",
       releaseId: "remote-fewer-lessons",
     });
 
-    // 2 of 11, recomputed from the newly active release rather than remembered from the old one.
+    // 2 of 2, recomputed from the newly active release rather than remembered from the old one.
     expect(
       getProgressPercent({ modules: await repository.getModules() }, completedLessonIds),
-    ).toBe(18);
+    ).toBe(100);
   });
 
   test("schedules superseded-release cleanup only after a successful activation", async () => {

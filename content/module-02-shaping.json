@@ -1,0 +1,16 @@
+{
+  "id": "shaping-values",
+  "position": 2,
+  "status": "planned",
+  "title": "Shaping Values",
+  "description": "Turn any continuous measurement into a controlled visual signal.",
+  "plannedLessonCount": 5,
+  "plannedTopics": [
+    "Hard edges with step",
+    "Soft edges with smoothstep",
+    "Blending with mix",
+    "Keeping values in range",
+    "Remapping and easing"
+  ],
+  "lessons": []
+}

@@ -1,0 +1,16 @@
+{
+  "id": "lighting-and-materials",
+  "position": 10,
+  "status": "planned",
+  "title": "Lighting & Materials",
+  "description": "Light 3D surfaces with normals, shading, shadows, and fog.",
+  "plannedLessonCount": 5,
+  "plannedTopics": [
+    "Normals by gradient",
+    "Diffuse",
+    "Specular",
+    "Soft shadows",
+    "Fog"
+  ],
+  "lessons": []
+}

@@ -42,46 +42,33 @@ describe("SQLite course repository", () => {
   test("returns a requested lesson and its ordered children", async () => {
     const expectedLesson = release.modules
       .flatMap(({ lessons }) => lessons)
-      .find(({ id }) => id === "color-mixing");
+      .find(({ id }) => id === "what-a-fragment-shader-is");
 
-    await expect(repository.getLesson("color-mixing")).resolves.toEqual(expectedLesson);
-    await expect(repository.getLesson("color-mixing")).resolves.toMatchObject({
-      moduleId: "color-light",
-      presets: expect.any(Array),
-      previewCaption: "Color field",
-    });
-  });
-
-  test("round-trips the authored presentation fields of a lesson", async () => {
-    await expect(repository.getLesson("uniforms-time")).resolves.toMatchObject({
-      defaultPresetId: "time-play",
-      previewCaption: "Time animation",
-    });
-    await expect(repository.getLesson("transforming-uvs")).resolves.not.toHaveProperty(
-      "defaultPresetId",
+    await expect(repository.getLesson("what-a-fragment-shader-is")).resolves.toEqual(
+      expectedLesson,
     );
+    await expect(repository.getLesson("what-a-fragment-shader-is")).resolves.toMatchObject({
+      moduleId: "fragments-and-coordinates",
+      stages: expect.any(Array),
+    });
   });
 
-  test("round-trips the bespoke preview footer of a preset", async () => {
-    const lesson = await repository.getLesson("coordinate-systems-uv-space");
+  test("round-trips the authored stages of a lesson", async () => {
+    const lesson = await repository.getLesson("what-a-fragment-shader-is");
 
-    expect(lesson?.presets.find((preset) => preset.id === "normalized")).toMatchObject({
-      previewValueLabel: "0.0 → 1.0 · screen space",
-    });
-
-    const colorsLesson = await repository.getLesson("colors-fragment-output");
-    expect(colorsLesson?.presets.find((preset) => preset.id === "rgb-gradient")).not.toHaveProperty(
-      "previewValueLabel",
-    );
+    expect(lesson?.stages.map(({ title }) => title)).toEqual([
+      "One colour, everywhere",
+      "Where am I? Raw pixels",
+      "Divide by the resolution",
+      "Both axes at once",
+    ]);
+    expect(lesson?.stages[0].source).toContain("vec4(0.85");
   });
 
-  test("round-trips the intro eyebrow of a lesson, absent rather than null when unauthored", async () => {
-    await expect(repository.getLesson("step-and-smoothstep")).resolves.toMatchObject({
-      introEyebrow: "Shape synthesis",
+  test("round-trips the optional tryThis prompt, absent rather than null when unauthored", async () => {
+    await expect(repository.getLesson("what-a-fragment-shader-is")).resolves.toMatchObject({
+      tryThis: "Swap uv.x and uv.y in the last stage. Which corner turns yellow now?",
     });
-    await expect(
-      repository.getLesson("coordinate-systems-uv-space"),
-    ).resolves.not.toHaveProperty("introEyebrow");
   });
 
   test("returns null for a lesson outside the active release", async () => {
@@ -94,7 +81,7 @@ describe("SQLite course repository", () => {
       .flatMap(({ lessons }) => lessons.map(({ id }) => id));
 
     await expect(repository.getPublishedLessonIds()).resolves.toEqual(expectedIds);
-    await expect(repository.getModules()).resolves.toHaveLength(4);
+    await expect(repository.getModules()).resolves.toHaveLength(11);
   });
 
   test("does not rewrite an already installed release with the same checksum", async () => {
@@ -132,8 +119,8 @@ describe("SQLite course repository", () => {
         ...module,
         title: index === 0 ? "Updated foundations" : module.title,
         lessons: module.lessons.map((lesson) =>
-          lesson.id === "color-mixing"
-            ? { ...lesson, title: "Updated color mixing" }
+          lesson.id === "what-a-fragment-shader-is"
+            ? { ...lesson, title: "Updated fragment shaders" }
             : lesson,
         ),
       })),
@@ -143,8 +130,8 @@ describe("SQLite course repository", () => {
 
     await expect(repository.getActiveRelease()).resolves.toEqual(nextRelease);
     await expect(repository.getModules()).resolves.toEqual(nextRelease.modules);
-    await expect(repository.getLesson("color-mixing")).resolves.toMatchObject({
-      title: "Updated color mixing",
+    await expect(repository.getLesson("what-a-fragment-shader-is")).resolves.toMatchObject({
+      title: "Updated fragment shaders",
     });
   });
 });

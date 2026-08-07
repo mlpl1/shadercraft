@@ -35,43 +35,21 @@ const CREATE_INITIAL_SCHEMA = `
     title TEXT NOT NULL,
     short_title TEXT NOT NULL,
     intro TEXT NOT NULL,
-    concept_title TEXT NOT NULL,
-    concept_lede TEXT NOT NULL,
-    try_hint TEXT NOT NULL,
     takeaway TEXT NOT NULL,
-    preview_caption TEXT NOT NULL,
-    default_preset_id TEXT,
-    intro_eyebrow TEXT,
+    try_this TEXT,
     PRIMARY KEY (release_id, id),
     FOREIGN KEY (release_id, module_id)
       REFERENCES modules(release_id, id) ON DELETE CASCADE
   );
 
-  CREATE TABLE lesson_presets (
-    release_id TEXT NOT NULL,
-    id TEXT NOT NULL,
-    lesson_id TEXT NOT NULL,
-    position INTEGER NOT NULL CHECK (position > 0),
-    label TEXT NOT NULL,
-    preview_key TEXT NOT NULL,
-    preview_parameters_json TEXT NOT NULL,
-    value TEXT NOT NULL,
-    preview_value_label TEXT,
-    filename TEXT NOT NULL,
-    code_lines_json TEXT NOT NULL,
-    highlighted_lines_json TEXT NOT NULL,
-    PRIMARY KEY (release_id, id),
-    FOREIGN KEY (release_id, lesson_id)
-      REFERENCES lessons(release_id, id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE lesson_sections (
+  CREATE TABLE lesson_stages (
     release_id TEXT NOT NULL,
     id TEXT NOT NULL,
     lesson_id TEXT NOT NULL,
     position INTEGER NOT NULL CHECK (position > 0),
     title TEXT NOT NULL,
     body TEXT NOT NULL,
+    source TEXT NOT NULL,
     PRIMARY KEY (release_id, id),
     FOREIGN KEY (release_id, lesson_id)
       REFERENCES lessons(release_id, id) ON DELETE CASCADE
@@ -133,26 +111,10 @@ const CREATE_INITIAL_SCHEMA = `
     value TEXT NOT NULL
   );
 
-  CREATE INDEX idx_modules_release_position
-    ON modules(release_id, position);
-  CREATE INDEX idx_lessons_release_module_position
-    ON lessons(release_id, module_id, position);
-  CREATE INDEX idx_lesson_presets_release_lesson_position
-    ON lesson_presets(release_id, lesson_id, position);
-  CREATE INDEX idx_lesson_sections_release_lesson_position
-    ON lesson_sections(release_id, lesson_id, position);
-  CREATE INDEX idx_sync_outbox_profile_pending_created_at
-    ON sync_outbox(profile_id, created_at)
-    WHERE merged_at IS NULL;
-`;
-
-/**
- * Learner-authored shader sketches. Partitioned by profile exactly as `lesson_progress` is, so
- * switching accounts shows that account's work — and so cloud sync stays possible later without a
- * second migration. Nothing enqueues `sync_outbox` rows for these: sketches are local-only, and
- * queueing mutations no server accepts would trip the sync attention state.
- */
-const CREATE_SKETCHES = `
+  -- Learner-authored shader sketches. Partitioned by profile exactly as lesson_progress is, so
+  -- switching accounts shows that account's work, and so cloud sync stays possible later without
+  -- a second migration. Nothing enqueues sync_outbox rows for these: sketches are local-only, and
+  -- queueing mutations no server accepts would trip the sync attention state.
   CREATE TABLE sketches (
     id TEXT PRIMARY KEY NOT NULL,
     profile_id TEXT NOT NULL,
@@ -163,6 +125,15 @@ const CREATE_SKETCHES = `
     FOREIGN KEY (profile_id) REFERENCES learner_profiles(id) ON DELETE CASCADE
   );
 
+  CREATE INDEX idx_modules_release_position
+    ON modules(release_id, position);
+  CREATE INDEX idx_lessons_release_module_position
+    ON lessons(release_id, module_id, position);
+  CREATE INDEX idx_lesson_stages_release_lesson_position
+    ON lesson_stages(release_id, lesson_id, position);
+  CREATE INDEX idx_sync_outbox_profile_pending_created_at
+    ON sync_outbox(profile_id, created_at)
+    WHERE merged_at IS NULL;
   CREATE INDEX idx_sketches_profile_updated_at
     ON sketches(profile_id, updated_at DESC);
 `;
@@ -172,12 +143,6 @@ const migrations: readonly DatabaseMigration[] = [
     version: 1,
     async migrate(driver) {
       await driver.exec(CREATE_INITIAL_SCHEMA);
-    },
-  },
-  {
-    version: 2,
-    async migrate(driver) {
-      await driver.exec(CREATE_SKETCHES);
     },
   },
 ];

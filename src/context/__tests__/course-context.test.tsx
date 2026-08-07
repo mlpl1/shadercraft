@@ -30,13 +30,8 @@ function buildLesson(id: string, moduleId: string, position: number): CourseLess
     title: id,
     shortTitle: id,
     intro: "",
-    conceptTitle: "",
-    conceptLede: "",
-    tryHint: "",
     takeaway: "",
-    previewCaption: "Preview",
-    presets: [],
-    sections: [],
+    stages: [],
   };
 }
 

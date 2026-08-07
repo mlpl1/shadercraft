@@ -1,5 +1,3 @@
-import bundledCourse from "../../../../assets/course/bundled-course.json";
-
 import {
   getModuleStatus,
   getProgressPercent,
@@ -7,10 +5,70 @@ import {
   isLessonUnlocked,
   isModuleUnlocked,
 } from "../domain";
-import { parseCourseRelease } from "../schema";
+import type { CourseLesson, CourseModule, CourseRelease } from "../types";
 
-const release = parseCourseRelease(bundledCourse);
-const [module1, module2, module3, plannedModule4] = release.modules;
+/**
+ * Progression logic is generic over module/lesson position and status; it does not read prose or
+ * stages. Building a synthetic release here (rather than importing the real bundled course) keeps
+ * these tests independent of how many modules and lessons are currently authored.
+ */
+function buildLesson(id: string, moduleId: string, position: number): CourseLesson {
+  return {
+    id,
+    moduleId,
+    position,
+    title: id,
+    shortTitle: id,
+    intro: "",
+    takeaway: "",
+    stages: [],
+  };
+}
+
+function buildModule(
+  id: string,
+  position: number,
+  status: CourseModule["status"],
+  lessonCount: number,
+  plannedTopics: string[] = [],
+): CourseModule {
+  const lessons =
+    status === "published"
+      ? Array.from({ length: lessonCount }, (_, index) =>
+          buildLesson(`${id}-lesson-${index + 1}`, id, index + 1),
+        )
+      : [];
+
+  return {
+    id,
+    position,
+    status,
+    title: id,
+    description: "",
+    plannedLessonCount: status === "planned" ? plannedTopics.length : 0,
+    plannedTopics: status === "planned" ? plannedTopics : [],
+    lessons,
+  };
+}
+
+const module1 = buildModule("module-1", 1, "published", 5);
+const module2 = buildModule("module-2", 2, "published", 5);
+const module3 = buildModule("module-3", 3, "published", 4);
+const plannedModule4 = buildModule("module-4", 4, "planned", 0, [
+  "Tiling Space",
+  "Value Noise",
+  "Layered Motion",
+  "Fractal Brownian Motion",
+  "Domain Warping",
+]);
+
+const release: CourseRelease = {
+  id: "test-release",
+  schemaVersion: 1,
+  minimumAppVersion: "1.0.0",
+  checksum: "checksum",
+  modules: [module1, module2, module3, plannedModule4],
+};
 
 describe("course progression selectors", () => {
   test("counts only lessons in published modules", () => {

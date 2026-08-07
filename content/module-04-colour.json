@@ -1,0 +1,15 @@
+{
+  "id": "colour",
+  "position": 4,
+  "status": "planned",
+  "title": "Colour",
+  "description": "Drive colour from any scalar field the shader produces.",
+  "plannedLessonCount": 4,
+  "plannedTopics": [
+    "Colour as three numbers",
+    "Mixing across space",
+    "Brightness that matches vision",
+    "Palettes as functions"
+  ],
+  "lessons": []
+}

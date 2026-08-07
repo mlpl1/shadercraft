@@ -1,0 +1,51 @@
+{
+  "id": "fragments-and-coordinates",
+  "position": 1,
+  "status": "published",
+  "title": "Fragments & Coordinates",
+  "description": "Understand what runs where, and put a deliberate colour at a deliberate place.",
+  "plannedLessonCount": 0,
+  "plannedTopics": [],
+  "lessons": [
+    {
+      "id": "what-a-fragment-shader-is",
+      "moduleId": "fragments-and-coordinates",
+      "position": 1,
+      "title": "What a fragment shader is",
+      "shortTitle": "Fragment shaders",
+      "intro": "A fragment shader is one small function, and the GPU runs a separate copy of it for every single pixel on screen. Your job is to return one colour. You never loop over pixels and you never know which pixel you are, except through the coordinate handed to you. That constraint is what makes shaders fast, and what makes them feel strange at first.",
+      "takeaway": "One function, run once per pixel, returning a colour. Divide the incoming coordinate by the resolution to get a number that means the same thing on every screen.",
+      "tryThis": "Swap uv.x and uv.y in the last stage. Which corner turns yellow now?",
+      "stages": [
+        {
+          "id": "one-colour-everywhere",
+          "position": 1,
+          "title": "One colour, everywhere",
+          "body": "The simplest possible shader ignores position entirely and returns the same colour for every pixel. This still runs once per pixel — hundreds of thousands of times for a phone screen — it just happens to produce the same answer each time. fragColor is what you assign to, and its four components are red, green, blue and alpha, each running from zero to one rather than zero to 255.",
+          "source": "fragColor = vec4(0.85, 0.28, 0.22, 1.0);"
+        },
+        {
+          "id": "raw-pixel-coordinates",
+          "position": 2,
+          "title": "Where am I? Raw pixels",
+          "body": "fragCoord tells you which pixel this copy of the function is responsible for, measured in pixels from the bottom-left corner. Feeding it into red makes position visible as a gradient. But notice the divisor: four hundred is a guess. On a narrower screen the gradient finishes early, and on a wider one it never reaches full brightness. The coordinate is real, but the scale is arbitrary.",
+          "source": "fragColor = vec4(fragCoord.x / 400.0, 0.28, 0.22, 1.0);"
+        },
+        {
+          "id": "divide-by-resolution",
+          "position": 3,
+          "title": "Divide by the resolution",
+          "body": "iResolution holds the size of the surface being drawn, so dividing fragCoord by it converts pixels into a fraction of the way across. Now zero is the left edge and one is the right edge on every device, and the guess is gone. This normalised coordinate is conventionally called uv, and almost everything else in this course starts from it. Elsewhere you will see it called u_resolution, declared as a vec2.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(uv.x, 0.28, 0.22, 1.0);"
+        },
+        {
+          "id": "both-axes",
+          "position": 4,
+          "title": "Both axes at once",
+          "body": "Feeding uv.x into red and uv.y into green makes both axes visible in one image, and gives you a permanently useful debugging tool: when coordinates misbehave, render them as colour and look. Bottom-left is black because both values are zero there. Top-right is yellow because red and green are both at full. Any corner that surprises you means your coordinates are not what you assumed.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(uv.x, uv.y, 0.22, 1.0);"
+        }
+      ]
+    }
+  ]
+}

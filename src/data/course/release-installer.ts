@@ -254,8 +254,7 @@ export class ReleaseInstaller {
       for (const id of deletable) {
         // Deleted child-first and explicitly rather than trusting ON DELETE CASCADE, so the outcome
         // does not depend on `PRAGMA foreign_keys` being on for this connection.
-        await this.driver.run("DELETE FROM lesson_sections WHERE release_id = ?", [id]);
-        await this.driver.run("DELETE FROM lesson_presets WHERE release_id = ?", [id]);
+        await this.driver.run("DELETE FROM lesson_stages WHERE release_id = ?", [id]);
         await this.driver.run("DELETE FROM lessons WHERE release_id = ?", [id]);
         await this.driver.run("DELETE FROM modules WHERE release_id = ?", [id]);
         await this.driver.run("DELETE FROM content_releases WHERE id = ?", [id]);
@@ -316,10 +315,8 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
     for (const lesson of module.lessons) {
       await driver.run(
         `INSERT INTO lessons
-          (release_id, id, module_id, position, title, short_title, intro,
-           concept_title, concept_lede, try_hint, takeaway, preview_caption,
-           default_preset_id, intro_eyebrow)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (release_id, id, module_id, position, title, short_title, intro, takeaway, try_this)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           release.id,
           lesson.id,
@@ -328,46 +325,17 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
           lesson.title,
           lesson.shortTitle,
           lesson.intro,
-          lesson.conceptTitle,
-          lesson.conceptLede,
-          lesson.tryHint,
           lesson.takeaway,
-          lesson.previewCaption,
-          lesson.defaultPresetId ?? null,
-          lesson.introEyebrow ?? null,
+          lesson.tryThis ?? null,
         ],
       );
 
-      for (const preset of lesson.presets) {
+      for (const stage of lesson.stages) {
         await driver.run(
-          `INSERT INTO lesson_presets
-            (release_id, id, lesson_id, position, label, preview_key,
-             preview_parameters_json, value, preview_value_label, filename, code_lines_json,
-             highlighted_lines_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            release.id,
-            preset.id,
-            lesson.id,
-            preset.position,
-            preset.label,
-            preset.previewKey,
-            JSON.stringify(preset.previewParameters),
-            preset.value,
-            preset.previewValueLabel ?? null,
-            preset.filename,
-            JSON.stringify(preset.codeLines),
-            JSON.stringify(preset.highlightedLines),
-          ],
-        );
-      }
-
-      for (const section of lesson.sections) {
-        await driver.run(
-          `INSERT INTO lesson_sections
-            (release_id, id, lesson_id, position, title, body)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [release.id, section.id, lesson.id, section.position, section.title, section.body],
+          `INSERT INTO lesson_stages
+            (release_id, id, lesson_id, position, title, body, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [release.id, stage.id, lesson.id, stage.position, stage.title, stage.body, stage.source],
         );
       }
     }

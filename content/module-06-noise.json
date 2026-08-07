@@ -1,0 +1,16 @@
+{
+  "id": "randomness-and-noise",
+  "position": 6,
+  "status": "planned",
+  "title": "Randomness & Noise",
+  "description": "Generate and shape procedural randomness.",
+  "plannedLessonCount": 5,
+  "plannedTopics": [
+    "Deterministic randomness",
+    "Value noise",
+    "Gradient noise",
+    "Fractal noise",
+    "Domain warping"
+  ],
+  "lessons": []
+}

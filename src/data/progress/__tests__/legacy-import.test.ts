@@ -29,19 +29,18 @@ describe("importLegacyProgress", () => {
   });
 
   test("imports valid legacy completions and removes the AsyncStorage entry", async () => {
+    // The bundled release currently authors only one published lesson, so this only exercises a
+    // single completion; the multi-row upsert path is covered elsewhere with a fabricated release.
     const storage = createStorage(
       JSON.stringify({
         version: 1,
-        completedLessonIds: ["coordinate-systems-uv-space", "colors-fragment-output"],
+        completedLessonIds: ["what-a-fragment-shader-is"],
       }),
     );
 
     await importLegacyProgress(storage, repository);
 
-    expect(await repository.getCompletedLessonIds()).toEqual([
-      "coordinate-systems-uv-space",
-      "colors-fragment-output",
-    ]);
+    expect(await repository.getCompletedLessonIds()).toEqual(["what-a-fragment-shader-is"]);
     expect(storage.removeItem).toHaveBeenCalledWith(LEGACY_STORAGE_KEY);
   });
 
@@ -104,19 +103,18 @@ describe("importLegacyProgress", () => {
     const storage = createStorage(
       JSON.stringify({
         version: 1,
-        completedLessonIds: ["retired-legacy-lesson", "coordinate-systems-uv-space"],
+        completedLessonIds: ["retired-legacy-lesson", "what-a-fragment-shader-is"],
       }),
     );
 
     await importLegacyProgress(storage, repository);
 
-    expect(await repository.getCompletedLessonIds()).toEqual(["coordinate-systems-uv-space"]);
+    expect(await repository.getCompletedLessonIds()).toEqual(["what-a-fragment-shader-is"]);
     expect(await repository.isLessonCompleted("retired-legacy-lesson")).toBe(true);
   });
 
   test("resumes cleanup without reinserting rows when the marker is already set", async () => {
-    await repository.setLessonCompleted("coordinate-systems-uv-space", true);
-    await repository.setLessonCompleted("colors-fragment-output", true);
+    await repository.setLessonCompleted("what-a-fragment-shader-is", true);
     await repository.markLegacyProgressImported();
 
     // `importLegacyProgress` never calls `setLessonCompleted` (it writes rows through
@@ -128,17 +126,14 @@ describe("importLegacyProgress", () => {
     const storage = createStorage(
       JSON.stringify({
         version: 1,
-        completedLessonIds: ["coordinate-systems-uv-space", "colors-fragment-output"],
+        completedLessonIds: ["what-a-fragment-shader-is"],
       }),
     );
 
     await importLegacyProgress(storage, repository);
 
     expect(importLegacyCompletionsSpy).not.toHaveBeenCalled();
-    expect(await repository.getCompletedLessonIds()).toEqual([
-      "coordinate-systems-uv-space",
-      "colors-fragment-output",
-    ]);
+    expect(await repository.getCompletedLessonIds()).toEqual(["what-a-fragment-shader-is"]);
     expect(storage.removeItem).toHaveBeenCalledWith(LEGACY_STORAGE_KEY);
   });
 
@@ -157,22 +152,19 @@ describe("importLegacyProgress", () => {
     const storage = createStorage(
       JSON.stringify({
         version: 1,
-        completedLessonIds: ["coordinate-systems-uv-space", "colors-fragment-output"],
+        completedLessonIds: ["what-a-fragment-shader-is"],
       }),
     );
 
     await importLegacyProgress(storage, repository);
-    expect(await repository.getCompletedLessonIds()).toEqual([
-      "coordinate-systems-uv-space",
-      "colors-fragment-output",
-    ]);
+    expect(await repository.getCompletedLessonIds()).toEqual(["what-a-fragment-shader-is"]);
 
-    await repository.setLessonCompleted("coordinate-systems-uv-space", false);
+    await repository.setLessonCompleted("what-a-fragment-shader-is", false);
     const pendingMutationsBeforeSecondRun = await repository.getPendingMutations();
 
     await importLegacyProgress(storage, repository);
 
-    expect(await repository.isLessonCompleted("coordinate-systems-uv-space")).toBe(false);
+    expect(await repository.isLessonCompleted("what-a-fragment-shader-is")).toBe(false);
     expect(await repository.getPendingMutations()).toEqual(pendingMutationsBeforeSecondRun);
     expect(storage.removeItem).toHaveBeenCalledTimes(2);
   });

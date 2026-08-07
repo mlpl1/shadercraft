@@ -1,0 +1,16 @@
+{
+  "id": "ray-marching",
+  "position": 8,
+  "status": "planned",
+  "title": "Ray Marching",
+  "description": "March a ray through space and find where it hits a 3D shape.",
+  "plannedLessonCount": 5,
+  "plannedTopics": [
+    "The march loop",
+    "Camera and ray setup",
+    "A 3D sphere",
+    "The hit test",
+    "Depth"
+  ],
+  "lessons": []
+}
