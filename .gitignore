@@ -40,6 +40,9 @@ yarn-error.*
 example
 .worktrees/
 
+# Subagent-driven development scratch: ledgers, task briefs, review packages
+.superpowers/
+
 # generated native folders
 /ios
 /android
