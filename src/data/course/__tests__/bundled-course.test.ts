@@ -9,13 +9,18 @@ const publishedLessons = release.modules
   .flatMap((module) => module.lessons);
 
 /**
- * The one number that moves when a module ships. Authoring Modules 2 and 3 each broke three tests
- * here, because they enumerated every published lesson id and every stage count — lists that grow
- * with the curriculum and say nothing a shorter assertion would not. Everything below is now either
- * a permanent fact about the syllabus or derived from this constant, so shipping a module means
- * updating it here and nowhere else.
+ * Lesson count per published module, in syllabus order — the one line that moves when a module
+ * ships. Authoring Modules 2 and 3 each broke three tests here, because they enumerated every
+ * published lesson id and stage count: lists that grow with the curriculum and say nothing a shorter
+ * assertion would not.
+ *
+ * A count per module rather than a single module count, because the syllabus does not give every
+ * module five lessons — Module 4 has four. The first attempt at this multiplied a module count by
+ * five and would have broken again the moment that turned out to be false, which it did.
  */
-const PUBLISHED_MODULE_COUNT = 3;
+const LESSONS_PER_PUBLISHED_MODULE = [5, 5, 5, 4];
+
+const PUBLISHED_MODULE_COUNT = LESSONS_PER_PUBLISHED_MODULE.length;
 
 /** Fixed by `docs/superpowers/specs/2026-08-06-curriculum-syllabus-design.md`, published or not. */
 const MODULE_IDS = [
@@ -47,7 +52,9 @@ it("publishes a prefix of the syllabus, with every later module still planned", 
 });
 
 it("gives every published lesson four stages and real source", () => {
-  expect(publishedLessons.length).toBe(PUBLISHED_MODULE_COUNT * 5);
+  const published = release.modules.filter((module) => module.status === "published");
+
+  expect(published.map(({ lessons }) => lessons.length)).toEqual(LESSONS_PER_PUBLISHED_MODULE);
 
   // Four is a fact about this content, not merely `parseCourseRelease`'s already-enforced 3–5 bound
   // (which importing this module has checked by the time this test runs, so re-asserting it here

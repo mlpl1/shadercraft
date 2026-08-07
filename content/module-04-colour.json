@@ -1,15 +1,168 @@
 {
   "id": "colour",
   "position": 4,
-  "status": "planned",
+  "status": "published",
   "title": "Colour",
   "description": "Drive colour from any scalar field the shader produces.",
-  "plannedLessonCount": 4,
-  "plannedTopics": [
-    "Colour as three numbers",
-    "Mixing across space",
-    "Brightness that matches vision",
-    "Palettes as functions"
-  ],
-  "lessons": []
+  "plannedLessonCount": 0,
+  "plannedTopics": [],
+  "lessons": [
+    {
+      "id": "colour-as-three-numbers",
+      "moduleId": "colour",
+      "position": 1,
+      "title": "Colour as three numbers",
+      "shortTitle": "Colour as three numbers",
+      "intro": "Every stage so far has written a vec3 and moved on. This lesson stops and looks at what those three numbers actually are: independent channels, each running from 0 to 1, each clipped hard at both ends. Then it takes on the part most introductions skip entirely — the value you store is not the amount of light the screen emits, and knowing the difference is what stops colour arithmetic from surprising you later.",
+      "takeaway": "A colour is three independent numbers, each meaningful between 0 and 1 and flattened outside it. What they are not is light: a stored 0.5 emits roughly a fifth of the display's brightness, yet reads as middle grey, because the encoding deliberately spends more of its range on dark values to match how vision works. Arithmetic on these numbers is therefore arithmetic on appearance, not on light, which is usually what you want and occasionally not.",
+      "tryThis": "In the second stage, wrap the ramp in clamp before it reaches the colour. The picture will not change at all — which tells you something about what the hardware was already doing for you.",
+      "stages": [
+        {
+          "id": "colour-as-three-numbers-channels",
+          "position": 1,
+          "title": "Three numbers that ignore each other",
+          "body": "Red is driven by uv.x, green by uv.y, and blue is pinned at a constant quarter. Nothing couples them, which is the point: the corners land on four completely different colours from one expression. Bottom-left is near-black with a faint blue cast, bottom-right is red, top-left is green, and top-right is where both ramps arrive at once and the result goes pale yellow-white. Every colour on this screen is a coordinate in a cube, and the shader is simply reading off two of its axes from position.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 colour = vec3(uv.x, uv.y, 0.25);\n\nfragColor = vec4(colour, 1.0);"
+        },
+        {
+          "id": "colour-as-three-numbers-range",
+          "position": 2,
+          "title": "The range is 0 to 1",
+          "body": "This ramp deliberately overshoots at both ends. Doubling uv.x and pulling it down by a half puts zero at a quarter of the way across and one at three quarters, so the left quarter of the screen is asked for negative brightness and the right quarter for more than full. Both requests are flattened: a solid black band, a gradient through the middle, then a solid white band. The hardware clamps for you when writing the final colour, which is convenient here and a trap the moment a value like this is used as a mix factor instead.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat ramp = uv.x * 2.0 - 0.5;\n\nfragColor = vec4(vec3(ramp), 1.0);"
+        },
+        {
+          "id": "colour-as-three-numbers-not-light",
+          "position": 3,
+          "title": "The numbers are not light",
+          "body": "An ordinary black-to-white ramp, and the interesting part is not on screen but in what the middle of it means. At the halfway point the stored value is 0.5, and the display emits about a fifth of its maximum light — not half. Yet it reads as a convincing middle grey. Both facts are true because the encoding is not linear in light: it spends far more of its range on dark values, where vision is most sensitive, and comparatively little on bright ones. The number tracks appearance closely and light only loosely.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(vec3(uv.x), 1.0);"
+        },
+        {
+          "id": "colour-as-three-numbers-gamma",
+          "position": 4,
+          "title": "See the difference",
+          "body": "The bottom half is the ramp from the last stage. The top half raises it to the power 2.2, which converts it into a ramp that is even in light rather than even in appearance — and it looks nothing alike. Both agree at the two ends, because zero and one are fixed points, but everywhere between the top band is far darker: at the midpoint it drops from 0.5 to 0.22, and a quarter of the way across from 0.25 to 0.05, crushing the shadows into near-black. Neither band is wrong. They are answering different questions.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat evenInAppearance = uv.x;\nfloat evenInLight = pow(uv.x, 2.2);\n\nfloat value = mix(evenInAppearance, evenInLight, step(0.5, uv.y));\n\nfragColor = vec4(vec3(value), 1.0);"
+        }
+      ]
+    },
+    {
+      "id": "mixing-across-space",
+      "moduleId": "colour",
+      "position": 2,
+      "title": "Mixing across space",
+      "shortTitle": "Mixing across space",
+      "intro": "Module 2 introduced mix with a constant factor and then with uv.x, which produced a gradient. Module 3 spent five lessons building fields — numbers that vary across the screen and mean something everywhere. This lesson connects the two, and the connection is the whole point of the module: any field can be a mix factor, so anything you can measure, you can colour by. Nothing new is introduced. The combination is what is new.",
+      "takeaway": "A gradient is a mix whose factor varies across space, and the factor does not have to be a coordinate. A distance field, a fill, or any scalar the shader can compute will drive it, provided the value is brought into the 0 to 1 range first. Chaining two mixes gives a third colour without a third function, and colouring a shape by its own field is the same idea turned inward.",
+      "stages": [
+        {
+          "id": "mixing-across-space-gradient",
+          "position": 1,
+          "title": "A gradient is a mix across space",
+          "body": "The starting point, and the only stage here that uses a coordinate as its factor. A cool blue on the left, a warm orange on the right, and uv.x sliding between them. The midpoint is worth looking at rather than assuming: it is not a vivid colour but a muted mauve-grey around 0.56, 0.46, 0.43, because mixing opposite hues channel by channel pulls all three toward each other. That flattening in the middle is characteristic of straight-line blending and is the reason the next lessons reach for palettes instead.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 cool = vec3(0.13, 0.29, 0.62);\nvec3 warm = vec3(0.98, 0.62, 0.24);\n\nvec3 colour = mix(cool, warm, uv.x);\n\nfragColor = vec4(colour, 1.0);"
+        },
+        {
+          "id": "mixing-across-space-field",
+          "position": 2,
+          "title": "Any field will do",
+          "body": "Here the factor is a circle's distance field rather than a coordinate. The field runs negative inside and positive out, so adding a half shifts it into useful territory and clamp keeps it there. The result is a soft radial gradient: warm pink at the centre where the field sits lowest, passing through the circle's nominal edge at exactly the halfway colour, and settling into dark navy by the time the distance reaches 0.9. There is no hard edge anywhere on this screen, and no shape either — only a measurement being read as colour.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.4;\nfloat t = clamp(d + 0.5, 0.0, 1.0);\n\nvec3 inner = vec3(0.95, 0.35, 0.42);\nvec3 outer = vec3(0.1, 0.14, 0.3);\n\nvec3 colour = mix(inner, outer, t);\n\nfragColor = vec4(colour, 1.0);"
+        },
+        {
+          "id": "mixing-across-space-three-stops",
+          "position": 3,
+          "title": "Three stops from two mixes",
+          "body": "mix only ever takes two colours, so a third arrives by mixing again over the result. The first smoothstep runs across the left half and takes deep navy to rose; the second runs across the right half and takes that rose to pale gold. Because each smoothstep is flat outside its own window, the two never fight over the same pixels. The midpoint lands exactly on the rose, and the easing at each end of both windows is what keeps the two joins from showing as creases.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 low = vec3(0.05, 0.13, 0.35);\nvec3 mid = vec3(0.85, 0.28, 0.35);\nvec3 high = vec3(0.99, 0.86, 0.52);\n\nvec3 colour = mix(low, mid, smoothstep(0.0, 0.5, uv.x));\ncolour = mix(colour, high, smoothstep(0.5, 1.0, uv.x));\n\nfragColor = vec4(colour, 1.0);"
+        },
+        {
+          "id": "mixing-across-space-inside",
+          "position": 4,
+          "title": "Colour inside the shape",
+          "body": "Two readings of one field, doing different jobs. fwidth and a narrow smoothstep give the crisp fill from Module 3, deciding where the disc is. The same field, negated and divided by the radius, gives a value that runs from 1 at the centre to 0 at the rim, deciding what colour the disc is there — pale gold in the middle falling to deep red at its edge. The background mix then places the whole thing. A shape and its shading from a single measurement, which is what fields are for.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat radius = 0.42;\nfloat d = length(p) - radius;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfloat inward = clamp(-d / radius, 0.0, 1.0);\nvec3 shape = mix(vec3(0.86, 0.22, 0.3), vec3(0.99, 0.9, 0.55), inward);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), shape, fill);\n\nfragColor = vec4(colour, 1.0);"
+        }
+      ]
+    },
+    {
+      "id": "brightness-that-matches-vision",
+      "moduleId": "colour",
+      "position": 3,
+      "title": "Brightness that matches vision",
+      "shortTitle": "Brightness that matches vision",
+      "intro": "Reducing a colour to a single brightness number sounds like it should be an average, and almost every first attempt is. It is also wrong in a way that is easy to see once you look for it: the eye is far more sensitive to green than to blue, by roughly a factor of ten. This lesson builds a deliberately colourful test image, measures it the obvious way, measures it the way vision does, and then uses the result to push contrast around a pivot.",
+      "takeaway": "Averaging the three channels weights them equally, which vision does not: green carries about 0.72 of perceived brightness, red 0.21, and blue only 0.07. dot with those weights is the standard Rec. 709 luma, and it costs exactly one instruction. Contrast is then a scaling around a pivot rather than a multiply, since multiplying darkens everything, and the result needs clamping because pushing away from the pivot leaves the range at both ends.",
+      "stages": [
+        {
+          "id": "brightness-that-matches-vision-source",
+          "position": 1,
+          "title": "Three lights to measure",
+          "body": "The test image, built entirely from Module 3. Three circles, each written into a single colour channel, each antialiased with its own fwidth. Because the channels are independent the overlaps do the arithmetic themselves: red and green together make yellow, red and blue make magenta, green and blue make cyan, and the small region where all three meet comes out white. Nothing here is new, and that is deliberate — the next three stages change only how this image is measured, never how it is made.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p - vec2(-0.22, 0.13)) - 0.26;\nfloat g = length(p - vec2(0.22, 0.13)) - 0.26;\nfloat b = length(p - vec2(0.0, -0.24)) - 0.26;\n\nvec3 colour;\ncolour.r = 1.0 - smoothstep(-fwidth(r), fwidth(r), r);\ncolour.g = 1.0 - smoothstep(-fwidth(g), fwidth(g), g);\ncolour.b = 1.0 - smoothstep(-fwidth(b), fwidth(b), b);\n\nfragColor = vec4(colour, 1.0);"
+        },
+        {
+          "id": "brightness-that-matches-vision-average",
+          "position": 2,
+          "title": "The obvious answer",
+          "body": "Averaging the three channels and painting the result as grey. Look at what happened to the three circles: every one of them became the same mid grey, exactly a third, because each is a single channel at full strength and the average cannot tell them apart. The two-way overlaps all land on two thirds and the centre on white. This is a defensible measure of how much colour is present. It is not a measure of how bright anything looks, and holding it beside the previous stage makes that obvious.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p - vec2(-0.22, 0.13)) - 0.26;\nfloat g = length(p - vec2(0.22, 0.13)) - 0.26;\nfloat b = length(p - vec2(0.0, -0.24)) - 0.26;\n\nvec3 colour;\ncolour.r = 1.0 - smoothstep(-fwidth(r), fwidth(r), r);\ncolour.g = 1.0 - smoothstep(-fwidth(g), fwidth(g), g);\ncolour.b = 1.0 - smoothstep(-fwidth(b), fwidth(b), b);\n\nfloat brightness = (colour.r + colour.g + colour.b) / 3.0;\n\nfragColor = vec4(vec3(brightness), 1.0);"
+        },
+        {
+          "id": "brightness-that-matches-vision-luma",
+          "position": 3,
+          "title": "Weights that match the eye",
+          "body": "dot multiplies two vectors component by component and adds the results, which is exactly the shape of a weighted sum, so the whole measurement fits in one call. These particular weights are the Rec. 709 luma coefficients, and the three circles now separate hard: green reads at 0.72, red at 0.21, and blue at 0.07 — barely distinguishable from the background. That spread is not a stylistic choice, it is roughly the sensitivity of human vision, and it is why a blue of the same nominal strength as a green looks so much darker.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p - vec2(-0.22, 0.13)) - 0.26;\nfloat g = length(p - vec2(0.22, 0.13)) - 0.26;\nfloat b = length(p - vec2(0.0, -0.24)) - 0.26;\n\nvec3 colour;\ncolour.r = 1.0 - smoothstep(-fwidth(r), fwidth(r), r);\ncolour.g = 1.0 - smoothstep(-fwidth(g), fwidth(g), g);\ncolour.b = 1.0 - smoothstep(-fwidth(b), fwidth(b), b);\n\nfloat luma = dot(colour, vec3(0.2126, 0.7152, 0.0722));\n\nfragColor = vec4(vec3(luma), 1.0);"
+        },
+        {
+          "id": "brightness-that-matches-vision-contrast",
+          "position": 4,
+          "title": "Contrast around a pivot",
+          "body": "Contrast is not a multiply. Multiplying scales everything toward black, which darkens rather than separates, so the trick is to subtract a pivot first, scale, and add the pivot back. Here the scale sweeps from 0.2 to 3.0. Above one the colours push apart and saturate; below one everything collapses toward the pivot, and watch the background — it is not immune, lifting off black to a flat grey as the scale falls. clamp is doing real work at both extremes, which is precisely the overshoot Module 2 warned about.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p - vec2(-0.22, 0.13)) - 0.26;\nfloat g = length(p - vec2(0.22, 0.13)) - 0.26;\nfloat b = length(p - vec2(0.0, -0.24)) - 0.26;\n\nvec3 colour;\ncolour.r = 1.0 - smoothstep(-fwidth(r), fwidth(r), r);\ncolour.g = 1.0 - smoothstep(-fwidth(g), fwidth(g), g);\ncolour.b = 1.0 - smoothstep(-fwidth(b), fwidth(b), b);\n\nfloat amount = 1.6 + sin(iTime) * 1.4;\nvec3 contrasted = clamp((colour - 0.5) * amount + 0.5, 0.0, 1.0);\n\nfragColor = vec4(contrasted, 1.0);"
+        }
+      ]
+    },
+    {
+      "id": "palettes-as-functions",
+      "moduleId": "colour",
+      "position": 4,
+      "title": "Palettes as functions",
+      "shortTitle": "Palettes as functions",
+      "intro": "Mixing between two or three fixed colours works, but the colours have to be chosen and stored, and the midpoints tend to go muddy. A palette function replaces the list with an expression: give it a number, get a colour, with no table and no branching. The one used here is built from three cosines, needs four vec3 parameters, and once assembled it will happily take any scalar the shader can produce — a coordinate, a distance, or time.",
+      "takeaway": "A cosine palette is a plus b times the cosine of two pi times c times t plus d, evaluated on all three channels at once. a sets the middle brightness, b how far it swings, c how many cycles fit in the range, and d the per-channel phase that turns three identical waves into a spectrum. Because it is a function of one number, anything scalar can drive it, which is the whole module in a line.",
+      "stages": [
+        {
+          "id": "palettes-as-functions-one-cosine",
+          "position": 1,
+          "title": "One cosine, one channel",
+          "body": "Before three channels, one. Multiplying uv.x by two pi turns the width of the screen into exactly one full turn of a cosine, and the half-plus-half pattern lifts its natural minus-one-to-one swing into the 0 to 1 a colour needs. The result is white at both edges, black in the middle, and smooth throughout. That smoothness is the reason cosines are used here rather than a ramp: the value and its slope both come back around, so a palette built this way never shows a seam.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat v = 0.5 + 0.5 * cos(6.28318 * uv.x);\n\nfragColor = vec4(vec3(v), 1.0);"
+        },
+        {
+          "id": "palettes-as-functions-three-cosines",
+          "position": 2,
+          "title": "Three cosines, one palette",
+          "body": "The same wave on all three channels, offset by the phase vector d so they peak at different places. Red peaks at both edges, green a third of the way across, blue two thirds — so the screen reads as a spectrum sweeping from salmon through green to blue and back. Every operation here is on a vec3, so one cos call does all three channels at once. Set d to three equal numbers and the whole thing collapses back to grey, which is a quick way to confirm the phase is doing the work.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 a = vec3(0.5);\nvec3 b = vec3(0.5);\nvec3 c = vec3(1.0);\nvec3 d = vec3(0.0, 0.67, 0.33);\n\nvec3 colour = a + b * cos(6.28318 * (c * uv.x + d));\n\nfragColor = vec4(colour, 1.0);"
+        },
+        {
+          "id": "palettes-as-functions-parameters",
+          "position": 3,
+          "title": "What the four parameters do",
+          "body": "Driving d from time slides the phase, and the whole spectrum drifts steadily leftward across the screen, wrapping seamlessly because a cosine has no start. The other three are worth predicting before you try them: a moves the middle brightness, so lowering it darkens everything without changing the hues; b sets how far the swing reaches, and at zero the palette flattens to the single colour a; c counts cycles, so raising it to 2.0 fits two full spectra across the same width. Each is independent of the others.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 a = vec3(0.5);\nvec3 b = vec3(0.5);\nvec3 c = vec3(1.0);\nvec3 d = vec3(0.0, 0.67, 0.33) + iTime * 0.1;\n\nvec3 colour = a + b * cos(6.28318 * (c * uv.x + d));\n\nfragColor = vec4(colour, 1.0);"
+        },
+        {
+          "id": "palettes-as-functions-any-scalar",
+          "position": 4,
+          "title": "Feed it any scalar",
+          "body": "The palette never asked where its number came from, so this hands it a distance instead of a coordinate. With c at 2.0 a little over two full cycles fit between the centre and the far corner, drawing concentric rings of colour, and the drifting phase pulls those rings steadily inward. Swap length for any field from Module 3 — a box, a union, a subtraction — and the rings follow that shape's contours instead. This is the module's goal in five lines: colour driven by any scalar the shader can produce.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat t = length(p);\n\nvec3 a = vec3(0.5);\nvec3 b = vec3(0.5);\nvec3 c = vec3(2.0);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.15;\n\nvec3 colour = a + b * cos(6.28318 * (c * t + phase));\n\nfragColor = vec4(colour, 1.0);"
+        }
+      ]
+    }
+  ]
 }
