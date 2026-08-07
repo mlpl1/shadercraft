@@ -10,20 +10,20 @@ const publishedLessons = release.modules
 
 it("contains the complete current curriculum", () => {
   expect(release.modules).toHaveLength(11);
-  expect(release.modules.filter((module) => module.status === "published")).toHaveLength(1);
-  expect(release.modules.flatMap((module) => module.lessons)).toHaveLength(5);
+  expect(release.modules.filter((module) => module.status === "published")).toHaveLength(2);
+  expect(release.modules.flatMap((module) => module.lessons)).toHaveLength(10);
   expect(
     release.modules.flatMap((module) => module.lessons.flatMap((lesson) => lesson.stages)),
-  ).toHaveLength(20);
+  ).toHaveLength(40);
   expect(release.modules[1]).toMatchObject({
     id: "shaping-values",
-    status: "planned",
-    plannedLessonCount: 5,
+    status: "published",
+    plannedLessonCount: 0,
   });
 });
 
-it("authors Module 1's five published lessons in order, each with real source", () => {
-  expect(publishedLessons).toHaveLength(5);
+it("authors both modules' published lessons in order, each with real source", () => {
+  expect(publishedLessons).toHaveLength(10);
 
   expect(publishedLessons.map(({ id }) => id)).toEqual([
     "what-a-fragment-shader-is",
@@ -31,6 +31,11 @@ it("authors Module 1's five published lessons in order, each with real source", 
     "centre-and-aspect",
     "time-as-an-input",
     "reading-shaders-from-elsewhere",
+    "hard-edges-with-step",
+    "soft-edges-with-smoothstep",
+    "blending-with-mix",
+    "keeping-values-in-range",
+    "remapping-and-easing",
   ]);
 
   const [lesson] = publishedLessons;
@@ -43,11 +48,11 @@ it("authors Module 1's five published lessons in order, each with real source", 
   ]);
   expect(lesson.stages[0].source).toContain("vec4(0.85");
 
-  // Each of Module 1's five authored lessons carries exactly four stages — a fact about this
-  // content, not merely `parseCourseRelease`'s already-enforced 3–5 bound (which importing this
-  // module has already checked by the time this test runs, so re-asserting the bound here could
-  // never fail independently of every other test in this file).
-  expect(publishedLessons.map(({ stages }) => stages.length)).toEqual([4, 4, 4, 4, 4]);
+  // Every authored lesson so far carries exactly four stages — a fact about this content, not
+  // merely `parseCourseRelease`'s already-enforced 3–5 bound (which importing this module has
+  // already checked by the time this test runs, so re-asserting the bound here could never fail
+  // independently of every other test in this file).
+  expect(publishedLessons.map(({ stages }) => stages.length)).toEqual([4, 4, 4, 4, 4, 4, 4, 4, 4, 4]);
 });
 
 it("carries the optional tryThis prompt on the first authored lesson", () => {
@@ -64,7 +69,6 @@ it("marks every planned module's lesson count equal to its planned topics", () =
   // already enforces at import time (see `validateModules`), which would fail every test in this
   // file rather than just this one, so re-asserting them here adds no coverage.
   expect(plannedModules.map(({ id }) => id)).toEqual([
-    "shaping-values",
     "distance-fields",
     "colour",
     "space",

@@ -44,7 +44,9 @@ export function loadAuthoredModules(): CourseModule[] {
 export function buildBundledRelease(): CourseRelease {
   const modules = loadAuthoredModules();
   const releaseBody = {
-    id: "bundled-2026-08-07",
+    // Bumped whenever committed content changes. A device that already installed an id rejects a
+    // different checksum under that same id permanently, so the id and the content move together.
+    id: "bundled-2026-08-07-2",
     schemaVersion: 1 as const,
     minimumAppVersion: "1.0.0",
     modules,

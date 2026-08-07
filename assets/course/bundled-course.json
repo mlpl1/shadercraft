@@ -1,6 +1,6 @@
 {
-  "checksum": "dba68da60124a4f23645d431c25603fcdf85c3c83138454f134b642ee89d7d6a",
-  "id": "bundled-2026-08-07",
+  "checksum": "91b5bf3f8a0f8eabbcb7bb2c1216282519d6c31113b956633956ff2a765fbc69",
+  "id": "bundled-2026-08-07-2",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -217,17 +217,212 @@
     {
       "description": "Turn any continuous measurement into a controlled visual signal.",
       "id": "shaping-values",
-      "lessons": [],
-      "plannedLessonCount": 5,
-      "plannedTopics": [
-        "Hard edges with step",
-        "Soft edges with smoothstep",
-        "Blending with mix",
-        "Keeping values in range",
-        "Remapping and easing"
+      "lessons": [
+        {
+          "id": "hard-edges-with-step",
+          "intro": "Every shader so far has painted a measurement straight onto the screen: a coordinate became a gradient, and that was the whole image. Gradients are honest but shapeless. The first tool for turning a smooth measurement into something with structure is step, which makes a single yes-or-no decision at a threshold you choose. It is the bluntest instrument in the module, and understanding exactly where it is too blunt is what motivates everything after it.",
+          "moduleId": "shaping-values",
+          "position": 1,
+          "shortTitle": "Hard edges",
+          "stages": [
+            {
+              "body": "Before any decision there has to be something to decide about. This is the horizontal gradient from Module 1, painted into all three colour channels so it reads as grey rather than as a colour: black at the left edge where uv.x is zero, white at the right edge where it reaches one, and every shade in between. Nothing here is new. It is on screen so that the next stage has something recognisable to cut in half, and so you can see precisely which value the threshold is about to be compared against. Keep the left-to-right direction in mind, because every stage in this lesson works along that same axis.",
+              "id": "step-a-measurement-first",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat brightness = uv.x;\nfragColor = vec4(brightness, brightness, brightness, 1.0);",
+              "title": "Start with a measurement"
+            },
+            {
+              "body": "step(edge, value) returns zero when value is below edge and one when it reaches or passes it. Feeding the same gradient through it collapses every shade into one of two answers, so the left half of the screen is pure black and the right half is pure white, with the change happening at exactly the middle where uv.x crosses 0.5. Notice that the gradient has not been removed; it is still being computed, still varying smoothly across every pixel. All that changed is what the shader does with it. Keeping the measurement and the decision separate like this is what lets one measurement drive several different treatments later.",
+              "id": "step-makes-a-decision",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat lit = step(0.5, uv.x);\nfragColor = vec4(lit, lit, lit, 1.0);",
+              "title": "step makes the decision"
+            },
+            {
+              "body": "The threshold is just a number, so it can be computed rather than typed. Here it is driven by sin(iTime), which swings between minus one and one; multiplying by 0.35 and adding 0.5 keeps the result inside 0.15 to 0.85 so the boundary always stays on screen instead of sliding off an edge and leaving the display a flat colour. The result is a hard vertical edge sweeping left and right. Watch the edge itself rather than the halves: it never softens, never blurs, and never lands between two pixels. Wherever it happens to fall, one column of pixels is black and the very next is white.",
+              "id": "step-move-the-threshold",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat edge = 0.5 + sin(iTime) * 0.35;\nfloat lit = step(edge, uv.x);\nfragColor = vec4(lit, lit, lit, 1.0);",
+              "title": "Move the threshold"
+            },
+            {
+              "body": "A vertical edge hides step's weakness, because a vertical line already agrees with the pixel grid. Averaging uv.x and uv.y produces a value that increases toward the top right, so the threshold now falls along a diagonal running from the bottom right corner to the top left. Look closely at that diagonal and you will see a staircase: each row of pixels switches from black to white one step further along than the row beneath it, because every pixel must be entirely one or entirely the other. The measurement crossing the threshold was smooth. The decision made from it was not, and that is what the next lesson fixes.",
+              "id": "step-shows-its-cost",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = step(0.5, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);",
+              "title": "Where step starts to hurt"
+            }
+          ],
+          "takeaway": "step(edge, value) returns zero below the threshold and one at or above it, turning a continuous measurement into two flat regions. Subtracting one step from another isolates a band between two thresholds. The decision is instant, which is exactly the problem: on any boundary that is not perfectly aligned with the pixel grid, that instant decision shows up as a visible staircase.",
+          "title": "Hard edges with step",
+          "tryThis": "Swap the arguments in stage two to step(uv.x, 0.5). Which side goes white now, and can you say why before you look?"
+        },
+        {
+          "id": "soft-edges-with-smoothstep",
+          "intro": "The staircase at the end of the last lesson is not a rendering bug, it is the honest consequence of asking for an instant decision. A pixel is a finite area, and a boundary that falls halfway across one has to be resolved somehow. smoothstep answers by replacing the single threshold with two, and blending across the gap between them instead of jumping. The width of that gap becomes something you control deliberately, rather than something the pixel grid decides for you.",
+          "moduleId": "shaping-values",
+          "position": 2,
+          "shortTitle": "Soft edges",
+          "stages": [
+            {
+              "body": "This is the closing stage of the previous lesson unchanged, so the comparison over the next few stages is exact rather than remembered. The diagonal boundary runs from the bottom right to the top left, black below it and white above, and each row of pixels flips one position further along than the row below. Put your eye close to the screen if you can. The staircase is small, but on a moving edge it does something worse than look rough: it crawls, because the exact pixel where the flip happens jumps by a whole step at a time rather than sliding.",
+              "id": "smoothstep-the-staircase-again",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = step(0.5, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);",
+              "title": "The staircase, one more time"
+            },
+            {
+              "body": "Two thresholds either side of the old one, 0.48 and 0.52, give the transition somewhere to happen. Below 0.48 the result is still exactly zero and above 0.52 it is still exactly one, so the flat black and flat white regions are untouched; only the boundary between them changed. The staircase is gone, replaced by a narrow band of greys a few pixels wide. That band is doing the work the pixel grid could not: where a boundary falls partway across a pixel, the pixel can now take a value partway between the two sides instead of being forced to pick one.",
+              "id": "smoothstep-replaces-the-cliff",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = smoothstep(0.48, 0.52, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);",
+              "title": "smoothstep replaces the cliff"
+            },
+            {
+              "body": "Moving the two thresholds far apart, to 0.3 and 0.7, shows what they actually control. The midpoint is unchanged, still at 0.5, so the boundary has not moved. What changed is how much of the image is spent crossing it: the flat black region now ends at 0.3, the flat white does not begin until 0.7, and the entire middle 40 percent of the screen is transition. At this width it no longer reads as a soft edge at all, it reads as a gradient with flat regions on either side. Edge and gradient are the same operation with different numbers.",
+              "id": "smoothstep-widen-the-band",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = smoothstep(0.3, 0.7, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);",
+              "title": "The thresholds are the width"
+            },
+            {
+              "body": "Keeping the midpoint at 0.5 and animating only the half width makes the edge breathe between crisp and diffuse while staying exactly where it is. The half width runs from 0.02 to 0.30, because sin(iTime) is remapped from its natural minus one to one range into zero to one before being scaled. The important detail is what that width means: it is a distance in the value being tested, not a distance in pixels. The same 0.02 would cover a different number of pixels on a different screen, or if the diagonal were computed at a different scale, which is a limitation Module 3 comes back to with a proper fix.",
+              "id": "smoothstep-width-in-value-units",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat halfWidth = 0.02 + (sin(iTime) * 0.5 + 0.5) * 0.28;\nfloat lit = smoothstep(0.5 - halfWidth, 0.5 + halfWidth, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);",
+              "title": "Width lives in the value's units"
+            }
+          ],
+          "takeaway": "smoothstep(lower, upper, value) is zero below the lower threshold, one above the upper, and follows a smooth curve between them rather than a straight line. The distance between the two thresholds is the edge width, measured in the same units as the value being tested, not in pixels. A narrow gap reads as a crisp edge without a staircase; a wide gap stops reading as an edge at all and becomes a gradient.",
+          "title": "Soft edges with smoothstep",
+          "tryThis": "Set both thresholds to the same number in stage two. What does smoothstep turn into, and which earlier stage does the result match?"
+        },
+        {
+          "id": "blending-with-mix",
+          "intro": "So far every result has been a single number painted into all three channels, which is why everything has been grey. mix takes two colours and a factor between them, and returns a colour somewhere along the line joining the two. The colours are usually the easy part of that decision. The factor is where the design actually happens, and the previous two lessons were really about building factors worth feeding in.",
+          "moduleId": "shaping-values",
+          "position": 3,
+          "shortTitle": "Blending",
+          "stages": [
+            {
+              "body": "With a factor of exactly 0.5 the whole screen is one flat colour: the halfway point between a cool cyan and a warm coral, which works out as a muted grey-lavender. It is worth sitting with how unremarkable that is. Both input colours are vivid, the result is not, and nothing has gone wrong. Averaging two saturated colours that sit on opposite sides of the colour space lands you near the middle, and the middle is grey. This is the first hint of what stage four makes unavoidable, and the reason a mix is usually only as good as the factor driving it.",
+              "id": "mix-a-constant-factor",
+              "position": 1,
+              "source": "vec3 cool = vec3(0.31, 0.84, 1.0);\nvec3 warm = vec3(1.0, 0.42, 0.42);\nvec3 colour = mix(cool, warm, 0.5);\nfragColor = vec4(colour, 1.0);",
+              "title": "Two colours, one constant"
+            },
+            {
+              "body": "Replacing the constant with uv.x makes the factor different for every pixel, and the flat colour becomes a blend running the full width of the screen: cool cyan at the left edge where the factor is zero, warm coral at the right where it reaches one, and that same muted grey-lavender from the previous stage passing through the exact middle. Nothing about mix changed. The only difference is that the factor is now a measurement rather than a number, which is the same separation between measuring and deciding that step and smoothstep relied on.",
+              "id": "mix-a-spatial-factor",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec3 cool = vec3(0.31, 0.84, 1.0);\nvec3 warm = vec3(1.0, 0.42, 0.42);\nvec3 colour = mix(cool, warm, uv.x);\nfragColor = vec4(colour, 1.0);",
+              "title": "A factor that varies across space"
+            },
+            {
+              "body": "The colours here are identical to the previous stage. The only change is that the factor now runs through smoothstep between 0.35 and 0.65, and the image is transformed: the left third is flat cool, the right third is flat warm, and all of the colour change is compressed into the middle third. Two vivid regions with a deliberate transition, rather than an even wash where every pixel is a slightly different compromise. This is the whole idea of the module in one stage. The endpoints were never the problem; shaping what travels between them is where the control is.",
+              "id": "mix-shaped-factor",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec3 cool = vec3(0.31, 0.84, 1.0);\nvec3 warm = vec3(1.0, 0.42, 0.42);\nfloat factor = smoothstep(0.35, 0.65, uv.x);\nvec3 colour = mix(cool, warm, factor);\nfragColor = vec4(colour, 1.0);",
+              "title": "Shape the factor, not the colours"
+            },
+            {
+              "body": "Pure red on the left, pure green on the right, and in the middle something most people do not predict. Mixing red and green light gives yellow, so the centre ought to be yellow, and in a sense it is: the halfway value is 0.5 red and 0.5 green. But that is a dark, muddy olive rather than a bright yellow, because mix moves each channel along a straight line and half of full red plus half of full green is only half as much light as full yellow would be. The interpolation is doing exactly what it promises. It just promises less than intuition assumes.",
+              "id": "mix-works-per-channel",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec3 red = vec3(1.0, 0.0, 0.0);\nvec3 green = vec3(0.0, 1.0, 0.0);\nvec3 colour = mix(red, green, uv.x);\nfragColor = vec4(colour, 1.0);",
+              "title": "One channel at a time"
+            }
+          ],
+          "takeaway": "mix(a, b, t) returns a when t is zero, b when t is one, and interpolates each colour channel independently in between. Because the channels are handled separately, the midpoint between two colours is their numerical average, which is often duller or muddier than either endpoint rather than the colour you might expect. Choosing the factor matters more than choosing the endpoints.",
+          "title": "Blending with mix",
+          "tryThis": "Replace uv.x in stage two with the smoothstep expression from the previous lesson. Where does the blend become flat, and where does all the colour change end up happening?"
+        },
+        {
+          "id": "keeping-values-in-range",
+          "intro": "Every value so far has happened to stay between zero and one, which is convenient and not guaranteed. Multiply a measurement, subtract an offset, or remap a range, and it will leave those bounds without complaint. The screen quietly forgives that by clipping anything it is handed, which is why the problem stays invisible until the out-of-range value is used for something other than a colour. clamp makes the bound explicit, and the interesting part is which of the two stages below actually needs it.",
+          "moduleId": "shaping-values",
+          "position": 4,
+          "shortTitle": "Staying in range",
+          "stages": [
+            {
+              "body": "Multiplying the horizontal gradient by 2.5 sends it from zero at the left edge to 2.5 at the right, well past the one that a colour channel can represent. What renders is a gradient that reaches full white about two fifths of the way across, then simply stays white for the remaining three fifths. The information did not survive: every value from one upward, and there are a lot of them, is displayed identically. The screen clipped them for you. That is convenient here and dangerous later, because nothing warned you it happened.",
+              "id": "clamp-unbounded-value",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat boosted = uv.x * 2.5;\nfragColor = vec4(boosted, boosted, boosted, 1.0);",
+              "title": "A value that leaves the range"
+            },
+            {
+              "body": "This renders exactly the same image as the previous stage, and that is the point rather than an oversight. Wrapping the value in clamp between zero and one produces pixel-for-pixel what the framebuffer was already producing on its own. The difference is entirely in where the decision lives: previously the range was enforced by the display, invisibly and at the very last moment, and now it is enforced by code you wrote, at a point you chose. Nothing visible changed because nothing about a colour needed to change. The next stage is where the distinction stops being philosophical.",
+              "id": "clamp-makes-it-explicit",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat boosted = clamp(uv.x * 2.5, 0.0, 1.0);\nfragColor = vec4(boosted, boosted, boosted, 1.0);",
+              "title": "clamp makes the bound explicit"
+            },
+            {
+              "body": "Here the same kind of stretched value is used as a factor rather than as a colour, running from minus 0.6 at the left edge to 1.9 at the right. mix does not clip out-of-range factors, it keeps going along the line through both colours and out the other side. To the left the result overshoots past cool into an oversaturated cyan the palette never contained; to the right it overshoots past coral into a hard red. Both extremes are then clipped by the screen, so the edges of the image are flat, blown-out slabs rather than the two colours that were chosen.",
+              "id": "clamp-factor-extrapolates",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec3 cool = vec3(0.31, 0.84, 1.0);\nvec3 warm = vec3(1.0, 0.42, 0.42);\nfloat factor = uv.x * 2.5 - 0.6;\nvec3 colour = mix(cool, warm, factor);\nfragColor = vec4(colour, 1.0);",
+              "title": "An unbounded factor breaks a mix"
+            },
+            {
+              "body": "One clamp around the factor restores the palette completely. The left quarter of the screen is now exactly the cool cyan that was chosen, the right third is exactly the coral, and the blend between them happens across the middle without ever leaving the two endpoint colours. Compare it against the previous stage: the transition is in the same place and has the same slope, because the arithmetic that produces the factor is unchanged. All that was added is a bound. Clamping the factor is what keeps a design intact; clamping the colour afterwards only cleans up damage that has already happened.",
+              "id": "clamp-the-factor",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec3 cool = vec3(0.31, 0.84, 1.0);\nvec3 warm = vec3(1.0, 0.42, 0.42);\nfloat factor = clamp(uv.x * 2.5 - 0.6, 0.0, 1.0);\nvec3 colour = mix(cool, warm, factor);\nfragColor = vec4(colour, 1.0);",
+              "title": "Clamp the factor, not the colour"
+            }
+          ],
+          "takeaway": "clamp(value, low, high) forces a value into a range instead of leaving it to whatever happens downstream. Writing it changes nothing about how a colour displays, because the framebuffer already clips. It matters when the out-of-range value is used as a factor, because mix does not clip: it extrapolates past both endpoint colours and destroys the palette you chose.",
+          "title": "Keeping values in range",
+          "tryThis": "In the final stage, clamp to 0.2 and 0.8 instead of 0.0 and 1.0. Which parts of the image stop being pure cool and pure coral, and why?"
+        },
+        {
+          "id": "remapping-and-easing",
+          "intro": "Every tool in this module takes a value in some range and expects it in another. smoothstep wants its input near its two thresholds, mix wants a factor between zero and one, and a colour channel wants the same. Remapping is the arithmetic that moves a measurement from the range it naturally occupies into the range the next step needs, and easing is what you do once it is there: bending the journey so it does not have to travel at a constant rate.",
+          "moduleId": "shaping-values",
+          "position": 5,
+          "shortTitle": "Remap & ease",
+          "stages": [
+            {
+              "body": "Multiplying by 0.4 and adding 0.3 takes the usual zero-to-one gradient and lands it in 0.3 to 0.7 instead. The screen shows the consequence directly: the left edge is a mid-dark grey rather than black, the right edge is a light grey rather than white, and the whole image has visibly less contrast than the gradient it came from. Multiplying sets how much of the range gets used and adding sets where that span begins. Those two numbers are the whole of a linear remap, and every remap in this lesson is a rearrangement of them.",
+              "id": "remap-into-a-narrower-range",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat narrow = uv.x * 0.4 + 0.3;\nfragColor = vec4(narrow, narrow, narrow, 1.0);",
+              "title": "Squeeze a range"
+            },
+            {
+              "body": "Written the other way round, the operation says what it means: subtract where the input starts, divide by how far it spans, and whatever range went in comes out as zero to one. Here the input window is 0.25 to 0.75, so the middle half of the screen carries the full black-to-white ramp. Outside that window the value goes negative on the left and past one on the right, and the screen clips both, which is why the outer quarters are flat black and flat white. That clipping is the previous lesson's problem appearing again, in a form where it happens to be exactly what was wanted.",
+              "id": "remap-a-general-form",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat inMin = 0.25;\nfloat inMax = 0.75;\nfloat t = (uv.x - inMin) / (inMax - inMin);\nfragColor = vec4(t, t, t, 1.0);",
+              "title": "A remap you can read"
+            },
+            {
+              "body": "Raising a value between zero and one to a power bends how it travels without changing where it starts or ends, because zero and one are fixed points of any exponent. With an exponent of three the gradient stays noticeably dark far longer than it did: at the middle of the screen the brightness is only 0.125 rather than 0.5, and almost all of the visible change is crowded into the right-hand third. Nothing was clipped and no range was altered. The value passes through the same two endpoints, it just spends its time differently along the way.",
+              "id": "remap-bend-with-pow",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat eased = pow(uv.x, 3.0);\nfragColor = vec4(eased, eased, eased, 1.0);",
+              "title": "Bend the ramp"
+            },
+            {
+              "body": "The final stage uses everything in the module at once. step splits the screen into two halves by height, and mix chooses which curve each half displays: the lower half carries the power curve from the previous stage, rising from black to white toward the right, while the upper half carries an exponential decay, starting at full white on the left and falling away toward the right. The two are near mirror images, and they meet at a shared dark region a little past the middle, where both happen to sit near 0.13. One measurement, two shapings, and the choice between them made by a third.",
+              "id": "remap-compare-two-curves",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat rise = pow(uv.x, 3.0);\nfloat decay = exp(-uv.x * 4.0);\nfloat upper = step(0.5, uv.y);\nfloat eased = mix(rise, decay, upper);\nfragColor = vec4(eased, eased, eased, 1.0);",
+              "title": "Two curves, side by side"
+            }
+          ],
+          "takeaway": "Subtracting the input's low end and dividing by its span remaps any range onto zero to one, which is the form the rest of the module expects. Once a value is in that range, raising it to a power bends the ramp without leaving the range, since zero and one are unchanged by any exponent. An exponent above one starts slow, below one starts fast, and exp gives a different curve family entirely.",
+          "title": "Remapping and easing",
+          "tryThis": "Change the exponent in stage three from 3.0 to 1.0. What happens to the image, and what does that tell you about what an exponent of one means?"
+        }
       ],
+      "plannedLessonCount": 0,
+      "plannedTopics": [],
       "position": 2,
-      "status": "planned",
+      "status": "published",
       "title": "Shaping Values"
     },
     {

@@ -499,10 +499,11 @@ describe("course sync engine", () => {
   });
 
   test("recalculates the progress percentage when the published lesson set changes", async () => {
-    // The bundled release currently authors only one published lesson, so this test grows module
-    // one to four lessons by cloning its sole authored lesson (re-suffixing every id, including
-    // each clone's stage ids, so the release-wide uniqueness checks still pass) — independent of
-    // how many lessons the real curriculum happens to have.
+    // This test needs a release with a known published-lesson count, so it builds one rather than
+    // inheriting however large the real curriculum currently is. Module one's first lesson is
+    // cloned four times (re-suffixing every id, including each clone's stage ids, so the
+    // release-wide uniqueness checks still pass) and every other module is dropped. Deriving from
+    // the live curriculum is what broke this test the moment a second module was published.
     const baseLesson = bundledRelease.modules[0].lessons[0];
     const clones = [1, 2, 3, 4].map((position) => ({
       ...baseLesson,
@@ -516,9 +517,7 @@ describe("course sync engine", () => {
 
     const withFourLessons = derivedRelease("remote-four-lessons", (release) => ({
       ...release,
-      modules: release.modules.map((candidate, index) =>
-        index !== 0 ? candidate : { ...candidate, lessons: clones },
-      ),
+      modules: [{ ...release.modules[0], lessons: clones }],
     }));
     remoteFake.state.manifest = manifestFor(withFourLessons);
     remoteFake.state.releases.set("remote-four-lessons", withFourLessons);
@@ -540,11 +539,9 @@ describe("course sync engine", () => {
     // denominator shrinks from 4 to 2.
     const withTwoLessons = derivedRelease("remote-fewer-lessons", (release) => ({
       ...release,
-      modules: release.modules.map((candidate, index) =>
-        index !== 0
-          ? candidate
-          : { ...candidate, lessons: clones.filter((lesson) => lesson.position <= 2) },
-      ),
+      modules: [
+        { ...release.modules[0], lessons: clones.filter((lesson) => lesson.position <= 2) },
+      ],
     }));
     remoteFake.state.manifest = manifestFor(withTwoLessons);
     remoteFake.state.releases.set("remote-fewer-lessons", withTwoLessons);
