@@ -28,6 +28,7 @@ export function createFakeGl(script: FakeGlScript = {}) {
   let draws = 0;
   const uniformNames = new Map<number, string>();
   const uniformCalls: UniformCall[] = [];
+  const extensionRequests: string[] = [];
 
   const make = (kind: Handle["kind"]): Handle => {
     const handle = { id: nextId++, kind };
@@ -57,6 +58,13 @@ export function createFakeGl(script: FakeGlScript = {}) {
     TRIANGLES: 0x0004,
     FLOAT: 0x1406,
     COLOR_BUFFER_BIT: 0x4000,
+
+    // Returns null the way a real WebGL2 context does for an extension that is core there. The host
+    // must not depend on the result — only on having asked, which is what a WebGL1 device needs.
+    getExtension: (name: string) => {
+      extensionRequests.push(name);
+      return null;
+    },
 
     createShader: (_type: number) => make("shader"),
     shaderSource: (_shader: Handle, _source: string) => undefined,
@@ -110,6 +118,7 @@ export function createFakeGl(script: FakeGlScript = {}) {
     drawingBufferHeight: 300,
 
     uniformCalls,
+    extensionRequests,
     liveObjectCount: () => live.size,
     createdCount: () => created,
     deletedCount: () => deleted,

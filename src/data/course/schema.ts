@@ -85,15 +85,21 @@ function validateContiguousPositions(
 }
 
 /**
- * Tokens that must never appear in an authored stage. The first four belong to the wrapper the app
+ * Tokens that must never appear in an authored stage. The first five belong to the wrapper the app
  * supplies (see `docs/data/shader-sandbox.md`); the rest name capability this build does not provide
  * — GLSL ES 3.00 sampling, and three Shadertoy uniforms the sandbox deliberately omits.
+ *
+ * `#extension` is listed for a reason worth keeping: a stage body is spliced inside `mainImage`, and
+ * a preprocessor directive is only legal above every non-preprocessor token. Content that declared
+ * its own extension would compile nowhere, so the wrapper declares the one the curriculum needs and
+ * content is stopped from trying.
  *
  * This is the job the preview registry used to do. Content could never name a preview behaviour the
  * app lacked; it now cannot name a uniform or language feature the app lacks either.
  */
 const SHADER_SOURCE_FORBIDDEN_TOKENS = [
   "#version",
+  "#extension",
   "precision",
   "void main(",
   "gl_FragColor",

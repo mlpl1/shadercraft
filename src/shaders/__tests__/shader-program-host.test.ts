@@ -8,6 +8,17 @@ const BODY = "fragColor = vec4(1.0);";
 const host = (gl: FakeGl) => new ShaderProgramHost(gl as never);
 
 describe("ShaderProgramHost", () => {
+  // Pairs with the prologue's `#extension GL_OES_standard_derivatives` directive. A WebGL1 context —
+  // which Expo warns some older Android devices still hand back — leaves `fwidth` unusable unless the
+  // extension is requested through the API too, and Module 3 teaches antialiasing with it. Asserted
+  // at construction rather than at compile time because the request must precede every compile.
+  it("requests the derivatives extension before compiling anything", () => {
+    const gl = createFakeGl();
+    host(gl);
+
+    expect(gl.extensionRequests).toEqual(["OES_standard_derivatives"]);
+  });
+
   it("compiles a body and reports success", () => {
     const gl = createFakeGl();
     const result = host(gl).setBody(BODY);

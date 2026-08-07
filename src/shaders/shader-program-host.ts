@@ -45,6 +45,12 @@ export class ShaderProgramHost {
 
   constructor(gl: ExpoWebGLRenderingContext) {
     this.gl = gl;
+    // Pairs with the `#extension GL_OES_standard_derivatives` directive in the prologue. On a WebGL1
+    // context — which Expo warns some older Android devices still give — the derivative built-ins
+    // stay unavailable until the extension is requested through the API as well as the shader. On
+    // WebGL2 they are core and this returns null, which is why the result is deliberately unused:
+    // the call is for the weaker context, and the directive is what the ES 1.00 compiler reads.
+    gl.getExtension("OES_standard_derivatives");
   }
 
   hasProgram(): boolean {

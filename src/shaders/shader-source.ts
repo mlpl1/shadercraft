@@ -7,8 +7,19 @@
  * Expo SDK 57 documentation warns that some older Android devices lack WebGL2. `out`/`in` on
  * function parameters is valid 1.00 — only stage-level `in`/`out` variables need 3.00 — so
  * `mainImage` compiles here and still pastes into Shadertoy.
+ *
+ * The extension directive buys `fwidth`/`dFdx`/`dFdy`, which are core in GLSL ES 3.00 but not in
+ * 1.00, and which Module 3 teaches antialiasing with. It must be the very first line: `#extension`
+ * is only valid above every non-preprocessor token, so no stage body could ever supply it — this is
+ * the one capability the curriculum needs that content genuinely cannot carry.
+ *
+ * `enable`, not `require`: on hardware without the extension `require` fails the whole compile,
+ * while `enable` warns and leaves the built-ins undeclared, so only a shader that actually calls one
+ * breaks. Every device new enough to run this app supports it; the weaker directive just keeps the
+ * blast radius to the stage that asked for it.
  */
 const PROLOGUE_LINES = [
+  "#extension GL_OES_standard_derivatives : enable",
   "precision highp float;",
   "uniform vec3 iResolution;",
   "uniform float iTime;",
