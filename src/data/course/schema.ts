@@ -103,9 +103,21 @@ const SHADER_SOURCE_FORBIDDEN_TOKENS = [
   "iTimeDelta",
 ] as const;
 
-const MIN_INTRO_WORDS = 40;
-const MIN_STAGE_BODY_WORDS = 40;
-const MIN_TAKEAWAY_WORDS = 20;
+/**
+ * Floors, not targets — and they match
+ * `docs/superpowers/specs/2026-08-06-curriculum-syllabus-design.md` rather than sitting below it.
+ *
+ * They existed at 40/40/20 while the spec committed to 60/60/30, which meant an author could satisfy
+ * the build with roughly half the depth the design asks for. The previous curriculum averaged ~165
+ * words per lesson while reading as finished, and this floor is the only mechanical guard against
+ * that recurring — a guard set below the standard it guards is not one.
+ *
+ * There are deliberately no ceilings: nothing about teaching a concept well gets worse because the
+ * explanation ran longer than a number guessed in advance.
+ */
+const MIN_INTRO_WORDS = 60;
+const MIN_STAGE_BODY_WORDS = 60;
+const MIN_TAKEAWAY_WORDS = 30;
 
 function countWords(value: string): number {
   return value.trim().split(/\s+/).filter(Boolean).length;

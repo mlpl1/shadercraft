@@ -1,5 +1,5 @@
 {
-  "checksum": "0eace305b9acc967afae59c8ecd9c4b635d66539bd774b84277d39a1f263c4d6",
+  "checksum": "dba68da60124a4f23645d431c25603fcdf85c3c83138454f134b642ee89d7d6a",
   "id": "bundled-2026-08-07",
   "minimumAppVersion": "1.0.0",
   "modules": [
@@ -43,7 +43,7 @@
               "title": "Both axes at once"
             }
           ],
-          "takeaway": "One function, run once per pixel, returning a colour. Divide the incoming coordinate by the resolution to get a number that means the same thing on every screen.",
+          "takeaway": "One function, run once per pixel, returning a colour. You never loop and you never know which pixel you are, except through the coordinate handed to you. Divide that coordinate by the resolution to get a number meaning the same thing on every screen.",
           "title": "What a fragment shader is",
           "tryThis": "Swap uv.x and uv.y in the last stage. Which two corners trade colours, and which two stay put?"
         },

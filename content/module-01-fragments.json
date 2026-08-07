@@ -14,7 +14,7 @@
       "title": "What a fragment shader is",
       "shortTitle": "Fragment shaders",
       "intro": "A fragment shader is one small function, and the GPU runs a separate copy of it for every single pixel on screen. Your job is to return one colour. You never loop over pixels and you never know which pixel you are, except through the coordinate handed to you. That constraint is what makes shaders fast, and what makes them feel strange at first.",
-      "takeaway": "One function, run once per pixel, returning a colour. Divide the incoming coordinate by the resolution to get a number that means the same thing on every screen.",
+      "takeaway": "One function, run once per pixel, returning a colour. You never loop and you never know which pixel you are, except through the coordinate handed to you. Divide that coordinate by the resolution to get a number meaning the same thing on every screen.",
       "tryThis": "Swap uv.x and uv.y in the last stage. Which two corners trade colours, and which two stay put?",
       "stages": [
         {
