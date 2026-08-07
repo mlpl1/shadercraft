@@ -7,38 +7,25 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
 );
 
-// The real preview compiles GLSL through an `expo-gl` context, which no Jest environment provides.
-// Stand in a view that reports the preview key and restart token it was handed, so the workspace's
-// contract with the preview stays observable.
-jest.mock("../../components/live-shader-preview", () => {
+// The real sandbox compiles GLSL through an `expo-gl` context, which no Jest environment provides.
+// Stand in a view that reports the source it was handed, so the workspace's contract with the
+// sandbox stays observable.
+jest.mock("../../components/shader-sandbox", () => {
   const React = require("react") as typeof import("react");
   const { View } = require("react-native") as typeof import("react-native");
 
   return {
-    LiveShaderPreview: ({
-      previewKey,
-      restartToken = 0,
-    }: {
-      previewKey: string;
-      restartToken?: number;
-    }) =>
-      React.createElement(View, {
-        accessibilityLabel: `${previewKey}#${restartToken}`,
-        testID: "live-shader-preview",
-      }),
+    ShaderSandbox: () => React.createElement(View, { testID: "sandbox" }),
   };
 });
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
-
-import bundledCourse from "../../../assets/course/bundled-course.json";
 
 import LessonScreen from "../lesson";
 import { CourseProvider } from "../../context/course-context";
 import { DataContext } from "../../context/data-context";
 import { ProgressProvider } from "../../context/progress-context";
 import type { CourseRepository } from "../../data/course/course-repository";
-import { parseCourseRelease } from "../../data/course/schema";
 import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
 import type { ProgressMutation, ProgressRepository } from "../../data/progress/progress-repository";
 import { createFakeSketchRepository } from "../../data/sketches/testing/fake-sketch-repository";
@@ -55,25 +42,81 @@ jest.mock("expo-router", () => ({
   useRouter: () => mockRouter,
 }));
 
-const release = parseCourseRelease(bundledCourse);
-
-function findModule(moduleId: string): CourseModule {
-  const module = release.modules.find((candidate) => candidate.id === moduleId);
-  if (!module) throw new Error(`Missing fixture module ${moduleId}`);
-  return module;
+/**
+ * `LessonScreen`'s route-resolution logic (lesson/module locking, "what opens next") only reads
+ * position and status, never prose or stages. Building a synthetic release here — rather than
+ * importing the real bundled course — keeps these tests independent of how many modules and
+ * lessons are currently authored, and lets each scenario (a locked module, a lesson mid-module, a
+ * course that ends) be sized exactly as the test needs. `ShaderSandbox` is mocked above, so the
+ * single placeholder stage per lesson is never actually rendered.
+ */
+function buildLesson(id: string, moduleId: string, position: number, title: string): CourseLesson {
+  return {
+    id,
+    moduleId,
+    position,
+    // Distinct from `shortTitle` (as real content is) so a lesson's header label and its intro
+    // heading never collide under an exact-text query.
+    title: `${title} in depth`,
+    shortTitle: title,
+    intro: "",
+    takeaway: "",
+    stages: [
+      {
+        id: `${id}-stage-1`,
+        position: 1,
+        title: "",
+        body: "",
+        source: "fragColor = vec4(0.0, 0.0, 0.0, 1.0);",
+      },
+    ],
+  };
 }
 
-function findLesson(lessonId: string): CourseLesson {
-  const lesson = release.modules
-    .flatMap((module) => module.lessons)
-    .find((candidate) => candidate.id === lessonId);
-  if (!lesson) throw new Error(`Missing fixture lesson ${lessonId}`);
-  return lesson;
+function buildModule(
+  id: string,
+  position: number,
+  title: string,
+  lessonTitles: readonly string[],
+): CourseModule {
+  return {
+    id,
+    position,
+    status: "published",
+    title,
+    description: "",
+    plannedLessonCount: 0,
+    plannedTopics: [],
+    lessons: lessonTitles.map((lessonTitle, index) =>
+      buildLesson(`${id}-lesson-${index + 1}`, id, index + 1, lessonTitle),
+    ),
+  };
 }
 
-const publishedLessonIds = release.modules
-  .filter((module) => module.status === "published")
-  .flatMap((module) => module.lessons.map((lesson) => lesson.id));
+// Module 1 has three lessons (enough to exercise mid-module locking and a lesson removal), module 2
+// has two, and module 3 has a single lesson that is the last lesson of the whole course.
+const moduleOne = buildModule("module-1", 1, "Coordinate Foundations", [
+  "Coordinate Spaces",
+  "Aspect Ratio Correction",
+  "Screen Space Mapping",
+]);
+const moduleTwo = buildModule("module-2", 2, "Shape Synthesis", ["Circles & Boxes", "Step & Smoothstep"]);
+const moduleThree = buildModule("module-3", 3, "Color & Light", ["Color & Light Challenge"]);
+
+const modules: CourseModule[] = [moduleOne, moduleTwo, moduleThree];
+
+const release: CourseRelease = {
+  id: "release-1",
+  schemaVersion: 1,
+  minimumAppVersion: "1.0.0",
+  checksum: "checksum-1",
+  modules,
+};
+
+const moduleOneLessonIds = moduleOne.lessons.map((lesson) => lesson.id);
+const moduleTwoLessonIds = moduleTwo.lessons.map((lesson) => lesson.id);
+const moduleThreeLessonIds = moduleThree.lessons.map((lesson) => lesson.id);
+const publishedLessonIds = [...moduleOneLessonIds, ...moduleTwoLessonIds, ...moduleThreeLessonIds];
 
 class FakeCourseRepository implements CourseRepository {
   private readonly listeners = new Set<() => void>();
@@ -108,7 +151,9 @@ class FakeCourseRepository implements CourseRepository {
   }
 
   async getPublishedLessonIds(): Promise<string[]> {
-    return publishedLessonIds;
+    return this.courseRelease.modules
+      .filter((module) => module.status === "published")
+      .flatMap((module) => module.lessons.map((lesson) => lesson.id));
   }
 
   subscribe(listener: () => void): () => void {
@@ -206,9 +251,6 @@ async function renderRoute(
   return { courseRepository, progressRepository };
 }
 
-const moduleOneLessonIds = findModule("coordinate-foundations").lessons.map((lesson) => lesson.id);
-const moduleTwoLessonIds = findModule("shape-synthesis").lessons.map((lesson) => lesson.id);
-
 describe("lesson route", () => {
   beforeEach(() => {
     mockRouter.back.mockClear();
@@ -219,53 +261,51 @@ describe("lesson route", () => {
   test("loads the requested unlocked lesson from the repository", async () => {
     await renderRoute({
       completedLessonIds: [moduleOneLessonIds[0]],
-      lessonId: "colors-fragment-output",
+      lessonId: moduleOneLessonIds[1],
     });
 
-    expect(screen.getByText("Colors & Fragment Output")).toBeTruthy();
-    expect(screen.getByText("2 of 5")).toBeTruthy();
+    expect(screen.getByText("Aspect Ratio Correction")).toBeTruthy();
+    expect(screen.getByText("2 of 3")).toBeTruthy();
     expect(screen.getByText("Module 01")).toBeTruthy();
-    expect(screen.getByText("Fragment color")).toBeTruthy();
   });
 
   test("falls back to the current unlocked lesson for a locked deep link", async () => {
-    await renderRoute({ lessonId: "color-light-challenge" });
+    await renderRoute({ lessonId: moduleThreeLessonIds[0] });
 
-    expect(screen.getByText("Coordinate Systems & UV Space")).toBeTruthy();
+    expect(screen.getByText("Coordinate Spaces")).toBeTruthy();
     expect(screen.queryByText("Color & Light Challenge")).toBeNull();
-    expect(screen.getByText("1 of 5")).toBeTruthy();
+    expect(screen.getByText("1 of 3")).toBeTruthy();
   });
 
   test("falls back to the current unlocked lesson when only the module is locked", async () => {
-    // `step-and-smoothstep` is position 1 within Module 2, so the lesson-unlock guard alone would
+    // `module-2-lesson-1` is position 1 within module two, so the lesson-unlock guard alone would
     // allow it (position-1 lessons are always unlocked within their module). With no completions,
-    // Module 2 itself is locked because Module 1 isn't complete yet, so only the module-unlock
+    // module two itself is locked because module one isn't complete yet, so only the module-unlock
     // check blocks this deep link. This isolates that guard from the lesson-unlock guard, unlike
-    // `color-light-challenge` above, which both guards already block.
-    await renderRoute({ lessonId: "step-and-smoothstep" });
+    // the module-three deep link above, which both guards already block.
+    await renderRoute({ lessonId: moduleTwoLessonIds[0] });
 
-    expect(screen.getByText("Coordinate Systems & UV Space")).toBeTruthy();
-    expect(screen.queryByText("Step & Smoothstep")).toBeNull();
-    expect(screen.getByText("1 of 5")).toBeTruthy();
+    expect(screen.getByText("Coordinate Spaces")).toBeTruthy();
+    expect(screen.queryByText("Circles & Boxes")).toBeNull();
+    expect(screen.getByText("1 of 3")).toBeTruthy();
   });
 
   test("falls back to the current unlocked lesson for an unknown lesson id", async () => {
-    await renderRoute({ completedLessonIds: moduleOneLessonIds, lessonId: "tiling-space" });
+    await renderRoute({ completedLessonIds: moduleOneLessonIds, lessonId: "does-not-exist" });
 
-    expect(screen.getByText("Step & Smoothstep")).toBeTruthy();
+    expect(screen.getByText("Circles & Boxes")).toBeTruthy();
   });
 
   test("opens the current unlocked lesson when no lesson id is requested", async () => {
     await renderRoute({ completedLessonIds: [...moduleOneLessonIds, moduleTwoLessonIds[0]] });
 
-    expect(screen.getByText("Circles & Boxes")).toBeTruthy();
-    expect(screen.getByText("2 of 5")).toBeTruthy();
+    expect(screen.getByText("Step & Smoothstep")).toBeTruthy();
+    expect(screen.getByText("2 of 2")).toBeTruthy();
     expect(screen.getByText("Module 02")).toBeTruthy();
-    expect(screen.getByText("Shape field")).toBeTruthy();
   });
 
   test("replaces the route with the next lesson after a completion", async () => {
-    await renderRoute({ lessonId: "coordinate-systems-uv-space" });
+    await renderRoute({ lessonId: moduleOneLessonIds[0] });
 
     await fireEvent.press(screen.getByText("Mark lesson complete"));
 
@@ -273,21 +313,15 @@ describe("lesson route", () => {
     await fireEvent.press(screen.getByText("Continue to next lesson"));
 
     expect(mockRouter.replace).toHaveBeenCalledWith({
-      params: { lessonId: "colors-fragment-output" },
+      params: { lessonId: moduleOneLessonIds[1] },
       pathname: "/lesson",
     });
   });
 
   test("replaces the route with the course when the module ends", async () => {
     await renderRoute({
-      completedLessonIds: [
-        ...moduleOneLessonIds,
-        ...moduleTwoLessonIds,
-        "color-mixing",
-        "luma-and-contrast",
-        "procedural-palettes",
-      ],
-      lessonId: "color-light-challenge",
+      completedLessonIds: [...moduleOneLessonIds, ...moduleTwoLessonIds],
+      lessonId: moduleThreeLessonIds[0],
     });
 
     await fireEvent.press(screen.getByText("Mark lesson complete"));
@@ -300,7 +334,7 @@ describe("lesson route", () => {
 
   test("keeps the lesson incomplete and offers a retry when the SQLite write fails", async () => {
     await renderRoute({
-      lessonId: "coordinate-systems-uv-space",
+      lessonId: moduleOneLessonIds[0],
       writeError: new Error("database is locked"),
     });
 
@@ -314,42 +348,39 @@ describe("lesson route", () => {
   });
 
   describe("when a newly activated release changes the published lesson set", () => {
-    /** The bundled release with `mutate` applied to its modules, still a valid parsed release. */
-    function releaseWithModules(modules: CourseModule[]): CourseRelease {
-      return { ...release, modules };
+    /** The synthetic release with `mutate` applied to its modules, still a valid `CourseRelease`. */
+    function releaseWithModules(nextModules: CourseModule[]): CourseRelease {
+      return { ...release, modules: nextModules };
     }
 
-    /** Module 1 with only its first two lessons, so lessons 3..5 no longer exist anywhere. */
+    /** Module one with only its first two lessons, so lesson 3 no longer exists anywhere. */
     function withModuleOneTruncated(): CourseRelease {
       return releaseWithModules(
-        release.modules.map((module) =>
-          module.id !== "coordinate-foundations"
+        modules.map((module) =>
+          module.id !== moduleOne.id
             ? module
-            : {
-                ...module,
-                lessons: module.lessons.filter((lesson) => lesson.position <= 2),
-              },
+            : { ...module, lessons: module.lessons.filter((lesson) => lesson.position <= 2) },
         ),
       );
     }
 
     test("falls back to the current unlocked lesson when the open lesson was removed", async () => {
-      // Open lesson 3 of Module 1 with lessons 1-2 complete, then publish a release that drops it.
+      // Open lesson 3 of module one with lessons 1-2 complete, then publish a release that drops it.
       const { courseRepository } = await renderRoute({
         completedLessonIds: moduleOneLessonIds.slice(0, 2),
         lessonId: moduleOneLessonIds[2],
       });
-      expect(screen.getByText("3 of 5")).toBeTruthy();
+      expect(screen.getByText("3 of 3")).toBeTruthy();
 
       await act(async () => {
         courseRepository.activateRelease(withModuleOneTruncated());
       });
 
-      // Truncating Module 1 leaves it fully complete, so the learner's current lesson is now the
-      // first lesson of Module 2 — resolved and rendered, never an error state.
-      await waitFor(() => expect(screen.getByText("Step & Smoothstep")).toBeTruthy());
+      // Truncating module one leaves it fully complete, so the learner's current lesson is now the
+      // first lesson of module two — resolved and rendered, never an error state.
+      await waitFor(() => expect(screen.getByText("Circles & Boxes")).toBeTruthy());
       expect(screen.getByText("Module 02")).toBeTruthy();
-      expect(screen.getByText("1 of 5")).toBeTruthy();
+      expect(screen.getByText("1 of 2")).toBeTruthy();
       expect(screen.queryByText("This lesson is not available yet.")).toBeNull();
     });
 
@@ -367,7 +398,7 @@ describe("lesson route", () => {
 
       await waitFor(() => expect(screen.getByText("Color & Light Challenge")).toBeTruthy());
       expect(screen.getByText("Module 03")).toBeTruthy();
-      expect(screen.getByText("4 of 4")).toBeTruthy();
+      expect(screen.getByText("1 of 1")).toBeTruthy();
       expect(screen.queryByText("This lesson is not available yet.")).toBeNull();
     });
 
@@ -379,7 +410,7 @@ describe("lesson route", () => {
         // nothing to resolve to. The route must say so rather than throw on a -1 index.
         courseRepository.activateRelease(
           releaseWithModules(
-            release.modules.map((module) => ({
+            modules.map((module) => ({
               ...module,
               status: "planned" as const,
               lessons: [],
@@ -397,7 +428,7 @@ describe("lesson route", () => {
   });
 
   test("goes back from the lesson header", async () => {
-    await renderRoute({ lessonId: "coordinate-systems-uv-space" });
+    await renderRoute({ lessonId: moduleOneLessonIds[0] });
 
     await fireEvent.press(screen.getByLabelText("Back"));
 

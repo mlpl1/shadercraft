@@ -4,9 +4,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppIcon } from "./app-icon";
 import { LessonCompletionSheet } from "./lesson-completion-sheet";
-import { LiveShaderPreview } from "./live-shader-preview";
+import { ShaderSandbox } from "./shader-sandbox";
 import { Colors, Radius, Spacing } from "../constants/theme";
-import type { CourseLesson, LessonPreset } from "../data/course/types";
+import type { CourseLesson } from "../data/course/types";
 
 export type LessonWorkspaceProps = {
   lesson: CourseLesson;
@@ -29,8 +29,6 @@ type FailedAction = "complete" | "undo";
 type WorkspaceState = {
   /** The lesson the rest of this state belongs to, so switching lesson starts fresh. */
   lessonId: string;
-  presetIndex: number;
-  restartToken: number;
   failedAction: FailedAction | null;
   isCompletionVisible: boolean;
 };
@@ -40,8 +38,6 @@ function freshState(lesson: CourseLesson): WorkspaceState {
     failedAction: null,
     isCompletionVisible: false,
     lessonId: lesson.id,
-    presetIndex: defaultPresetIndex(lesson),
-    restartToken: 0,
   };
 }
 
@@ -49,29 +45,12 @@ function byPosition<T extends { position: number }>(items: readonly T[]): T[] {
   return [...items].sort((left, right) => left.position - right.position);
 }
 
-/** The lesson's authored opening preset, falling back to its lowest-positioned one. */
-function defaultPresetIndex(lesson: CourseLesson): number {
-  const index = byPosition(lesson.presets).findIndex(
-    (preset) => preset.id === lesson.defaultPresetId,
-  );
-  return index >= 0 ? index : 0;
-}
-
-/** Only an explicit boolean `true` enables the restart control; other values are ignored. */
-function isRestartable(preset: LessonPreset): boolean {
-  return preset.previewParameters.restartable === true;
-}
-
-/** Presets animate unless authored otherwise, so content without the parameter keeps running. */
-function isAnimated(preset: LessonPreset): boolean {
-  return preset.previewParameters.animated !== false;
-}
-
 /**
- * Renders one course lesson: its concept copy, the live GLSL workspace (preview, preset switcher,
- * highlighted source), and the completion action. Every piece of content comes from the supplied
- * `CourseLesson`, so this component works for every published lesson of every module. Progress
- * writes are owned by the caller; a rejected write is surfaced here as a retryable error.
+ * Renders one course lesson: its concept copy, the live GLSL workspace (one stage's shader running
+ * in the sandbox, with forward/back navigation between stages), and the completion action. Every
+ * piece of content comes from the supplied `CourseLesson`, so this component works for every
+ * published lesson of every module. Progress writes are owned by the caller; a rejected write is
+ * surfaced here as a retryable error.
  */
 export function LessonWorkspace({
   completed,
@@ -99,9 +78,10 @@ export function LessonWorkspace({
     });
   };
 
-  const presets = byPosition(lesson.presets);
-  const sections = byPosition(lesson.sections);
-  const preset = presets[workspace.presetIndex] ?? presets[0];
+  const [stageIndex, setStageIndex] = useState(0);
+  const stages = byPosition(lesson.stages);
+  const stage = stages[stageIndex] ?? stages[0];
+
   const moduleNumeral = `Module ${String(modulePosition).padStart(2, "0")}`;
   const isFinalLesson = lessonIndex >= lessonCount - 1;
   const lessonProgressWidth = `${((lessonIndex + 1) / Math.max(lessonCount, 1)) * 100}%` as const;
@@ -180,145 +160,46 @@ export function LessonWorkspace({
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.intro}>
-              <Text style={styles.eyebrow}>{lesson.introEyebrow ?? "Concept"}</Text>
+              <Text style={styles.eyebrow}>Concept</Text>
               <Text style={styles.title}>{lesson.title}</Text>
               <Text style={styles.lede}>{lesson.intro}</Text>
             </View>
 
             <View style={styles.workspace}>
-              <View style={styles.workspaceHeader}>
-                <View>
-                  <Text style={styles.workspaceEyebrow}>Live workspace</Text>
-                  <Text style={styles.workspaceTitle}>Preview and source</Text>
-                </View>
-                <View style={styles.liveBadge}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.liveLabel}>{isAnimated(preset) ? "Running" : "Paused"}</Text>
-                </View>
+              <ShaderSandbox height={200} source={stage.source} />
+
+              <View style={styles.stageBar}>
+                <Pressable
+                  accessibilityLabel="Previous stage"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: stageIndex === 0 }}
+                  disabled={stageIndex === 0}
+                  onPress={() => setStageIndex((index) => Math.max(0, index - 1))}
+                >
+                  <Text style={styles.stageNav}>Back</Text>
+                </Pressable>
+
+                <Text style={styles.stageCount}>
+                  Stage {stageIndex + 1} of {stages.length}
+                </Text>
+
+                <Pressable
+                  accessibilityLabel="Next stage"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: stageIndex === stages.length - 1 }}
+                  disabled={stageIndex === stages.length - 1}
+                  onPress={() => setStageIndex((index) => Math.min(stages.length - 1, index + 1))}
+                >
+                  <Text style={styles.stageNav}>Next</Text>
+                </Pressable>
               </View>
 
-              <View style={styles.previewCard}>
-                <LiveShaderPreview
-                  previewKey={preset.previewKey}
-                  restartToken={workspace.restartToken}
-                />
-                <View style={styles.previewFooter}>
-                  <Text style={styles.previewLabel}>{lesson.previewCaption}</Text>
-                  <Text style={styles.previewValue}>
-                    {preset.previewValueLabel ?? `${preset.label} · ${preset.value}`}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.tryCard}>
-                <Text style={styles.tryTitle}>Try it</Text>
-                <Text style={styles.tryHint}>{lesson.tryHint}</Text>
-                <View accessibilityRole="radiogroup" style={styles.presets}>
-                  {presets.map((option, index) => {
-                    const selected = option.id === preset.id;
-
-                    return (
-                      <Pressable
-                        accessibilityRole="radio"
-                        accessibilityState={{ checked: selected }}
-                        key={option.id}
-                        onPress={() => update({ presetIndex: index })}
-                        style={({ pressed }) => [
-                          styles.preset,
-                          selected && styles.selectedPreset,
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Text style={[styles.presetLabel, selected && styles.selectedPresetLabel]}>
-                          {option.label}
-                        </Text>
-                        <Text style={[styles.presetValue, selected && styles.selectedPresetValue]}>
-                          {option.value}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                {isRestartable(preset) && (
-                  <Pressable
-                    accessibilityLabel="Restart animation timeline"
-                    accessibilityRole="button"
-                    onPress={() =>
-                      update((previous) => ({ restartToken: previous.restartToken + 1 }))
-                    }
-                    style={({ pressed }) => [styles.restartButton, pressed && styles.pressed]}
-                  >
-                    <AppIcon
-                      color={Colors.accent}
-                      fallback="↻"
-                      name={{ android: "refresh", ios: "arrow.counterclockwise", web: "refresh" }}
-                      size={17}
-                    />
-                    <Text style={styles.restartLabel}>Restart timeline</Text>
-                  </Pressable>
-                )}
-              </View>
-
-              <View style={styles.codeCard}>
-                <View style={styles.codeHeader}>
-                  <Text style={styles.codeFilename}>{preset.filename}</Text>
-                  <Text style={styles.codeLanguage}>LIVE GLSL</Text>
-                </View>
-                <View style={styles.codeBody}>
-                  {preset.codeLines.map((line, index) => (
-                    <View key={`${index}-${line}`} style={styles.codeLine}>
-                      <Text style={styles.lineNumber}>{index + 1}</Text>
-                      <Text
-                        style={[
-                          styles.codeText,
-                          preset.highlightedLines.includes(index + 1) && styles.codeAccent,
-                        ]}
-                      >
-                        {line}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
+              <Text style={styles.stageTitle}>{stage.title}</Text>
+              <Text style={styles.stageBody}>{stage.body}</Text>
             </View>
 
-            <View style={styles.conceptHeader}>
-              <Text style={styles.eyebrow}>Concept breakdown</Text>
-              <Text style={styles.conceptTitle}>{lesson.conceptTitle}</Text>
-              <Text style={styles.conceptLede}>{lesson.conceptLede}</Text>
-            </View>
-
-            {sections.map((section, index) => (
-              <View key={section.id} style={styles.section}>
-                <Text style={styles.sectionNumber}>{String(index + 1).padStart(2, "0")}</Text>
-                <View style={styles.sectionCopy}>
-                  <Text style={styles.sectionTitle}>{section.title}</Text>
-                  <Text style={styles.sectionBody}>{section.body}</Text>
-                </View>
-              </View>
-            ))}
-
-            <View style={styles.takeaway}>
-              <AppIcon
-                color={Colors.accent}
-                fallback="✦"
-                name={{ android: "lightbulb", ios: "lightbulb.fill", web: "lightbulb" }}
-                size={22}
-              />
-              <View style={styles.takeawayCopy}>
-                <Text style={styles.takeawayTitle}>Remember</Text>
-                <Text style={styles.takeawayBody}>{lesson.takeaway}</Text>
-              </View>
-            </View>
-
-            <View style={styles.readyCard}>
-              <Text style={styles.readyEyebrow}>Checkpoint</Text>
-              <Text style={styles.readyTitle}>Ready to experiment?</Text>
-              <Text style={styles.readyBody}>
-                Switch between every preset and connect the code changes to what you see in the live
-                preview. You can review this lesson again after completing it.
-              </Text>
-            </View>
+            <Text style={styles.takeaway}>{lesson.takeaway}</Text>
+            {lesson.tryThis !== undefined && <Text style={styles.tryThis}>{lesson.tryThis}</Text>}
           </ScrollView>
 
           <View style={styles.actionBar}>
@@ -459,190 +340,31 @@ const styles = StyleSheet.create({
   },
   lede: { marginTop: Spacing.md, color: Colors.textMuted, fontSize: 15, lineHeight: 23 },
   workspace: { marginTop: 34, gap: Spacing.lg },
-  workspaceHeader: {
+  stageBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  workspaceEyebrow: {
+  stageNav: { color: Colors.accent, fontSize: 13, fontWeight: "800" },
+  stageCount: {
     color: Colors.textSubtle,
     fontFamily: "monospace",
-    fontSize: 8,
-    fontWeight: "800",
+    fontSize: 11,
     textTransform: "uppercase",
   },
-  workspaceTitle: { marginTop: 3, color: Colors.text, fontSize: 20, fontWeight: "800" },
-  liveBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: Radius.round,
-    backgroundColor: "rgba(199,244,100,0.1)",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  liveDot: { width: 6, height: 6, borderRadius: Radius.round, backgroundColor: Colors.accent },
-  liveLabel: { color: Colors.accent, fontSize: 9, fontWeight: "900", textTransform: "uppercase" },
-  previewCard: {
-    overflow: "hidden",
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  previewFooter: {
-    minHeight: 44,
-    paddingHorizontal: Spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  previewLabel: { color: Colors.text, fontSize: 12, fontWeight: "800" },
-  previewValue: { color: Colors.accent, fontFamily: "monospace", fontSize: 10 },
-  tryCard: {
-    padding: Spacing.lg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  tryTitle: { color: Colors.text, fontSize: 16, fontWeight: "800" },
-  tryHint: { marginTop: 3, marginBottom: Spacing.md, color: Colors.textSubtle, fontSize: 11 },
-  presets: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm },
-  preset: {
-    flex: 1,
-    flexBasis: "46%",
-    minHeight: 64,
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
-    justifyContent: "center",
-  },
-  selectedPreset: { borderColor: Colors.accent, backgroundColor: "rgba(199,244,100,0.08)" },
-  presetLabel: { color: Colors.textMuted, fontSize: 13, fontWeight: "800" },
-  selectedPresetLabel: { color: Colors.text },
-  presetValue: {
-    marginTop: 4,
-    color: Colors.textSubtle,
-    fontFamily: "monospace",
-    fontSize: 10,
-  },
-  selectedPresetValue: { color: Colors.accent },
-  restartButton: {
-    marginTop: Spacing.md,
-    minHeight: 42,
-    paddingHorizontal: Spacing.md,
-    alignSelf: "flex-start",
-    borderRadius: Radius.round,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  restartLabel: { color: Colors.accent, fontSize: 12, fontWeight: "800" },
-  codeCard: {
-    overflow: "hidden",
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: "#0C0F14",
-  },
-  codeHeader: {
-    minHeight: 42,
-    paddingHorizontal: Spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  codeFilename: { color: Colors.textMuted, fontFamily: "monospace", fontSize: 10 },
-  codeLanguage: { color: Colors.textSubtle, fontSize: 9, fontWeight: "900" },
-  codeBody: { paddingVertical: Spacing.md },
-  codeLine: {
-    minHeight: 25,
-    paddingHorizontal: Spacing.md,
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  lineNumber: {
-    width: 24,
-    color: Colors.textSubtle,
-    fontFamily: "monospace",
-    fontSize: 11,
-    lineHeight: 18,
-  },
-  codeText: {
-    flex: 1,
-    color: Colors.textMuted,
-    fontFamily: "monospace",
-    fontSize: 11,
-    lineHeight: 18,
-  },
-  codeAccent: { color: Colors.accent },
-  conceptHeader: {
-    marginTop: 44,
-    paddingTop: Spacing.xxl,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-  },
-  conceptTitle: {
-    marginTop: Spacing.sm,
-    color: Colors.text,
-    fontSize: 27,
-    fontWeight: "900",
-    letterSpacing: -0.7,
-  },
-  conceptLede: { marginTop: Spacing.sm, color: Colors.textMuted, fontSize: 15, lineHeight: 22 },
-  section: { marginTop: Spacing.xxl, flexDirection: "row", gap: Spacing.md },
-  sectionNumber: { color: Colors.textSubtle, fontFamily: "monospace", fontSize: 11 },
-  sectionCopy: { flex: 1 },
-  sectionTitle: { color: Colors.text, fontSize: 20, fontWeight: "800" },
-  sectionBody: { marginTop: Spacing.sm, color: Colors.textMuted, fontSize: 14, lineHeight: 22 },
+  stageTitle: { color: Colors.text, fontSize: 20, fontWeight: "800" },
+  stageBody: { marginTop: Spacing.sm, color: Colors.textMuted, fontSize: 14, lineHeight: 22 },
   takeaway: {
     marginTop: Spacing.xxl,
-    padding: Spacing.lg,
-    borderRadius: Radius.lg,
-    backgroundColor: "rgba(199,244,100,0.08)",
-    flexDirection: "row",
-    gap: Spacing.md,
-  },
-  takeawayCopy: { flex: 1 },
-  takeawayTitle: { color: Colors.accent, fontSize: 13, fontWeight: "900" },
-  takeawayBody: { marginTop: 5, color: Colors.textMuted, fontSize: 13, lineHeight: 20 },
-  readyCard: {
-    marginTop: Spacing.xxl,
-    padding: Spacing.xl,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: "center",
-  },
-  readyEyebrow: {
-    color: Colors.accent,
-    fontFamily: "monospace",
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  readyTitle: {
-    marginTop: Spacing.sm,
-    color: Colors.text,
-    fontSize: 22,
-    fontWeight: "900",
-    letterSpacing: -0.4,
-  },
-  readyBody: {
-    marginTop: Spacing.sm,
     color: Colors.textMuted,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  tryThis: {
+    marginTop: Spacing.md,
+    color: Colors.accent,
     fontSize: 13,
     lineHeight: 20,
-    textAlign: "center",
   },
   actionBar: {
     padding: Spacing.md,
