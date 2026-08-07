@@ -4,7 +4,7 @@ import { type CompileError, parseCompileLog, wrapMainImageBody } from "./shader-
 
 /**
  * A full-viewport triangle pair. `fragCoord` comes from `gl_FragCoord.xy`, so the vertex stage needs
- * to pass nothing through — unlike `live-shader-preview.tsx`, which forwards a `v_uv` varying.
+ * to pass nothing through.
  */
 const VERTEX_SHADER_SOURCE = `attribute vec2 a_position;
 void main() {

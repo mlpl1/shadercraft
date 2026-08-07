@@ -117,17 +117,22 @@ class FakeCourseRepository implements CourseRepository {
 
 class FakeProgressRepository implements ProgressRepository {
   private readonly listeners = new Set<() => void>();
+  private readonly completedLessonIds: readonly string[];
+
+  constructor(completedLessonIds: readonly string[] = []) {
+    this.completedLessonIds = completedLessonIds;
+  }
 
   async getActiveProfileId(): Promise<string> {
     return "local-profile";
   }
 
   async getCompletedLessonIds(): Promise<string[]> {
-    return [];
+    return [...this.completedLessonIds];
   }
 
-  async isLessonCompleted(): Promise<boolean> {
-    return false;
+  async isLessonCompleted(lessonId: string): Promise<boolean> {
+    return this.completedLessonIds.includes(lessonId);
   }
 
   async setLessonCompleted(): Promise<void> {
@@ -148,20 +153,23 @@ class FakeProgressRepository implements ProgressRepository {
   }
 }
 
-function buildDataValue(courseReadError?: Error): DataContextValue {
+function buildDataValue(
+  courseReadError?: Error,
+  completedLessonIds: readonly string[] = [],
+): DataContextValue {
   return {
     status: "ready",
     releaseInstaller: STUB_RELEASE_INSTALLER,
     bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
     courseRepository: new FakeCourseRepository(courseReadError),
-    progressRepository: new FakeProgressRepository(),
+    progressRepository: new FakeProgressRepository(completedLessonIds),
     sketchRepository: createFakeSketchRepository(),
     retry: jest.fn(),
   };
 }
 
-async function renderHomeScreen(courseReadError?: Error) {
-  const dataValue = buildDataValue(courseReadError);
+async function renderHomeScreen(courseReadError?: Error, completedLessonIds: readonly string[] = []) {
+  const dataValue = buildDataValue(courseReadError, completedLessonIds);
 
   return render(
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
@@ -242,5 +250,17 @@ describe("HomeScreen", () => {
 
     await waitFor(() => expect(screen.queryByText("Could not refresh curriculum")).toBeNull());
     expect(screen.getAllByText("Coordinate spaces").length).toBeGreaterThan(0);
+  });
+
+  test("offers no bonus tutorial card even once the first module is complete", async () => {
+    // `isFirstModuleComplete` (see `navigation-model.ts`) used to gate a "Bonus tutorial" card
+    // that pushed a hardcoded `/bonus-scanline` route. That route and the preview machinery behind
+    // it are gone; completing the module's only lesson must not resurrect the card.
+    await renderHomeScreen(undefined, ["lesson-1a"]);
+
+    await waitFor(() => expect(screen.getAllByText("Coordinate spaces").length).toBeGreaterThan(0));
+
+    expect(screen.queryByText("Bonus tutorial")).toBeNull();
+    expect(screen.queryByText("Recreate the Scanline S")).toBeNull();
   });
 });
