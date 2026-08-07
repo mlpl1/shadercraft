@@ -1,6 +1,6 @@
 {
-  "checksum": "91b5bf3f8a0f8eabbcb7bb2c1216282519d6c31113b956633956ff2a765fbc69",
-  "id": "bundled-2026-08-07-2",
+  "checksum": "fb32b65d245c1de5fdd14d7a2d485617d47a129ede8959b91e7c8bf682574419",
+  "id": "bundled-2026-08-07-3",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -428,17 +428,208 @@
     {
       "description": "Describe a shape as a reusable field and give it any edge treatment.",
       "id": "distance-fields",
-      "lessons": [],
-      "plannedLessonCount": 5,
-      "plannedTopics": [
-        "Distance as a field",
-        "A circle you control",
-        "Boxes and rounded boxes",
-        "Combining shapes",
-        "Edges that survive scaling"
+      "lessons": [
+        {
+          "id": "distance-as-a-field",
+          "intro": "Every shape in this module comes from one idea: instead of asking whether a pixel is inside something, measure how far it is from the edge. That measurement is a distance field — one number per pixel, defined everywhere on the screen rather than only on the shape itself. Module 1 used length to measure the distance from the centre and stopped there. This lesson turns that measurement into something you can build with, and shows why keeping it continuous is exactly what makes it reusable.",
+          "moduleId": "distance-fields",
+          "position": 1,
+          "shortTitle": "Distance as a field",
+          "stages": [
+            {
+              "body": "This paints the distance from the centre straight into all three colour channels, so brightness is distance. The centre reads zero and comes out black, and every direction brightens away from it. Pure white is reached exactly one unit out — and because the aspect line squeezes x, one unit is nearer on the vertical axis than the horizontal. On a tall screen that means the regions above and below the middle clip to flat white, while the left and right edges only reach around 0.56, a mid grey. The rings of equal brightness are perfect circles: that is what a field looks like when you look at it directly.",
+              "id": "distance-as-a-field-raw",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\n\nfragColor = vec4(vec3(d), 1.0);",
+              "title": "Paint the measurement itself"
+            },
+            {
+              "body": "Subtracting 0.5 slides the whole field down by half a unit, so zero no longer sits at the centre — it now falls on a circle of radius 0.5. Inside that circle the value is negative. This is the single most useful move in the module, and the render undersells it badly: negative and zero both display as black, so you see a solid black disc with no visible boundary, fading up to roughly 0.65 grey at the corners and never reaching white at all. The sign is real and the code can read it. The screen simply has no way to show it.",
+              "id": "distance-as-a-field-signed",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.5;\n\nfragColor = vec4(vec3(d), 1.0);",
+              "title": "Subtract a radius to place the edge"
+            },
+            {
+              "body": "step and mix, both from Module 2, turn the invisible sign into two colours. step(0.0, d) returns 0 wherever d is negative and 1 wherever it is not, and mix reads that as a choice between the two colours rather than a blend. The result is a cyan disc of radius 0.5 sitting in a coral field, with a hard edge between them. Nothing about the field changed here — it is the same d as the stage above. Only the way it is read changed, which is the whole reason a field is worth keeping around.",
+              "id": "distance-as-a-field-sign",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.5;\n\nvec3 inside = vec3(0.31, 0.84, 1.0);\nvec3 outside = vec3(1.0, 0.45, 0.42);\nvec3 colour = mix(inside, outside, step(0.0, d));\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Make the sign visible"
+            },
+            {
+              "body": "Here the same d again, read a third way. One smoothstep rises just before the edge and another rises just after it, and subtracting the second from the first leaves a band that is 1 only between roughly -0.03 and 0.03. Everything outside that window cancels to 0. What you get is a thin yellow-green ring hanging at radius 0.5 on a near-black background — no fill anywhere, because the band never includes the middle of the disc. A mask could not have produced this. Only a field that still knows how far away it is at every pixel can.",
+              "id": "distance-as-a-field-ring",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.5;\n\nfloat ring = smoothstep(-0.04, -0.02, d) - smoothstep(0.02, 0.04, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), ring);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "One field, a third reading"
+            }
+          ],
+          "takeaway": "A distance field is a measurement, not a mask. length(p) gives the distance from the centre, and subtracting a radius moves the zero line out to wherever you want the edge to fall, which is what makes the sign meaningful — negative inside, positive outside. The screen cannot show a negative value, but your code can read it, and every shape in this module is built by choosing where that zero line sits.",
+          "title": "Distance as a field",
+          "tryThis": "In the last stage, change both smoothstep pairs to widen the ring, then make the ring sit at a different radius without touching the subtraction. Which number controls which?"
+        },
+        {
+          "id": "a-circle-you-control",
+          "intro": "The previous lesson produced a circle almost by accident — it fell out of measuring distance from the centre. This lesson takes hold of it properly, so that where the circle sits and how large it is become numbers you set rather than consequences of the coordinate system. Both turn out to be one-line changes, and neither touches the shape of the expression. By the end the circle moves, breathes, and lights the space around it, all from the same single measurement.",
+          "moduleId": "distance-fields",
+          "position": 2,
+          "shortTitle": "A circle you control",
+          "stages": [
+            {
+              "body": "The subtracted value from the last lesson is now a named variable, which changes nothing about the render and everything about how the code reads. smoothstep turns the field into a fill: it is 1 wherever d is at or below zero, and falls to 0 across the next 0.012, so the disc is cyan with a soft edge a few pixels wide and the background stays near-black. Note the direction — the fill is 1 minus the smoothstep, because d is small inside the shape and large outside, so the raw smoothstep would give you the background instead.",
+              "id": "a-circle-you-control-radius",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat radius = 0.3;\nfloat d = length(p) - radius;\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Name the radius"
+            },
+            {
+              "body": "Subtracting a centre from p before measuring shifts the disc to that centre: it now sits at x 0.2 and y -0.2, which is right of the middle and below it, since p.y runs negative at the bottom of the screen. This is worth pausing on, because Module 1 warned that coordinate transforms often feel backwards. Here it does not — subtract a positive x and the shape moves right. The reason is that you are moving the point of measurement, not the space: you are asking each pixel how far it is from a centre that has itself moved.",
+              "id": "a-circle-you-control-centre",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 centre = vec2(0.2, -0.2);\nfloat radius = 0.3;\nfloat d = length(p - centre) - radius;\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Move it by moving the coordinate"
+            },
+            {
+              "body": "Centre and radius are just floats, so iTime can drive them. sin and cos of the same rate trace a closed ellipse — wider vertically than horizontally here, because the two multipliers differ — and the disc goes round it once every six and a bit seconds. The radius runs on a separate sine at twice that rate, swinging between 0.16 and 0.28, so the disc pulses exactly twice per lap. Nothing structural changed from the stage above. Two constants became expressions, and that is the entire difference between a still image and an animation.",
+              "id": "a-circle-you-control-animated",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 centre = vec2(sin(iTime) * 0.24, cos(iTime) * 0.45);\nfloat radius = 0.22 + sin(iTime * 2.0) * 0.06;\nfloat d = length(p - centre) - radius;\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Drive both from time"
+            },
+            {
+              "body": "A mask would be finished at the edge. A field is not, and this stage spends what is left. The same d feeds a second smoothstep with a far wider range, giving a value that is 1 at the edge and does not reach 0 until half a unit out, which paints a teal halo fading to background by radius 0.76. The bright fill is then mixed over the top so the disc itself stays clean. Halfway through the halo the two colours sit at even weight. This costs one extra line precisely because the measurement never stopped being available.",
+              "id": "a-circle-you-control-glow",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.26;\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\nfloat glow = 1.0 - smoothstep(0.0, 0.5, d);\n\nvec3 colour = vec3(0.05, 0.05, 0.08);\ncolour = mix(colour, vec3(0.18, 0.42, 0.55), glow);\ncolour = mix(colour, vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "The field outside the shape"
+            }
+          ],
+          "takeaway": "A circle needs two numbers you control: a centre, subtracted from the coordinate before measuring, and a radius, subtracted from the measurement afterwards. Order matters — the first moves the shape, the second resizes it. Because both are ordinary floats, anything that can produce a float can drive them, including iTime. And the field keeps meaning something outside the shape, which is where effects like a glow come from for free.",
+          "title": "A circle you control"
+        },
+        {
+          "id": "boxes-and-rounded-boxes",
+          "intro": "A circle is the easy case, because distance from a point is exactly what length already computes. A rectangle has corners and flat sides, and no single built-in measures it. Building one introduces two functions that do far more work in this module than their names suggest: abs, which folds the plane so you only have to think about one quadrant, and max, which is how you say that two conditions must both hold. The rounding trick at the end costs one subtraction.",
+          "moduleId": "distance-fields",
+          "position": 3,
+          "shortTitle": "Boxes and rounded boxes",
+          "stages": [
+            {
+              "body": "abs applied to a vec2 takes the absolute value of each component separately, which mirrors the left half onto the right and the bottom half onto the top. Painting the folded coordinate shows it plainly: the centre is dark blue where both components are zero, red grows toward the left and right edges, green grows toward the top and bottom, and all four corners land on the same pale yellow-green. Top-left, top-right, bottom-left and bottom-right are pixel-identical. Anything you build from the folded coordinate is symmetric about both axes without you arranging for it.",
+              "id": "boxes-and-rounded-boxes-abs",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 q = abs(p);\n\nfragColor = vec4(q.x, q.y, 0.25, 1.0);",
+              "title": "abs folds the plane"
+            },
+            {
+              "body": "Subtracting a half-size from the folded coordinate gives a value per axis that is negative inside the box's extent on that axis. max of the two is negative only when both are, which is precisely the rectangle: 0.68 wide and 0.44 tall, in yellow-green on near-black. That is max used as a logical and. The inside of this field is correct, but the outside is not quite a distance — diagonally past a corner it reports the larger of the two gaps rather than the true one, which the next stage both shows and fixes.",
+              "id": "boxes-and-rounded-boxes-max",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 halfSize = vec2(0.34, 0.22);\nvec2 q = abs(p) - halfSize;\n\nfloat d = max(q.x, q.y);\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "max means both at once"
+            },
+            {
+              "body": "max here takes a vector and a float, clamping each component up to zero, so inside the box both components are zeroed and length returns exactly 0. Outside, the surviving components form the offset to the nearest point on the box, and length measures it truly. The wide smoothstep exposes the difference: the halo's contours curve around the corners in quarter circles. Under the previous stage's max they would have run square. The fill is identical either way, which is why this error hides until the moment you use the field for anything beyond filling.",
+              "id": "boxes-and-rounded-boxes-outside",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 q = abs(p) - vec2(0.34, 0.22);\n\nfloat outside = length(max(q, 0.0));\n\nfloat glow = 1.0 - smoothstep(0.0, 0.35, outside);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), glow);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Measure the outside properly"
+            },
+            {
+              "body": "Subtracting a constant from a distance field moves its zero line outward by that amount in every direction at once, and around a corner every direction means a quarter circle. So rounding is free: shrink the half-size by the rounding first, then subtract the rounding from the field. The shrink is what keeps the outer size unchanged — this box still measures 0.68 by 0.44, exactly like the last two stages, but now with corners of radius 0.1. Push rounding up to the smaller half-size and the box becomes a capsule, then a circle.",
+              "id": "boxes-and-rounded-boxes-rounded",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat rounding = 0.1;\nvec2 q = abs(p) - (vec2(0.34, 0.22) - rounding);\n\nfloat d = length(max(q, 0.0)) - rounding;\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Rounding is a subtraction"
+            }
+          ],
+          "takeaway": "abs mirrors the plane into all four quadrants, so a box only has to be described once and comes out symmetric. max of the two folded axes is negative only where both are, which is the rectangle. Taking length of the outside part measures the corners properly, where the plain max only approximates them. Rounding is then a subtraction: shrink the box by the corner radius, then subtract that radius from the field, and the outer size is preserved.",
+          "title": "Boxes and rounded boxes"
+        },
+        {
+          "id": "combining-shapes",
+          "intro": "Two shapes drawn one over the other are two shapes that happen to overlap. Combined as fields they become a single shape, with one continuous boundary that every later effect can read as a whole. The difference matters more than it first appears, and this lesson makes it visible before naming the three operators that do the work. All three are functions you already have, and all three are one line long.",
+          "moduleId": "distance-fields",
+          "position": 4,
+          "shortTitle": "Combining shapes",
+          "stages": [
+            {
+              "body": "Two discs of radius 0.26, offset left and right of centre, each turned into its own fill and painted in turn. Because the coral disc is mixed last it covers the cyan one where they overlap, leaving a cyan crescent on the left and a whole coral circle on the right. It looks like a composition, and for painting purposes it is one. But there is no value anywhere in this shader that describes the pair as a single shape, so nothing here can be given an outline, a glow, or a rounded join.",
+              "id": "combining-shapes-separate",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat a = length(p - vec2(-0.16, 0.0)) - 0.26;\nfloat b = length(p - vec2(0.16, 0.0)) - 0.26;\n\nfloat fillA = 1.0 - smoothstep(0.0, 0.012, a);\nfloat fillB = 1.0 - smoothstep(0.0, 0.012, b);\n\nvec3 colour = vec3(0.05, 0.05, 0.08);\ncolour = mix(colour, vec3(0.31, 0.84, 1.0), fillA);\ncolour = mix(colour, vec3(1.0, 0.45, 0.42), fillB);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Drawn separately is not combined"
+            },
+            {
+              "body": "min of the two fields keeps whichever surface is nearer, and the result is a union: one yellow-green shape with a single unbroken outline, pinched slightly at the waist where the two circles meet. Only the colouring collapsed to one fill — the geometry did not change at all. This is why the operators are worth learning as field operations rather than as drawing tricks: min produced a new field, so it can be fed to a ring, a glow, or another min, exactly like the fields it was built from.",
+              "id": "combining-shapes-union",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat a = length(p - vec2(-0.16, 0.0)) - 0.26;\nfloat b = length(p - vec2(0.16, 0.0)) - 0.26;\n\nfloat d = min(a, b);\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "min unites"
+            },
+            {
+              "body": "One character changes and the meaning inverts. max is negative only where both fields are negative, so what survives is the overlap alone: a tall pointed oval, roughly 0.2 wide and 0.41 tall, meeting in sharp cusps at the top and bottom where the two circles cross. Everything either disc had to itself is gone. This is the same max that built the box two lessons ago, doing the same job — insisting both conditions hold at once — on whole shapes rather than on two axes.",
+              "id": "combining-shapes-intersect",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat a = length(p - vec2(-0.16, 0.0)) - 0.26;\nfloat b = length(p - vec2(0.16, 0.0)) - 0.26;\n\nfloat d = max(a, b);\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "max intersects"
+            },
+            {
+              "body": "Negating a field swaps its sign everywhere, so inside becomes outside and the shape turns inside out. Intersecting the left disc with the inverted right one therefore keeps what is inside the left and outside the right: a crescent, thick at the far left, opening to the right, with horns reaching the points where the circles cross. There is no subtract function, and there does not need to be. Reverse the two and you get the mirrored crescent, which is a useful reminder that this operation, unlike the other two, cares about order.",
+              "id": "combining-shapes-subtract",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat a = length(p - vec2(-0.16, 0.0)) - 0.26;\nfloat b = length(p - vec2(0.16, 0.0)) - 0.26;\n\nfloat d = max(a, -b);\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Negation subtracts"
+            }
+          ],
+          "takeaway": "min unites two fields, max intersects them, and max against a negated field subtracts one from the other. Each returns a field, not a picture, so the result composes exactly like the shapes that went into it and every treatment from earlier lessons still applies. Negating a field swaps its inside and outside, which is why subtraction is intersection with a complement rather than an operator of its own.",
+          "title": "Combining shapes"
+        },
+        {
+          "id": "edges-that-survive-scaling",
+          "intro": "Every stage so far has softened its edge with the same hand-picked 0.012, and every one of them looked fine, because nothing has changed scale yet. That number is measured in the field's units, not in pixels, so the moment a shape grows or shrinks it stops being right — too soft at one size, jagged at another. This lesson makes that failure visible and then removes the guesswork entirely, using a function that can tell you how large a pixel is.",
+          "moduleId": "distance-fields",
+          "position": 5,
+          "shortTitle": "Edges that survive scaling",
+          "stages": [
+            {
+              "body": "This is the same disc and the same 0.012 as the rest of the module, and there is nothing wrong with it. The edge is a fraction under one percent of the preview's height, which on a surface a few hundred pixels tall works out to a small handful of pixels: soft enough not to stair-step, tight enough to read as a clean edge. The number was chosen by eye and it does its job. Worth noticing before the next stage is that nothing in the code knows how big a pixel is.",
+              "id": "edges-that-survive-scaling-fixed",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.34;\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Fine, at exactly one size"
+            },
+            {
+              "body": "Multiplying the coordinate by a changing zoom makes the disc grow and shrink — a larger multiplier packs more field into the same screen, so the disc gets smaller. The edge width is still 0.012 in field units, so on screen it shrinks and grows with everything else, by more than four times across the cycle. Watch the boundary rather than the disc: at its largest the edge is a visible blur, and at its smallest it tightens until it starts to stair-step. One constant cannot be correct at both ends.",
+              "id": "edges-that-survive-scaling-broken",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat zoom = 1.85 + sin(iTime * 0.6) * 1.15;\nvec2 p = (uv * 2.0 - 1.0) * zoom;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.34;\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Change scale and it breaks"
+            },
+            {
+              "body": "fwidth reports roughly how much a value changes between one pixel and the next, by comparing against the neighbouring pixels being shaded alongside this one. Given a distance field it therefore answers the question the last stage could not: how far, in field units, is one pixel? Smoothstepping from minus that width to plus it spans about two pixels at every zoom. The disc breathes exactly as before, and the edge now holds the same crispness throughout. The 0.012 is gone, and with it the assumption about scale.",
+              "id": "edges-that-survive-scaling-fwidth",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat zoom = 1.85 + sin(iTime * 0.6) * 1.15;\nvec2 p = (uv * 2.0 - 1.0) * zoom;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.34;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "fwidth measures a pixel"
+            },
+            {
+              "body": "The whole module in nine lines. A rounded box built from abs and max, a circle placed to overlap its top edge, min uniting them into one shape, and fwidth keeping the outline honest while the zoom drives it. The join between the box and the circle is seamless because they were combined as fields rather than drawn in sequence. Nothing here is new — every line is from an earlier lesson — and that is the point: fields compose, and the edge treatment does not care how the field was assembled.",
+              "id": "edges-that-survive-scaling-together",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat zoom = 1.85 + sin(iTime * 0.6) * 1.15;\nvec2 p = (uv * 2.0 - 1.0) * zoom;\np.x *= iResolution.x / iResolution.y;\n\nfloat rounding = 0.08;\nvec2 q = abs(p) - (vec2(0.3, 0.2) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat ball = length(p - vec2(0.0, 0.3)) - 0.14;\n\nfloat d = min(box, ball);\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Everything at once"
+            }
+          ],
+          "takeaway": "A hand-tuned edge width is tied to one scale and one screen. fwidth reports how much a value changes across a single pixel, so smoothstep between minus and plus that width gives an edge about two pixels wide no matter how the shape is scaled or what resolution it is rendered at. It works on any field, however that field was built, which is the last thing that makes distance fields worth the trouble.",
+          "title": "Edges that survive scaling"
+        }
       ],
+      "plannedLessonCount": 0,
+      "plannedTopics": [],
       "position": 3,
-      "status": "planned",
+      "status": "published",
       "title": "Distance Fields"
     },
     {
