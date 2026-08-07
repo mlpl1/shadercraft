@@ -136,13 +136,26 @@ describe("lesson workspace", () => {
     expect(screen.getByTestId("sandbox")).toHaveTextContent(/400\.0/);
   });
 
-  it("goes back", async () => {
+  it("goes back, reverting the rendered source", async () => {
     await renderWorkspace();
 
     await fireEvent.press(screen.getByLabelText("Next stage"));
     await fireEvent.press(screen.getByLabelText("Previous stage"));
 
     expect(screen.getByText("Stage 1 of 4")).toBeTruthy();
+    expect(screen.getByTestId("sandbox")).toHaveTextContent(/vec4\(0\.85/);
+  });
+
+  it("shows the current stage's source as readable code, and advances it with the stage", async () => {
+    await renderWorkspace();
+
+    // The code shown to the learner is exactly the source the sandbox above it is compiling —
+    // never a paraphrase of it.
+    expect(screen.getByTestId("stage-source")).toHaveTextContent(/vec4\(0\.85/);
+
+    await fireEvent.press(screen.getByLabelText("Next stage"));
+
+    expect(screen.getByTestId("stage-source")).toHaveTextContent(/400\.0/);
   });
 
   it("disables previous on the first stage and next on the last", async () => {

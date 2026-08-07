@@ -29,8 +29,9 @@ describe("importLegacyProgress", () => {
   });
 
   test("imports valid legacy completions and removes the AsyncStorage entry", async () => {
-    // The bundled release currently authors only one published lesson, so this only exercises a
-    // single completion; the multi-row upsert path is covered elsewhere with a fabricated release.
+    // This only exercises a single completion; the multi-row upsert path is covered later in this
+    // same file (see "retains rows for unknown historical lesson IDs...", which imports two IDs
+    // at once).
     const storage = createStorage(
       JSON.stringify({
         version: 1,

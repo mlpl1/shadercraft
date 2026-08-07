@@ -65,10 +65,25 @@ describe("SQLite course repository", () => {
     expect(lesson?.stages[0].source).toContain("vec4(0.85");
   });
 
-  test("round-trips the optional tryThis prompt, absent rather than null when unauthored", async () => {
+  test("round-trips the authored tryThis prompt", async () => {
     await expect(repository.getLesson("what-a-fragment-shader-is")).resolves.toMatchObject({
-      tryThis: "Swap uv.x and uv.y in the last stage. Which corner turns yellow now?",
+      tryThis: "Swap uv.x and uv.y in the last stage. Which two corners trade colours, and which two stay put?",
     });
+  });
+
+  test("round-trips an unauthored tryThis as absent rather than null", async () => {
+    // No bundled lesson omits `tryThis`, so this writes a NULL `try_this` row directly to reach
+    // the branch `sqlite-course-repository.ts`'s `toLesson` documents at its comment: an
+    // unauthored prompt must come back as a missing key, not an explicit `null`, matching the
+    // authored release shape `CourseLesson.tryThis?: string` allows.
+    await driver.run("UPDATE lessons SET try_this = NULL WHERE release_id = ? AND id = ?", [
+      release.id,
+      "what-a-fragment-shader-is",
+    ]);
+
+    await expect(repository.getLesson("what-a-fragment-shader-is")).resolves.not.toHaveProperty(
+      "tryThis",
+    );
   });
 
   test("returns null for a lesson outside the active release", async () => {

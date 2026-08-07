@@ -260,6 +260,14 @@ describe("HomeScreen", () => {
 
     await waitFor(() => expect(screen.getAllByText("Coordinate spaces").length).toBeGreaterThan(0));
 
+    // Anchors the precondition: this fixture's only module has one lesson, now complete, so
+    // `isFirstModuleComplete` is genuinely true here and its sibling card (there is no planned
+    // module in this fixture to unlock, so the "module in progress" branch renders) is on screen.
+    // Without this, fixture drift that left `isFirstModuleComplete` false would make the assertions
+    // below pass vacuously.
+    expect(screen.getByText("Module 00 in progress")).toBeTruthy();
+    expect(screen.getByText("Coordinate systems")).toBeTruthy();
+
     expect(screen.queryByText("Bonus tutorial")).toBeNull();
     expect(screen.queryByText("Recreate the Scanline S")).toBeNull();
   });

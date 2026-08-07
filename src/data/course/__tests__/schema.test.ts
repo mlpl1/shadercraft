@@ -161,7 +161,11 @@ describe("prose depth", () => {
 
 describe("tryThis", () => {
   it("is optional", () => {
-    expect(() => parseAuthoredModules([publishedModule()])).not.toThrow();
+    const [parsedModule] = parseAuthoredModules([publishedModule()]);
+    const [parsedLesson] = parsedModule.lessons;
+
+    expect(parsedLesson.tryThis).toBeUndefined();
+    expect(parsedLesson).not.toHaveProperty("tryThis");
   });
 
   it("is accepted when present", () => {

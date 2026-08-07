@@ -1,5 +1,5 @@
 {
-  "checksum": "2e3a473066ad9ec6e8d406ff96437ac7fe8eda3ca751d631f9e60780979a05c4",
+  "checksum": "0eace305b9acc967afae59c8ecd9c4b635d66539bd774b84277d39a1f263c4d6",
   "id": "bundled-2026-08-07",
   "minimumAppVersion": "1.0.0",
   "modules": [
@@ -45,7 +45,7 @@
           ],
           "takeaway": "One function, run once per pixel, returning a colour. Divide the incoming coordinate by the resolution to get a number that means the same thing on every screen.",
           "title": "What a fragment shader is",
-          "tryThis": "Swap uv.x and uv.y in the last stage. Which corner turns yellow now?"
+          "tryThis": "Swap uv.x and uv.y in the last stage. Which two corners trade colours, and which two stay put?"
         },
         {
           "id": "from-pixels-to-uv",
@@ -95,21 +95,21 @@
           "shortTitle": "Centre & aspect",
           "stages": [
             {
-              "body": "Doubling uv and subtracting one turns a 0-to-1 range into a −1-to-1 range: at the exact centre of the screen p is (0, 0); it is negative toward the bottom and left, positive toward the top and right. Watch closely what actually renders, because clamping hits each quadrant differently, not each half. Only where both p.x and p.y are negative — the bottom-left quadrant — do red and green both clamp to zero, leaving a flat dark purple, (0, 0, 0.5). The top-left quadrant still shows green climbing as p.y rises above zero, even though red sits pinned at zero there because p.x is negative; the bottom-right quadrant mirrors that, red climbing while green stays pinned at zero. p really is negative everywhere the maths says so — but the framebuffer clamps each colour channel to zero independently, so a region only goes completely still once both of its channels are negative at once.",
+              "body": "Doubling uv and subtracting one turns a 0-to-1 range into a −1-to-1 range: at the exact centre of the screen p is (0, 0); it is negative toward the bottom and left, positive toward the top and right. Watch closely what actually renders, because clamping hits each quadrant differently, not each half. Only where both p.x and p.y are negative — the bottom-left quadrant — do red and green both clamp to zero, leaving a flat dark navy blue, (0, 0, 0.5). The top-left quadrant still shows green climbing as p.y rises above zero, even though red sits pinned at zero there because p.x is negative; the bottom-right quadrant mirrors that, red climbing while green stays pinned at zero. p really is negative everywhere the maths says so — but the framebuffer clamps each colour channel to zero independently, so a region only goes completely still once both of its channels are negative at once.",
               "id": "remap-to-centred",
               "position": 1,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\nfragColor = vec4(p.x, p.y, 0.5, 1.0);",
               "title": "Remap to centred coordinates"
             },
             {
-              "body": "length(p) here is used purely as a ruler — it measures how far a point is from the centre, it does not draw a shape, and Module 1 has no shape functions yet. On a square screen the resulting grey rings look like circles. On a real phone screen, which is taller than it is wide, they do not: p.x and p.y are each normalised against a different physical dimension, width for one axis and height for the other, so a fixed step in p covers more real pixels along the wider dimension than the narrower one. The rings you are looking at are ellipses, stretched along whichever screen dimension is larger, even though the code that produced them never mentions an ellipse.",
+              "body": "length(p) here is used purely as a ruler — it measures how far a point is from the centre, it does not draw a shape, and Module 1 has no shape functions yet. On a square screen the resulting grey gradient's contours look like circles. On a real phone screen, which is taller than it is wide, they do not: p.x and p.y are each normalised against a different physical dimension, width for one axis and height for the other, so a fixed step in p covers more real pixels along the wider dimension than the narrower one. The contours you are looking at are ellipses, stretched along whichever screen dimension is larger, even though the code that produced them never mentions an ellipse.",
               "id": "radial-gradient-is-an-ellipse",
               "position": 2,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\nfloat distanceFromCentre = length(p);\nfragColor = vec4(distanceFromCentre, distanceFromCentre, distanceFromCentre, 1.0);",
               "title": "A circle-ish gradient, until you check"
             },
             {
-              "body": "One new line fixes the ellipse from the previous stage: multiplying p.x by iResolution.x / iResolution.y stretches the x axis by exactly the screen's width-to-height ratio before length() ever measures it. length() is still only a ruler here, not a shape — the correction changes what unit the ruler is marked in, not what it draws. On a screen taller than it is wide that ratio is less than one, so p.x is compressed rather than expanded, matching how much less physical width there is to work with per unit of p compared to height. The grey rings now read as genuine circles, the same on a phone in portrait or landscape.",
+              "body": "One new line fixes the ellipse from the previous stage: multiplying p.x by iResolution.x / iResolution.y stretches the x axis by exactly the screen's width-to-height ratio before length() ever measures it. length() is still only a ruler here, not a shape — the correction changes what unit the ruler is marked in, not what it draws. On a screen taller than it is wide that ratio is less than one, so p.x is compressed rather than expanded, matching how much less physical width there is to work with per unit of p compared to height. The grey gradient's contours now read as genuine circles, the same on a phone in portrait or landscape.",
               "id": "fix-the-aspect-ratio",
               "position": 3,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\nfloat distanceFromCentre = length(p);\nfragColor = vec4(distanceFromCentre, distanceFromCentre, distanceFromCentre, 1.0);",

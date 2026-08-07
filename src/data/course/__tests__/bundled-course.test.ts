@@ -43,24 +43,36 @@ it("authors Module 1's five published lessons in order, each with real source", 
   ]);
   expect(lesson.stages[0].source).toContain("vec4(0.85");
 
-  for (const publishedLesson of publishedLessons) {
-    expect(publishedLesson.stages.length).toBeGreaterThanOrEqual(3);
-    expect(publishedLesson.stages.length).toBeLessThanOrEqual(5);
-  }
+  // Each of Module 1's five authored lessons carries exactly four stages — a fact about this
+  // content, not merely `parseCourseRelease`'s already-enforced 3–5 bound (which importing this
+  // module has already checked by the time this test runs, so re-asserting the bound here could
+  // never fail independently of every other test in this file).
+  expect(publishedLessons.map(({ stages }) => stages.length)).toEqual([4, 4, 4, 4, 4]);
 });
 
 it("carries the optional tryThis prompt on the first authored lesson", () => {
   expect(publishedLessons[0].tryThis).toBe(
-    "Swap uv.x and uv.y in the last stage. Which corner turns yellow now?",
+    "Swap uv.x and uv.y in the last stage. Which two corners trade colours, and which two stay put?",
   );
 });
 
 it("marks every planned module's lesson count equal to its planned topics", () => {
   const plannedModules = release.modules.filter((module) => module.status === "planned");
 
-  expect(plannedModules).toHaveLength(10);
-  for (const module of plannedModules) {
-    expect(module.plannedLessonCount).toBe(module.plannedTopics.length);
-    expect(module.lessons).toHaveLength(0);
-  }
+  // The ids and order below are content facts `parseCourseRelease` does not check — unlike the
+  // per-module `plannedLessonCount`/`plannedTopics` equality and empty-`lessons` invariants it
+  // already enforces at import time (see `validateModules`), which would fail every test in this
+  // file rather than just this one, so re-asserting them here adds no coverage.
+  expect(plannedModules.map(({ id }) => id)).toEqual([
+    "shaping-values",
+    "distance-fields",
+    "colour",
+    "space",
+    "randomness-and-noise",
+    "composition",
+    "ray-marching",
+    "three-d-shape-and-space",
+    "lighting-and-materials",
+    "performance-and-craft",
+  ]);
 });

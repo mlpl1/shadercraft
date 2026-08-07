@@ -28,11 +28,10 @@ The project is currently an early working prototype built with Expo and React Na
 - Optional Supabase accounts and background cross-device progress synchronization, reachable from
   an account icon on the Course screen; disabled by default and entirely inert until configured
 - Remote curriculum publishing: an immutable, checksummed course release can be published to
-  Supabase and picked up by installed apps in the background, without an app-store update
+  Supabase and picked up by installed apps in the background, without an app-store update.
+  **Currently broken** — see the caveat under [Curriculum content](#curriculum-content).
 
-Module 1, Fragments & Coordinates, is published. Modules 2 through 11 are `planned`: each shows a
-roadmap card with a topic list and stays unopenable until it ships real lessons. See
-[`docs/data/local-curriculum.md`](docs/data/local-curriculum.md) for the authoring model and
+See [`docs/data/local-curriculum.md`](docs/data/local-curriculum.md) for the authoring model and
 [`docs/superpowers/specs/2026-08-06-curriculum-syllabus-design.md`](docs/superpowers/specs/2026-08-06-curriculum-syllabus-design.md)
 for the full eleven-module arc.
 
@@ -56,7 +55,8 @@ for the full eleven-module arc.
 - Supabase also hosts immutable, published curriculum releases a device can download and activate
   in the background (see
   [`docs/data/curriculum-publishing.md`](docs/data/curriculum-publishing.md)); reads are open to
-  every client, publishing is restricted to a service-role credential held only by CI
+  every client, publishing is restricted to a service-role credential held only by CI.
+  Publishing itself is temporarily broken — see [Curriculum content](#curriculum-content)
 - TypeScript and the React Compiler
 
 ## Requirements
@@ -173,6 +173,13 @@ documented there: a learner on a build too old for the active release gets no on
 (the check just quietly fails to install), and a device that updates the app and then stays offline
 can be stranded on the app update's own bundled curriculum instead of a newer one it had already
 downloaded — no progress is lost either way, since progress is keyed by lesson id.
+
+**Publishing is currently broken.** `supabase/migrations/202608030002_curriculum_releases.sql`
+still declares the retired `concept_title`, `concept_lede`, `try_hint`, and `preview_caption`
+lesson columns `NOT NULL`, so `publish_course_release` fails against the current stage-based
+content shape. Do not run `npm run content:publish` until a migration updates the Supabase schema
+to match; the bundled, on-device curriculum is unaffected. See
+[`docs/data/curriculum-publishing.md`](docs/data/curriculum-publishing.md) for detail.
 
 ## Roadmap
 

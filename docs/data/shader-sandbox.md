@@ -1,8 +1,8 @@
 # The shader sandbox
 
 The sandbox compiles learner-authored GLSL at runtime, renders it live, and reports compile errors
-against the line the learner actually typed. It powers the Editor tab, and later the lesson previews
-and tutorial steps.
+against the line the learner actually typed. It powers the Editor tab and every lesson's live stage
+preview, and will power tutorial steps too once those ship.
 
 This document is the contract. If you author shader source anywhere in the app, or debug why a preview
 is blank, read it first.
@@ -47,7 +47,7 @@ That is the whole set. **`iMouse`, `iFrame` and `iTimeDelta` do not exist.** Add
 additive and breaks no existing content, so they were left out rather than shipped unused.
 
 `fragCoord` is real framebuffer pixels, taken from `gl_FragCoord.xy` exactly as Shadertoy does. Note
-that this is what makes the curriculum's own claim honest: Module 1 Lesson 1 teaches `gl_FragCoord.xy`
+that this is what makes the curriculum's own claim honest: Module 1 Lesson 5 teaches `gl_FragCoord.xy`
 while every snippet writes `fragCoord`, and the wrapper is the bridge between them.
 
 ## Why GLSL ES 1.00, not 3.00
@@ -142,7 +142,7 @@ No Jest environment provides a GL context, so:
 - `ShaderProgramHost` is tested against `createFakeGl`, a scriptable stub that can fail compilation or
   linking on demand and tracks created-versus-deleted objects.
 - Screens mock `../components/shader-sandbox` with a view echoing the source it was handed, the same
-  way `lesson-workspace.test.tsx` stands in for the old preview.
+  way `lesson-workspace.test.tsx` stands in for the sandbox.
 
 Three harness details that cost time to rediscover:
 

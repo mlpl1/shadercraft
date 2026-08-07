@@ -92,7 +92,7 @@ function validateContiguousPositions(
  * This is the job the preview registry used to do. Content could never name a preview behaviour the
  * app lacked; it now cannot name a uniform or language feature the app lacks either.
  */
-export const SHADER_SOURCE_FORBIDDEN_TOKENS = [
+const SHADER_SOURCE_FORBIDDEN_TOKENS = [
   "#version",
   "precision",
   "void main(",

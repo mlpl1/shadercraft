@@ -1,5 +1,16 @@
 # Publishing curriculum releases to Supabase
 
+**Publishing is currently broken and must not be run.** `supabase/migrations/202608030002_curriculum_releases.sql:47-52`
+still declares `content_lessons.concept_title`, `concept_lede`, `try_hint`, and `preview_caption`
+`NOT NULL`. Those fields belonged to the retired preset-based lesson shape and have no equivalent
+in the current stage-based `CourseLesson` (see `src/data/course/types.ts`), so any payload built
+from current content omits them and `publish_course_release` fails its `NOT NULL` constraints. Do
+not run `npm run content:publish` until a migration adds the stage schema
+(`content_lesson_stages` or equivalent) and drops those retired `NOT NULL` columns. The bundled,
+on-device curriculum described in
+[`docs/data/local-curriculum.md`](local-curriculum.md) is unaffected — this only blocks the remote
+path this document describes below.
+
 This document covers the remote publishing layer on top of the local curriculum pipeline
 described in [`docs/data/local-curriculum.md`](local-curriculum.md): how an authored, checksummed
 release gets from `content/*.json` into the `content_releases` tables in Supabase, how a device

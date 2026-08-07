@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AppIcon } from "./app-icon";
 import { LessonCompletionSheet } from "./lesson-completion-sheet";
 import { ShaderSandbox } from "./shader-sandbox";
+import { StageSourceView } from "./stage-source-view";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import type { CourseLesson } from "../data/course/types";
 
@@ -168,6 +169,8 @@ export function LessonWorkspace({
 
             <View style={styles.workspace}>
               <ShaderSandbox height={200} source={stage.source} />
+
+              <StageSourceView source={stage.source} />
 
               <View style={styles.stageBar}>
                 <Pressable

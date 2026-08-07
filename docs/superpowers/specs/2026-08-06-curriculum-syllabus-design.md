@@ -60,17 +60,23 @@ lesson format has been read by a real learner on a real device.
 ```
 Lesson
 ├── title, position
-├── intro          60–100 words: what this is for, why it matters
+├── intro          60+ words: what this is for, why it matters
 ├── stages[3–5]
 │   ├── title      e.g. "Threshold it into an edge"
-│   ├── body       60–120 words explaining this stage
+│   ├── body       60+ words explaining this stage
 │   └── source     a complete, runnable mainImage body
-├── takeaway       30–50 words: the thing to remember
+├── takeaway       30+ words: the thing to remember
 └── tryThis?       optional prompt. No target, no solution, no check.
 ```
 
-A lesson therefore runs **roughly 400–700 words plus 3–5 real shaders**, against the old average of
-~165 words. The depth fix is a number, not an aspiration.
+A lesson therefore runs **400+ words plus 3–5 real shaders**, against the old average of ~165 words.
+The depth fix is a number, not an aspiration.
+
+These are floors, not ceilings, and deliberately so. The old curriculum's defect was thinness —
+14 lessons averaging ~165 words that never showed a complete runnable shader — and a floor is what
+stops that recurring. A stated ceiling on top of it would have been arbitrary: nothing about teaching
+a concept well gets worse because the explanation ran a bit longer than a word count guessed in
+advance. Write to the length the explanation actually needs; the validator enforces only the floor.
 
 Three to five stages is a rule, not a preference: a lesson that seems to need six is teaching two
 things and should be split. A lesson that needs only two is probably a stage of its neighbour.
@@ -267,7 +273,8 @@ Because the app is pre-release with no installs, `minimumAppVersion` gating and 
 - No lesson uses a technique a later lesson introduces.
 - Every technique the old course taught has a home, plus randomness and noise, `fwidth`
   antialiasing, `clamp`, and a complete runnable program.
-- Word targets met per lesson: intro 60–100, each stage body 60–120, takeaway 30–50.
+- Word floors met per lesson: intro 60+, each stage body 60+, takeaway 30+ (floors, not ceilings —
+  see Lesson Anatomy).
 - Modules 8–11 present as `planned` with topic lists drawn from real learning goals.
 
 ## Technical References
