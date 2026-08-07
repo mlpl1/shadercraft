@@ -46,6 +46,166 @@
           "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(uv.x, uv.y, 0.22, 1.0);"
         }
       ]
+    },
+    {
+      "id": "from-pixels-to-uv",
+      "moduleId": "fragments-and-coordinates",
+      "position": 2,
+      "title": "From pixels to UV",
+      "shortTitle": "Pixels to UV",
+      "intro": "Lesson 1 divided fragCoord by iResolution.xy without asking what either side of that division actually contains. This lesson slows down on that one line: which corner of the screen is (0, 0), why iResolution is a vec3 instead of a vec2, and why uv survives a phone rotating from portrait to landscape when a raw pixel count does not. It also flags a naming mismatch you will meet immediately outside this app: plenty of shader code calls this uniform u_resolution and declares it as a vec2.",
+      "takeaway": "iResolution is a vec3 whose .xy holds real pixel width and height; dividing fragCoord by it, not by a guessed number, is what lets a gradient survive resizing or rotation. Elsewhere the same uniform is often called u_resolution and declared as a vec2, so code written against it needs .xy appended wherever it appears here.",
+      "tryThis": "Remove the .xy from the divisor in the last stage and read the compile error. What type mismatch is the driver complaining about?",
+      "stages": [
+        {
+          "id": "which-corner-is-home",
+          "position": 1,
+          "title": "Which corner is home",
+          "body": "Green here is driven only by uv.y, so watch it rather than the fixed red and blue. It is dark, almost black-green, at the bottom of the screen, and climbs to a bright green at the top. That tells you where (0, 0) lives: fragCoord, and therefore uv, starts at the bottom-left corner and grows upward and rightward. Many UI frameworks and image formats put the origin at the top-left instead, with y growing downward, so a gradient ported from one of those without adjustment renders upside down here even though every number in it is unchanged.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(0.12, uv.y, 0.35, 1.0);"
+        },
+        {
+          "id": "resolution-xy-vs-z",
+          "position": 2,
+          "title": "iResolution.xy versus iResolution.z",
+          "body": "iResolution is a vec3, not the vec2 you might expect from 'a width and a height'. Its .xy holds the real pixel dimensions you already divide by; .z is the pixel aspect ratio, a Shadertoy convention for hardware whose pixels are not square, and it is always 1.0 in this sandbox. Subtracting 1.0 from it leaves blue permanently at zero here, proving the point: on a platform where pixels really were non-square, that same line would shift blue away from zero. Because iResolution is a vec3, dividing a vec2 like fragCoord by the whole thing rather than by iResolution.xy is not just wrong, it does not compile at all.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat pixelAspect = iResolution.z;\nfragColor = vec4(uv.x, uv.y, pixelAspect - 1.0, 1.0);"
+        },
+        {
+          "id": "gradient-survives-rotation",
+          "position": 3,
+          "title": "A gradient that survives rotation",
+          "body": "This diagonal blend runs from near-black in the bottom-left corner to near-white in the top-right, because uv.x and uv.y are each already a fraction from 0 to 1 of their own axis before they are added and halved. Rotate the phone from portrait to landscape and iResolution.xy swaps its width and height, but the corners stay the corners: bottom-left is still 0, top-right is still 1, so the image reflows correctly without the shader being recompiled. Compare that with Lesson 1's raw fragCoord.x / 400.0: that divisor was a guess baked into the shader, so the same rotation would change how far across the screen the gradient reaches, sometimes clipping to solid colour before the edge.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfragColor = vec4(diagonal, diagonal, 0.4, 1.0);"
+        },
+        {
+          "id": "naming-elsewhere-u-resolution",
+          "position": 4,
+          "title": "The same idea, other names",
+          "body": "Plenty of shader code you will read outside this app, including tutorials like The Book of Shaders, declares this uniform as u_resolution and gives it type vec2 rather than vec3. Their normalising line often reads gl_FragCoord.xy / u_resolution.xy, where the trailing .xy is a harmless no-op swizzle on an already-two-component value. Paste that convention into this sandbox unchanged and it fails: u_resolution does not exist here, and iResolution cannot stand in for it directly because iResolution is a vec3. Anywhere their code uses the bare uniform expecting two components, you must write iResolution.xy explicitly, the same swizzle Lesson 1 introduced, now doing double duty as a translation between naming conventions.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(uv.x, uv.y, 0.5, 1.0);"
+        }
+      ]
+    },
+    {
+      "id": "centre-and-aspect",
+      "moduleId": "fragments-and-coordinates",
+      "position": 3,
+      "title": "Centre and aspect",
+      "shortTitle": "Centre & aspect",
+      "intro": "Every stage so far has measured position from a corner, which makes distance from the middle of the screen awkward to express and makes anything meant to look round secretly depend on the screen's proportions. This lesson remaps uv from a 0 to 1 range into a −1 to 1 range centred on the middle of the screen, then confronts the cost of treating a non-square screen as if it were square: a shape meant to be round comes out stretched. length() appears here strictly as a ruler, to measure that stretch, not to draw a shape.",
+      "takeaway": "Doubling uv and subtracting one centres the origin on the middle of the screen instead of a corner. On a non-square screen that origin is still correct, but a length()-based radial gradient is elliptical until x is scaled by iResolution.x / iResolution.y, after which the same measurement reads as a true circle centred at exactly (0, 0).",
+      "tryThis": "Try dividing p.y by the aspect ratio instead of multiplying p.x. Does the circle still come out round, and where does it sit on screen?",
+      "stages": [
+        {
+          "id": "remap-to-centred",
+          "position": 1,
+          "title": "Remap to centred coordinates",
+          "body": "Doubling uv and subtracting one turns a 0-to-1 range into a −1-to-1 range: at the exact centre of the screen p is (0, 0); it is negative toward the bottom and left, positive toward the top and right. Watch what the render actually shows, though: the left and bottom halves look like flat, solid colour rather than a smooth gradient into negative numbers. p really is negative there — the maths is correct — but the framebuffer clamps every colour channel to 0 before it reaches your eyes, so a negative red or green simply displays as the darkest value the screen can show, hiding the sign entirely.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\nfragColor = vec4(p.x, p.y, 0.5, 1.0);"
+        },
+        {
+          "id": "radial-gradient-is-an-ellipse",
+          "position": 2,
+          "title": "A circle-ish gradient, until you check",
+          "body": "length(p) here is used purely as a ruler — it measures how far a point is from the centre, it does not draw a shape, and Module 1 has no shape functions yet. On a square screen the resulting grey rings look like circles. On a real phone screen, which is taller than it is wide, they do not: p.x and p.y are each normalised against a different physical dimension, width for one axis and height for the other, so a fixed step in p covers more real pixels along the wider dimension than the narrower one. The rings you are looking at are ellipses, stretched along whichever screen dimension is larger, even though the code that produced them never mentions an ellipse.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\nfloat distanceFromCentre = length(p);\nfragColor = vec4(distanceFromCentre, distanceFromCentre, distanceFromCentre, 1.0);"
+        },
+        {
+          "id": "fix-the-aspect-ratio",
+          "position": 3,
+          "title": "Fix it: scale x by the aspect ratio",
+          "body": "One new line fixes the ellipse from the previous stage: multiplying p.x by iResolution.x / iResolution.y stretches the x axis by exactly the screen's width-to-height ratio before length() ever measures it. length() is still only a ruler here, not a shape — the correction changes what unit the ruler is marked in, not what it draws. On a screen taller than it is wide that ratio is less than one, so p.x is compressed rather than expanded, matching how much less physical width there is to work with per unit of p compared to height. The grey rings now read as genuine circles, the same on a phone in portrait or landscape.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\nfloat distanceFromCentre = length(p);\nfragColor = vec4(distanceFromCentre, distanceFromCentre, distanceFromCentre, 1.0);"
+        },
+        {
+          "id": "confirm-the-centre",
+          "position": 4,
+          "title": "Confirm the centre is (0, 0)",
+          "body": "This is stage one's colour-coded render again, with the same aspect correction from the previous stage applied. Compare the two: the aspect fix reshapes how quickly colour changes as you move away from the middle, but it does not move the middle itself. At the exact centre pixel, uv is (0.5, 0.5), so p starts as (0, 0) before the correction ever runs, and multiplying zero by any aspect ratio is still zero. That is the property worth confirming: aspect correction changes the surrounding falloff, never the origin. Anything you build on top of p — a ring, a stripe, a pattern radiating outward — can rely on the centre staying exactly where it was.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\nfragColor = vec4(p.x, p.y, 0.5, 1.0);"
+        }
+      ]
+    },
+    {
+      "id": "time-as-an-input",
+      "moduleId": "fragments-and-coordinates",
+      "position": 4,
+      "title": "Time as an input",
+      "shortTitle": "Time as input",
+      "intro": "Every stage in this course so far has rendered one still frame; this lesson introduces the one uniform that changes on its own without any input from the learner. iTime counts seconds since the sandbox started, and feeding it into colour is deceptively easy to get wrong: used directly it only ever grows, so a naive shader gets brighter forever and then sits stuck at white. This lesson works through turning that endless ramp into a genuinely bounded, controllable animation, and explains why counting seconds rather than counting frames is what keeps the result looking identical on every screen.",
+      "takeaway": "iTime only ever increases, so feeding it straight into colour saturates and sticks. Wrapping it in sin() turns it into a bounded, repeating signal, and multiplying the argument to sin() — not the result — changes how fast that cycle repeats. Elapsed seconds, not a per-frame counter, is what keeps motion the same speed on a 60Hz and a 120Hz screen.",
+      "tryThis": "Change the multiplier in the last stage to a negative number. Which direction does the oscillation reverse, and does the period change?",
+      "stages": [
+        {
+          "id": "time-climbs-and-clips",
+          "position": 1,
+          "title": "iTime, driven straight into colour",
+          "body": "iTime is seconds since the sandbox started, and it never resets or wraps — it just keeps counting up for as long as this screen stays open. Feeding it straight into every colour channel makes the whole frame start black and get linearly brighter, reaching pure white after about ten seconds. After that it stays white, not because the maths stopped — iTime keeps climbing — but because the screen can only display values from 0 to 1, and anything above 1 clamps to the same white as exactly 1. This is the trap with using iTime directly: it is unbounded, so anything meant to animate indefinitely needs a bounded function of it, not iTime itself.",
+          "source": "float brightness = iTime * 0.1;\nfragColor = vec4(brightness, brightness, brightness, 1.0);"
+        },
+        {
+          "id": "sin-of-time",
+          "position": 2,
+          "title": "sin(iTime): bounded, not straight-line",
+          "body": "sin(iTime) oscillates between −1 and 1 forever, no matter how large iTime grows, which is exactly the bounded behaviour the previous stage lacked. Multiplying by 0.5 and adding 0.5 is the same remap Lesson 3 used in reverse to build p from uv; here it takes sin's −1-to-1 output and lands it inside the 0-to-1 range colour channels actually need, instead of clipping the negative half to black the way an unmapped signal would. A full cycle — dark, bright, dark again — takes about 6.28 seconds, because iTime is measured in the same units sin already expects: radians' worth of seconds, not degrees or an arbitrary frame count.",
+          "source": "float brightness = sin(iTime) * 0.5 + 0.5;\nfragColor = vec4(brightness, brightness, brightness, 1.0);"
+        },
+        {
+          "id": "multiply-time-for-speed",
+          "position": 3,
+          "title": "Change speed: multiply the input, not the output",
+          "body": "Multiplying inside sin's argument compresses time itself before the wave ever sees it: at 3.0, the shader lives through three seconds of oscillation for every one second of iTime, so a cycle that took 6.28 seconds now takes about 2.09. Compare that with multiplying the brightness value sin produces afterward, outside the function — that would change how bright the peaks and troughs are, not how often they occur. Confusing those two multiplications is an easy mistake to make because both are innocuous-looking * operators sitting near sin, but one scales speed and the other scales contrast, and only one of them is what 'faster' actually means here.",
+          "source": "float brightness = sin(iTime * 3.0) * 0.5 + 0.5;\nfragColor = vec4(brightness, brightness, brightness, 1.0);"
+        },
+        {
+          "id": "seconds-not-frames",
+          "position": 4,
+          "title": "Elapsed seconds, not a frame count",
+          "body": "iTime measures wall-clock seconds, not how many frames have been drawn, and that distinction matters the moment two devices differ. A shader that instead incremented a counter once per rendered frame would animate twice as fast on a 120Hz screen as on a 60Hz one, running the identical code, and would visibly stutter if either device dropped frames under load. Because this blue channel is driven by sin(iTime * 2.0), the oscillation takes the same real-world duration everywhere the sandbox runs, regardless of frame rate. You will also meet u_time, used by the same convention as u_resolution, and iGlobalTime, an older Shadertoy uniform iTime replaced — both name the identical idea of elapsed seconds.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat brightness = sin(iTime * 2.0) * 0.5 + 0.5;\nfragColor = vec4(uv.x, uv.y, brightness, 1.0);"
+        }
+      ]
+    },
+    {
+      "id": "reading-shaders-from-elsewhere",
+      "moduleId": "fragments-and-coordinates",
+      "position": 5,
+      "title": "Reading shaders from elsewhere",
+      "shortTitle": "Reading shaders",
+      "intro": "Every previous lesson taught maths; this one teaches the tooling around it, because the sandbox has been quietly hiding four things from you since Lesson 1: a precision declaration, two uniform declarations, and the main() that actually runs. That hiding is deliberate scaffolding, not the whole truth, and a learner who copies a body from this app into a bare WebGL page or pastes foreign shader code in here without knowing what changed will hit confusing compile errors. This lesson walks the body you write, the complete program it becomes, the same idea under different uniform names, and what changes if the target is GLSL ES 3.00 instead of 1.00.",
+      "takeaway": "Every stage's source has always been just the body of mainImage; the app supplies precision, the uniform declarations, and a main() that calls your body and writes gl_FragColor for you. Reading real shader code elsewhere means recognising that wrapper even when it uses u_ names instead of i, or targets GLSL ES 3.00 with its own out-variable colour and #version line.",
+      "tryThis": "Take the shader from stage one, paste only its body into a fresh WebGL page with your own wrapper, and see what you have to add for it to compile there.",
+      "stages": [
+        {
+          "id": "the-body-you-write",
+          "position": 1,
+          "title": "The body you write",
+          "body": "This body is nothing new: it is Lesson 3's aspect-corrected centring, remapped back into 0-to-1 so it displays as colour instead of clamping away its negative half. What matters this lesson is not the maths but the shape of the file — four lines, no precision line, no uniform declarations, no function signature, no main(), and definitely no gl_FragColor. Every stage in every lesson you have read so far has been exactly this: the inside of one function, handed to a sandbox that supplies everything around it. The next stage names precisely what that surrounding scaffolding contains and why it exists.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\nfragColor = vec4(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5, 0.5, 1.0);"
+        },
+        {
+          "id": "the-whole-program",
+          "position": 2,
+          "title": "The whole program it compiles into",
+          "body": "Here is the complete program your body actually becomes, exactly as docs/data/shader-sandbox.md describes it: precision highp float; uniform vec3 iResolution; uniform float iTime; void mainImage(out vec4 fragColor, in vec2 fragCoord) { — your lines land here, unindented in the real file — } void main() { vec4 shadercraftColor = vec4(0.0, 0.0, 0.0, 1.0); mainImage(shadercraftColor, gl_FragCoord.xy); gl_FragColor = shadercraftColor; }. The precision line tells the GPU how much floating-point accuracy to spend; the two uniform lines are the only two values that exist beyond what you compute yourself; mainImage is the function every stage's source has secretly been the body of all along; and main() is what a GLSL program must define to run at all, calling your body through a local variable before writing the result to the built-in gl_FragColor, because passing that built-in straight through as an out parameter is rejected by some drivers.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(uv.x, uv.y, 0.5, 1.0);"
+        },
+        {
+          "id": "the-same-shader-elsewhere",
+          "position": 3,
+          "title": "The same shader, u_ names",
+          "body": "Plenty of shader tooling outside this app, including The Book of Shaders and glslCanvas, wires up the same two ideas under different names: u_resolution instead of iResolution, declared as a plain vec2 rather than a vec3, and u_time instead of iTime. Their version of stage one's normalising line reads vec2 uv = gl_FragCoord.xy / u_resolution.xy — no .xy swap needed on the right-hand side, because u_resolution is already two components, unlike our vec3. The maths taught across this module carries over untouched; only the uniform names and the vec2-versus-vec3 declaration change. Recognising u_resolution and u_time as the same concepts as iResolution.xy and iTime is what lets you read a tutorial written for a different sandbox without relearning anything.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(uv.x, uv.y, 0.4, 1.0);"
+        },
+        {
+          "id": "under-glsl-es-300",
+          "position": 4,
+          "title": "What changes under GLSL ES 3.00",
+          "body": "GLSL ES 3.00 changes the wrapper this lesson has been describing, not the maths this module taught. A 3.00 program opens with a #version 300 es directive, which this sandbox's wrapper never writes because it targets 1.00 implicitly. Fragment output stops being the built-in gl_FragColor and becomes a variable you declare yourself, typically out vec4 fragColor; at the top level — the same name Shadertoy's mainImage convention already uses for its out parameter, which is not a coincidence. Sampler reads switch from texture2D to a single overloaded texture call. This sandbox stays on 1.00 deliberately: docs/data/shader-sandbox.md notes that some older Android devices do not reliably support WebGL2 features, and a learner on one of those phones deserves a working preview over a marginally newer syntax.",
+          "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(uv.y, uv.x, 0.6, 1.0);"
+        }
+      ]
     }
   ]
 }

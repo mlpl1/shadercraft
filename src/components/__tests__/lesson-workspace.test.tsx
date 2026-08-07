@@ -117,7 +117,7 @@ describe("lesson workspace", () => {
     expect(screen.getByText(fragmentShaderLesson.intro)).toBeTruthy();
     expect(screen.getByText(fragmentShaderLesson.shortTitle)).toBeTruthy();
     expect(screen.getByText("Module 01")).toBeTruthy();
-    expect(screen.getByText("1 of 1")).toBeTruthy();
+    expect(screen.getByText(`1 of ${fragmentsModule.lessons.length}`)).toBeTruthy();
   });
 
   it("opens on the first stage", async () => {
@@ -192,7 +192,9 @@ describe("lesson workspace", () => {
   });
 
   test("shows the completion sheet after a successful completion", async () => {
-    const { props } = await renderWorkspace();
+    // Explicitly the last lesson in the module, so completing it offers "Return to course" rather
+    // than "Continue to next lesson" — independent of how many lessons the module happens to carry.
+    const { props } = await renderWorkspace({ lessonIndex: fragmentsModule.lessons.length - 1 });
 
     await fireEvent.press(screen.getByText("Mark lesson complete"));
 

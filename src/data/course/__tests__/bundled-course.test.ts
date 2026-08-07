@@ -11,10 +11,10 @@ const publishedLessons = release.modules
 it("contains the complete current curriculum", () => {
   expect(release.modules).toHaveLength(11);
   expect(release.modules.filter((module) => module.status === "published")).toHaveLength(1);
-  expect(release.modules.flatMap((module) => module.lessons)).toHaveLength(1);
+  expect(release.modules.flatMap((module) => module.lessons)).toHaveLength(5);
   expect(
     release.modules.flatMap((module) => module.lessons.flatMap((lesson) => lesson.stages)),
-  ).toHaveLength(4);
+  ).toHaveLength(20);
   expect(release.modules[1]).toMatchObject({
     id: "shaping-values",
     status: "planned",
@@ -22,8 +22,16 @@ it("contains the complete current curriculum", () => {
   });
 });
 
-it("authors the only published lesson with four ordered stages carrying real source", () => {
-  expect(publishedLessons).toHaveLength(1);
+it("authors Module 1's five published lessons in order, each with real source", () => {
+  expect(publishedLessons).toHaveLength(5);
+
+  expect(publishedLessons.map(({ id }) => id)).toEqual([
+    "what-a-fragment-shader-is",
+    "from-pixels-to-uv",
+    "centre-and-aspect",
+    "time-as-an-input",
+    "reading-shaders-from-elsewhere",
+  ]);
 
   const [lesson] = publishedLessons;
   expect(lesson.id).toBe("what-a-fragment-shader-is");
@@ -34,9 +42,14 @@ it("authors the only published lesson with four ordered stages carrying real sou
     "Both axes at once",
   ]);
   expect(lesson.stages[0].source).toContain("vec4(0.85");
+
+  for (const publishedLesson of publishedLessons) {
+    expect(publishedLesson.stages.length).toBeGreaterThanOrEqual(3);
+    expect(publishedLesson.stages.length).toBeLessThanOrEqual(5);
+  }
 });
 
-it("carries the optional tryThis prompt on the only authored lesson", () => {
+it("carries the optional tryThis prompt on the first authored lesson", () => {
   expect(publishedLessons[0].tryThis).toBe(
     "Swap uv.x and uv.y in the last stage. Which corner turns yellow now?",
   );
