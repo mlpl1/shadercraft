@@ -48,6 +48,38 @@ function findLesson(lessonId: string): CourseLesson {
 const fragmentsModule = findModule("fragments-and-coordinates");
 const fragmentShaderLesson = findLesson("what-a-fragment-shader-is");
 
+/**
+ * A second lesson, distinct from the bundled fixture, purely to exercise switching lessons while
+ * a later stage is open. `LessonWorkspace` gets no `key` from its caller (see `src/app/lesson.tsx`,
+ * which advances lessons via `router.replace` on the same route), so its instance survives a lesson
+ * change and any state that isn't explicitly reset per-lesson would leak across lessons.
+ */
+const otherLesson: CourseLesson = {
+  id: "other-lesson",
+  moduleId: fragmentsModule.id,
+  position: 2,
+  title: "Another lesson",
+  shortTitle: "Another lesson",
+  intro: "A second lesson used only to prove stage state resets when the lesson prop changes.",
+  takeaway: "Switching lessons must not carry over stage position from the previous lesson.",
+  stages: [
+    {
+      id: "other-lesson-stage-1",
+      position: 1,
+      title: "Other lesson, stage one",
+      body: "The first stage of the other lesson.",
+      source: "fragColor = vec4(0.1, 0.2, 0.3, 1.0);",
+    },
+    {
+      id: "other-lesson-stage-2",
+      position: 2,
+      title: "Other lesson, stage two",
+      body: "The second stage of the other lesson.",
+      source: "fragColor = vec4(0.4, 0.5, 0.6, 1.0);",
+    },
+  ],
+};
+
 async function renderWorkspace(overrides: Partial<LessonWorkspaceProps> = {}) {
   const props: LessonWorkspaceProps = {
     completed: false,
@@ -136,6 +168,21 @@ describe("lesson workspace", () => {
 
     expect(screen.getByText(/One function, run once per pixel/)).toBeTruthy();
     expect(screen.getByText(/Swap uv.x and uv.y/)).toBeTruthy();
+  });
+
+  it("resets to the first stage when the lesson prop changes", async () => {
+    const { props, view } = await renderWorkspace();
+
+    await fireEvent.press(screen.getByLabelText("Next stage"));
+    await fireEvent.press(screen.getByLabelText("Next stage"));
+    expect(screen.getByText("Stage 3 of 4")).toBeTruthy();
+
+    // Same component instance, new `lesson` prop — exactly what `router.replace`-driven lesson
+    // navigation produces, since `LessonWorkspace` is never remounted with a fresh `key`.
+    await view.rerender(<LessonWorkspace {...props} lesson={otherLesson} />);
+
+    expect(screen.getByText("Stage 1 of 2")).toBeTruthy();
+    expect(screen.getByTestId("sandbox")).toHaveTextContent(/vec4\(0\.1, 0\.2, 0\.3/);
   });
 
   test("zero-pads the module numeral in the header", async () => {

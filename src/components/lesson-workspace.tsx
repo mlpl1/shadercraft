@@ -29,6 +29,7 @@ type FailedAction = "complete" | "undo";
 type WorkspaceState = {
   /** The lesson the rest of this state belongs to, so switching lesson starts fresh. */
   lessonId: string;
+  stageIndex: number;
   failedAction: FailedAction | null;
   isCompletionVisible: boolean;
 };
@@ -38,6 +39,7 @@ function freshState(lesson: CourseLesson): WorkspaceState {
     failedAction: null,
     isCompletionVisible: false,
     lessonId: lesson.id,
+    stageIndex: 0,
   };
 }
 
@@ -78,9 +80,8 @@ export function LessonWorkspace({
     });
   };
 
-  const [stageIndex, setStageIndex] = useState(0);
   const stages = byPosition(lesson.stages);
-  const stage = stages[stageIndex] ?? stages[0];
+  const stage = stages[workspace.stageIndex] ?? stages[0];
 
   const moduleNumeral = `Module ${String(modulePosition).padStart(2, "0")}`;
   const isFinalLesson = lessonIndex >= lessonCount - 1;
@@ -172,23 +173,29 @@ export function LessonWorkspace({
                 <Pressable
                   accessibilityLabel="Previous stage"
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: stageIndex === 0 }}
-                  disabled={stageIndex === 0}
-                  onPress={() => setStageIndex((index) => Math.max(0, index - 1))}
+                  accessibilityState={{ disabled: workspace.stageIndex === 0 }}
+                  disabled={workspace.stageIndex === 0}
+                  onPress={() =>
+                    update((previous) => ({ stageIndex: Math.max(0, previous.stageIndex - 1) }))
+                  }
                 >
                   <Text style={styles.stageNav}>Back</Text>
                 </Pressable>
 
                 <Text style={styles.stageCount}>
-                  Stage {stageIndex + 1} of {stages.length}
+                  Stage {workspace.stageIndex + 1} of {stages.length}
                 </Text>
 
                 <Pressable
                   accessibilityLabel="Next stage"
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: stageIndex === stages.length - 1 }}
-                  disabled={stageIndex === stages.length - 1}
-                  onPress={() => setStageIndex((index) => Math.min(stages.length - 1, index + 1))}
+                  accessibilityState={{ disabled: workspace.stageIndex === stages.length - 1 }}
+                  disabled={workspace.stageIndex === stages.length - 1}
+                  onPress={() =>
+                    update((previous) => ({
+                      stageIndex: Math.min(stages.length - 1, previous.stageIndex + 1),
+                    }))
+                  }
                 >
                   <Text style={styles.stageNav}>Next</Text>
                 </Pressable>
