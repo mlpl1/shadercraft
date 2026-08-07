@@ -58,10 +58,7 @@ The existing suite mocks `expo-gl` with a plain `View`, so `onContextCreate` nev
 
 ```tsx
 describe("ShaderSandbox render loop", () => {
-  const drawCounts: Array<() => number> = [];
-
   beforeEach(() => {
-    drawCounts.length = 0;
     jest.spyOn(globalThis, "requestAnimationFrame").mockImplementation(() => 1 as never);
   });
 
