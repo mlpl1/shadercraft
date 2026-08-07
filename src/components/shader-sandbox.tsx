@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 
@@ -11,6 +11,14 @@ type ShaderSandboxProps = {
   /** A `mainImage` body. The wrapper is added by `wrapMainImageBody`. */
   source: string;
   paused?: boolean;
+  /**
+   * `false` stops the render loop entirely — no animation frame, no draw, no `endFrameEXP`. Used for
+   * a preview scrolled off-screen, where drawing is pure waste.
+   *
+   * Deliberately distinct from `paused`, which freezes `iTime` but keeps drawing so a visible
+   * preview holds its last frame rather than going blank.
+   */
+  active?: boolean;
   /** Increment to reset `iTime` to zero without remounting. */
   restartToken?: number;
   height?: number;
@@ -20,6 +28,7 @@ type ShaderSandboxProps = {
 export function ShaderSandbox({
   source,
   paused = false,
+  active = true,
   restartToken = 0,
   height = DEFAULT_HEIGHT,
   onCompileResult,
@@ -29,6 +38,9 @@ export function ShaderSandbox({
   const mountedRef = useRef(true);
   const startedAtRef = useRef(0);
   const pausedRef = useRef(paused);
+  const activeRef = useRef(active);
+  /** Set once the context exists, so the effect below can restart a loop that stopped itself. */
+  const renderRef = useRef<(() => void) | null>(null);
   const sourceRef = useRef(source);
   const onCompileResultRef = useRef(onCompileResult);
   const [hasRendered, setHasRendered] = useState(false);
@@ -37,6 +49,17 @@ export function ShaderSandbox({
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
+
+  useEffect(() => {
+    const wasActive = activeRef.current;
+    activeRef.current = active;
+
+    // The loop stops scheduling itself when inactive, so becoming active again has to restart it.
+    // The null check on `frameRef` is what stops a re-render with unchanged `active` double-scheduling.
+    if (active && !wasActive && frameRef.current === null) {
+      renderRef.current?.();
+    }
+  }, [active]);
 
   useEffect(() => {
     onCompileResultRef.current = onCompileResult;
@@ -67,7 +90,11 @@ export function ShaderSandbox({
     };
   }, []);
 
-  const createContext = (gl: ExpoWebGLRenderingContext) => {
+  // Memoized so its identity is stable across re-renders (e.g. the one triggered by
+  // `setHasRendered`). `GLView` only ever creates one native surface per mount, but a test double
+  // that fires `onContextCreate` from a `useEffect` keyed on this callback would otherwise re-fire —
+  // and re-create the render loop — on every unrelated re-render.
+  const createContext = useCallback((gl: ExpoWebGLRenderingContext) => {
     const host = new ShaderProgramHost(gl);
     hostRef.current = host;
     startedAtRef.current = globalThis.performance.now();
@@ -83,6 +110,12 @@ export function ShaderSandbox({
     const render = () => {
       if (!mountedRef.current) return;
 
+      if (!activeRef.current) {
+        // Stop without rescheduling. `frameRef` going null is what the effect above tests.
+        frameRef.current = null;
+        return;
+      }
+
       if (!pausedRef.current) {
         frozenSeconds = (globalThis.performance.now() - startedAtRef.current) / 1000;
       }
@@ -93,8 +126,9 @@ export function ShaderSandbox({
       frameRef.current = requestAnimationFrame(render);
     };
 
-    render();
-  };
+    renderRef.current = render;
+    if (activeRef.current) render();
+  }, []);
 
   return (
     <View style={[styles.container, { height }]} testID="shader-sandbox">
