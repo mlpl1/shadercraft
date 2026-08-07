@@ -175,7 +175,7 @@ Mocking `ShaderSandbox` with a view echoing its props, as the suite already does
 - Block 0 mounts a sandbox before any scroll occurs.
 - Simulated layout plus scroll mounts a later block.
 - A block scrolled back out **stays** mounted.
-- An off-screen block receives the inactive prop, a visible one does not.
+- An off-screen block receives `active={false}`, a visible one `active={true}`.
 - Switching lessons resets the mounted set.
 - "Stage N of M" and the prev/next controls no longer exist.
 
