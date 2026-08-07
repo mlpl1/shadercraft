@@ -44,7 +44,7 @@ export function loadAuthoredModules(): CourseModule[] {
 export function buildBundledRelease(): CourseRelease {
   const modules = loadAuthoredModules();
   const releaseBody = {
-    id: "bundled-2026-08-06",
+    id: "bundled-2026-08-07",
     schemaVersion: 1 as const,
     minimumAppVersion: "1.0.0",
     modules,

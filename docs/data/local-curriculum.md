@@ -192,7 +192,7 @@ After editing any `content/module-*.json` file:
 ## 6. Release ids and checksums
 
 `scripts/content/build-course.ts` compiles the modules into a release with a fixed `id` (currently
-`bundled-2026-08-06`) and a SHA-256 `checksum` over the canonicalized content. `installBundledRelease`
+`bundled-2026-08-07`) and a SHA-256 `checksum` over the canonicalized content. `installBundledRelease`
 (`src/data/database/seed.ts`) hands that pair to `ReleaseInstaller.stageAndActivate`
 (`src/data/course/release-installer.ts`) — the same installer downloaded remote releases go
 through — with checksum verification skipped (it is already verified at build time by

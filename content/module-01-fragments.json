@@ -61,7 +61,7 @@
           "id": "which-corner-is-home",
           "position": 1,
           "title": "Which corner is home",
-          "body": "Green here is driven only by uv.y, so watch it rather than the fixed red and blue. It is dark, almost black-green, at the bottom of the screen, and climbs to a bright green at the top. That tells you where (0, 0) lives: fragCoord, and therefore uv, starts at the bottom-left corner and grows upward and rightward. Many UI frameworks and image formats put the origin at the top-left instead, with y growing downward, so a gradient ported from one of those without adjustment renders upside down here even though every number in it is unchanged.",
+          "body": "Green here is driven only by uv.y, so watch it rather than the fixed red and blue. At the bottom of the screen it renders a dark purple — red and blue sit at their fixed 0.12 and 0.35, and green is pinned at zero there — and it climbs to a bright green as uv.y approaches one and green overtakes the other two channels. That tells you where (0, 0) lives: fragCoord, and therefore uv, starts at the bottom-left corner and grows upward and rightward. Many UI frameworks and image formats put the origin at the top-left instead, with y growing downward, so a gradient ported from one of those without adjustment renders upside down here even though every number in it is unchanged.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(0.12, uv.y, 0.35, 1.0);"
         },
         {
@@ -75,7 +75,7 @@
           "id": "gradient-survives-rotation",
           "position": 3,
           "title": "A gradient that survives rotation",
-          "body": "This diagonal blend runs from near-black in the bottom-left corner to near-white in the top-right, because uv.x and uv.y are each already a fraction from 0 to 1 of their own axis before they are added and halved. Rotate the phone from portrait to landscape and iResolution.xy swaps its width and height, but the corners stay the corners: bottom-left is still 0, top-right is still 1, so the image reflows correctly without the shader being recompiled. Compare that with Lesson 1's raw fragCoord.x / 400.0: that divisor was a guess baked into the shader, so the same rotation would change how far across the screen the gradient reaches, sometimes clipping to solid colour before the edge.",
+          "body": "This diagonal blend runs from a dark navy blue in the bottom-left corner to a bright, pale yellow in the top-right, because uv.x and uv.y are each already a fraction from 0 to 1 of their own axis before they are added and halved; the fixed 0.4 in blue is what keeps either corner from reading as pure black or pure white. Rotate the phone from portrait to landscape and iResolution.xy swaps its width and height, but the corners stay the corners: bottom-left is still 0, top-right is still 1, so the image reflows correctly without the shader being recompiled. Compare that with Lesson 1's raw fragCoord.x / 400.0: that divisor was a guess baked into the shader, so the same rotation would change how far across the screen the gradient reaches, sometimes clipping to solid colour before the edge.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfragColor = vec4(diagonal, diagonal, 0.4, 1.0);"
         },
         {
@@ -101,7 +101,7 @@
           "id": "remap-to-centred",
           "position": 1,
           "title": "Remap to centred coordinates",
-          "body": "Doubling uv and subtracting one turns a 0-to-1 range into a −1-to-1 range: at the exact centre of the screen p is (0, 0); it is negative toward the bottom and left, positive toward the top and right. Watch what the render actually shows, though: the left and bottom halves look like flat, solid colour rather than a smooth gradient into negative numbers. p really is negative there — the maths is correct — but the framebuffer clamps every colour channel to 0 before it reaches your eyes, so a negative red or green simply displays as the darkest value the screen can show, hiding the sign entirely.",
+          "body": "Doubling uv and subtracting one turns a 0-to-1 range into a −1-to-1 range: at the exact centre of the screen p is (0, 0); it is negative toward the bottom and left, positive toward the top and right. Watch closely what actually renders, because clamping hits each quadrant differently, not each half. Only where both p.x and p.y are negative — the bottom-left quadrant — do red and green both clamp to zero, leaving a flat dark purple, (0, 0, 0.5). The top-left quadrant still shows green climbing as p.y rises above zero, even though red sits pinned at zero there because p.x is negative; the bottom-right quadrant mirrors that, red climbing while green stays pinned at zero. p really is negative everywhere the maths says so — but the framebuffer clamps each colour channel to zero independently, so a region only goes completely still once both of its channels are negative at once.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\nfragColor = vec4(p.x, p.y, 0.5, 1.0);"
         },
         {
