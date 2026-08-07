@@ -42,6 +42,26 @@ function freshState(lesson: CourseLesson): WorkspaceState {
   };
 }
 
+type StageVisibilityState = {
+  /** The lesson this mount/visibility state was computed for, so switching lesson starts fresh. */
+  lessonId: string;
+  /**
+   * Which blocks have a mounted preview, and which are on screen. `mounted` is one-way: a block
+   * that scrolls out keeps its context and only loses its render loop, so scrolling back is free.
+   */
+  mounted: boolean[];
+  visible: boolean[];
+};
+
+function freshVisibility(lesson: CourseLesson, stageCount: number): StageVisibilityState {
+  return {
+    lessonId: lesson.id,
+    // Block 0 mounts unconditionally so an opened lesson is never blank while layout settles.
+    mounted: Array.from({ length: stageCount }, (_stage, index) => index === 0),
+    visible: Array.from({ length: stageCount }, (_stage, index) => index === 0),
+  };
+}
+
 function byPosition<T extends { position: number }>(items: readonly T[]): T[] {
   return [...items].sort((left, right) => left.position - right.position);
 }
@@ -80,15 +100,16 @@ export function LessonWorkspace({
 
   const stages = byPosition(lesson.stages);
 
-  /**
-   * Which blocks have a mounted preview, and which are on screen. `mounted` is one-way: a block that
-   * scrolls out keeps its context and only loses its render loop, so scrolling back is free.
-   */
-  const [visibility, setVisibility] = useState(() => ({
-    // Block 0 mounts unconditionally so an opened lesson is never blank while layout settles.
-    mounted: stages.map((_stage, index) => index === 0),
-    visible: stages.map((_stage, index) => index === 0),
-  }));
+  const [visibilityState, setVisibilityState] = useState<StageVisibilityState>(() =>
+    freshVisibility(lesson, stages.length),
+  );
+  // Reconciled at render time — same idiom as `workspace` above — so a lesson change is never
+  // committed against the previous lesson's mount/visibility booleans. A passive `useEffect` runs
+  // only after that first mismatched render has already committed, which is too late: it would
+  // mount (and then immediately unmount) a real `GLView` for an index that only existed in the old
+  // lesson's stage count.
+  const visibility =
+    visibilityState.lessonId === lesson.id ? visibilityState : freshVisibility(lesson, stages.length);
 
   // Pre-sized so every index is always occupied. React Native gives no ordering guarantee between
   // sibling `onLayout` callbacks, so without this a block that reports before an earlier-index block
@@ -101,13 +122,11 @@ export function LessonWorkspace({
 
   // A new lesson invalidates every measurement. Reusing them would drive mount decisions from the
   // previous lesson's geometry — the same shape of bug as the stage index that used to leak here.
+  // `visibility` itself no longer needs resetting here — it is reconciled at render time above — but
+  // these refs aren't rendered, so a passive effect is the right place for them.
   useEffect(() => {
     boundsRef.current = stages.map(() => ({ top: 0, height: 0 }));
     scrollYRef.current = 0;
-    setVisibility({
-      mounted: stages.map((_stage, index) => index === 0),
-      visible: stages.map((_stage, index) => index === 0),
-    });
   }, [lesson.id, stages.length]);
 
   const recomputeVisibility = useCallback(() => {
@@ -117,24 +136,26 @@ export function LessonWorkspace({
       viewportHeightRef.current,
     );
 
-    setVisibility((previous) => {
-      const mounted = shouldMount.map((next, index) => next || previous.mounted[index] === true);
+    setVisibilityState((previous) => {
+      const base = previous.lessonId === lesson.id ? previous : freshVisibility(lesson, stages.length);
+      const mounted = shouldMount.map((next, index) => next || base.mounted[index] === true);
       // Length-checked first: `.every()` alone only walks the *new* array's indices, so a shorter
       // array (not every block measured yet, or a lesson change mid-flight) would silently ignore
-      // `previous`'s trailing elements — and an empty new array would look vacuously "same" — letting
-      // a genuinely stale `previous` be returned instead of the fresh state.
+      // `base`'s trailing elements — and an empty new array would look vacuously "same" — letting
+      // a genuinely stale `base` be returned instead of the fresh state.
       const sameMounted =
-        mounted.length === previous.mounted.length &&
-        mounted.every((value, index) => value === previous.mounted[index]);
+        mounted.length === base.mounted.length &&
+        mounted.every((value, index) => value === base.mounted[index]);
       const sameVisible =
-        isVisible.length === previous.visible.length &&
-        isVisible.every((value, index) => value === previous.visible[index]);
+        isVisible.length === base.visible.length &&
+        isVisible.every((value, index) => value === base.visible[index]);
 
-      // Returning the previous object tells React to skip the re-render. Without this the component
-      // would re-render on every scroll frame, which is exactly the cost this layout must not add.
-      return sameMounted && sameVisible ? previous : { mounted, visible: isVisible };
+      // Returning `base` unchanged tells React to skip the re-render when nothing moved. Without
+      // this the component would re-render on every scroll frame, which is exactly the cost this
+      // layout must not add.
+      return sameMounted && sameVisible ? base : { lessonId: lesson.id, mounted, visible: isVisible };
     });
-  }, []);
+  }, [lesson, stages.length]);
 
   const moduleNumeral = `Module ${String(modulePosition).padStart(2, "0")}`;
   const isFinalLesson = lessonIndex >= lessonCount - 1;
@@ -229,28 +250,26 @@ export function LessonWorkspace({
               <Text style={styles.lede}>{lesson.intro}</Text>
             </View>
 
-            <View style={styles.stages}>
-              {stages.map((item, index) => (
-                <View
-                  key={item.id}
-                  onLayout={(event) => {
-                    boundsRef.current[index] = {
-                      top: event.nativeEvent.layout.y,
-                      height: event.nativeEvent.layout.height,
-                    };
-                    recomputeVisibility();
-                  }}
-                  testID={`stage-block-${index}`}
-                >
-                  <LessonStageBlock
-                    isMounted={visibility.mounted[index] === true}
-                    isVisible={visibility.visible[index] === true}
-                    position={index + 1}
-                    stage={item}
-                  />
-                </View>
-              ))}
-            </View>
+            {stages.map((item, index) => (
+              <View
+                key={item.id}
+                onLayout={(event) => {
+                  boundsRef.current[index] = {
+                    top: event.nativeEvent.layout.y,
+                    height: event.nativeEvent.layout.height,
+                  };
+                  recomputeVisibility();
+                }}
+                testID={`stage-block-${index}`}
+              >
+                <LessonStageBlock
+                  isMounted={visibility.mounted[index] === true}
+                  isVisible={visibility.visible[index] === true}
+                  position={index + 1}
+                  stage={item}
+                />
+              </View>
+            ))}
 
             <Text style={styles.takeaway}>{lesson.takeaway}</Text>
             {lesson.tryThis !== undefined && <Text style={styles.tryThis}>{lesson.tryThis}</Text>}
@@ -393,9 +412,6 @@ const styles = StyleSheet.create({
     lineHeight: 37,
   },
   lede: { marginTop: Spacing.md, color: Colors.textMuted, fontSize: 15, lineHeight: 23 },
-  stages: {
-    gap: Spacing.xl,
-  },
   takeaway: {
     marginTop: Spacing.xxl,
     color: Colors.textMuted,

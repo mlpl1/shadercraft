@@ -24,7 +24,7 @@ jest.mock("../shader-sandbox", () => {
   };
 });
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import { Alert } from "react-native";
 
 import bundledCourse from "../../../assets/course/bundled-course.json";
@@ -108,8 +108,16 @@ async function renderWorkspace(overrides: Partial<LessonWorkspaceProps> = {}) {
 
 /**
  * The component cannot know any block's position until `onLayout` fires, and no test environment
- * fires it. This supplies plausible geometry — a 600pt viewport over four 400pt blocks — then scrolls.
+ * fires it. This supplies plausible geometry — a 600pt viewport over four 400pt blocks, preceded by a
+ * non-zero intro section — then scrolls.
+ *
+ * `INTRO_OFFSET` matters: React Native reports `onLayout`'s `y` relative to the *parent* view, not the
+ * scroll content. Each stage block's measuring `View` sits below `styles.intro`, so its real `y` is
+ * `INTRO_OFFSET + index * blockHeight`, never `index * blockHeight` alone. A fixture that omits the
+ * intro offset encodes geometry the app can never produce.
  */
+const INTRO_OFFSET = 240;
+
 async function measureAndScroll({ scrollY }: { scrollY: number }) {
   const scroll = screen.getByTestId("lesson-scroll");
 
@@ -118,7 +126,7 @@ async function measureAndScroll({ scrollY }: { scrollY: number }) {
   const blocks = screen.getAllByTestId(/^stage-block-/);
   for (const [index, block] of blocks.entries()) {
     await fireEvent(block, "layout", {
-      nativeEvent: { layout: { y: index * 400, height: 400, width: 400 } },
+      nativeEvent: { layout: { y: INTRO_OFFSET + index * 400, height: 400, width: 400 } },
     });
   }
 
@@ -201,7 +209,7 @@ describe("lesson workspace", () => {
     const blocks = [...screen.getAllByTestId(/^stage-block-/).entries()].reverse();
     for (const [index, block] of blocks) {
       await fireEvent(block, "layout", {
-        nativeEvent: { layout: { y: index * 400, height: 400, width: 400 } },
+        nativeEvent: { layout: { y: INTRO_OFFSET + index * 400, height: 400, width: 400 } },
       });
     }
 
@@ -214,6 +222,20 @@ describe("lesson workspace", () => {
     });
 
     expect(screen.getAllByTestId("sandbox").length).toBeGreaterThan(1);
+  });
+
+  it("keeps a block that still occupies the top of the screen active, not scrolled past", async () => {
+    // Regression for the coordinate-space bug: a block's `top` must be measured in the same
+    // (content-relative) space as `scrollY`. At scrollY 500, block 0 (real content top
+    // `INTRO_OFFSET` = 240, bottom 640) still occupies the top 140px of the 600pt viewport, so it
+    // must stay active. Feeding the pre-fix, intro-less top (0, bottom 400) into this same
+    // assertion makes it fail — `400 > 500` is false — which is exactly the bug finding 1 describes:
+    // a block still on screen gets computed as scrolled past.
+    await renderWorkspace();
+    await measureAndScroll({ scrollY: 500 });
+
+    const firstBlock = screen.getByTestId("stage-block-0");
+    expect(within(firstBlock).getByText(/^active:/)).toBeTruthy();
   });
 
   it("stops the loop on previews that scrolled off-screen", async () => {

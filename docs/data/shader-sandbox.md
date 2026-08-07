@@ -122,12 +122,29 @@ afternoon if you do not know it.
 | --- | --- |
 | Wrapper assembly and log parsing (pure) | `src/shaders/shader-source.ts` |
 | Compile, swap, retain last good, delete | `src/shaders/shader-program-host.ts` |
-| `GLView` and the frame loop | `src/components/shader-sandbox.tsx` |
+| `GLView`, the frame loop, `paused`/`active` | `src/components/shader-sandbox.tsx` |
 | Editing surface, gutter, symbol row | `src/components/glsl-input.tsx` |
 | Pause, restart, collapse | `src/components/preview-controls.tsx` |
 | Sketch list, rename, delete | `src/components/sketch-list-sheet.tsx` |
 | Persistence (profile-scoped, local-only) | `src/data/sketches/` |
 | Test double for a GL context | `src/shaders/testing/fake-gl.ts` |
+
+## `paused` versus `active`
+
+`ShaderSandbox` takes two boolean props that both affect the render loop, and they are deliberately
+distinct:
+
+- **`paused`** freezes `iTime` but keeps drawing every frame, so a preview the learner can see holds
+  its last rendered frame rather than going blank. This is what the Editor tab's pause control uses.
+- **`active`** (default `true`) stops the render loop entirely when `false` — no animation frame, no
+  draw call, no `endFrameEXP`. This is for a preview nobody can see: a lesson stage block that has
+  scrolled off screen. Its GL context stays alive (mounting is one-way; see
+  `src/components/lesson-stage-visibility.ts`), only the per-frame work stops.
+
+Do not conflate the two: a paused-but-visible preview must keep drawing its last frame, and an
+inactive-but-invisible preview must not draw at all. Setting `active={false}` on something the learner
+can currently see would freeze it mid-frame with no indication why; setting only `paused` on something
+off-screen would waste every frame on a draw call nobody observes.
 
 The editing surface is a **controlled** `TextInput` with state local to the component. That is not a
 style preference: RN 0.86 always runs the New Architecture, where `setNativeProps` is unsupported, so
