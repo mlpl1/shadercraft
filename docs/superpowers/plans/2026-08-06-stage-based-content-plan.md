@@ -875,10 +875,10 @@ In the features list, replace the three lines describing the old module structur
 - [ ] **Step 3: Verify no stale references and commit**
 
 ```bash
-grep -rn "previewKey\|previewParameters\|preview registry\|preview-registry" docs/ README.md
+grep -rn "previewKey\|previewParameters\|preview registry\|preview-registry" docs/data/ README.md
 ```
 
-Expected: no matches.
+Expected: no matches. Scoped to `docs/data/` deliberately — `docs/superpowers/plans/` and `specs/` are dated records that necessarily quote the model they retired, and rewriting them to match current reality would falsify what was actually decided at the time.
 
 ```bash
 git add docs/data/local-curriculum.md README.md
