@@ -8,6 +8,7 @@ import { canonicalizeRelease } from "../../src/data/course/canonicalize";
 import { parseAuthoredModules, parseCourseRelease } from "../../src/data/course/schema";
 import type { CourseModule, CourseRelease } from "../../src/data/course/types";
 import { calculateNodeReleaseChecksum } from "./node-checksum";
+import { BUNDLED_RELEASE_ID, MINIMUM_APP_VERSION } from "./release-metadata";
 
 const moduleFiles = [
   "content/module-01-fragments.json",
@@ -44,11 +45,9 @@ export function loadAuthoredModules(): CourseModule[] {
 export function buildBundledRelease(): CourseRelease {
   const modules = loadAuthoredModules();
   const releaseBody = {
-    // Bumped whenever committed content changes. A device that already installed an id rejects a
-    // different checksum under that same id permanently, so the id and the content move together.
-    id: "bundled-2026-08-08-5",
+    id: BUNDLED_RELEASE_ID,
     schemaVersion: 1 as const,
-    minimumAppVersion: "1.0.0",
+    minimumAppVersion: MINIMUM_APP_VERSION,
     modules,
   };
   const checksum = calculateNodeReleaseChecksum(releaseBody);

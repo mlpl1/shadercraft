@@ -52,17 +52,33 @@ function invalidModules(): CourseModule[] {
 
 type FakeAdminClient = AdminClient & { calls: { fn: string; args: Record<string, unknown> }[] };
 
-function fakeAdminClient(result: import("../publish-course").AdminRpcResult = { error: null }): FakeAdminClient {
+type FakeOptions = {
+  publishResult?: import("../publish-course").AdminRpcResult;
+  /** Rewrites what the read path returns, to model a publish and read path that disagree. */
+  readBack?: (published: unknown) => import("../publish-course").AdminRpcResult;
+};
+
+/**
+ * Models a working server rather than returning one canned result for every call: the publish RPC
+ * remembers its payload and the read RPC hands it back. That default is what makes the failure
+ * cases below meaningful — each one is a specific, deliberate deviation from a server that works.
+ */
+function fakeAdminClient(options: FakeOptions = {}): FakeAdminClient {
   const calls: { fn: string; args: Record<string, unknown> }[] = [];
+  let published: unknown = null;
+
   return {
     calls,
     rpc: async (fn, args) => {
       calls.push({ fn, args });
-      return result;
+      if (fn === "publish_course_release") {
+        published = args.p_payload;
+        return options.publishResult ?? { error: null };
+      }
+      return options.readBack ? options.readBack(published) : { data: published, error: null };
     },
   };
 }
-
 function baseDeps(overrides: Partial<PublishDeps> = {}): PublishDeps {
   return {
     env: { SUPABASE_URL: "https://project-ref.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "sb_secret_example" },
@@ -129,14 +145,18 @@ test("runs content validation before creating an admin client", async () => {
   expect(createAdminClientCalled).toBe(false);
 });
 
-test("sends exactly one publish_course_release RPC with the checksummed payload", async () => {
+test("publishes the checksummed payload and then reads it back", async () => {
   const admin = fakeAdminClient();
   const deps = baseDeps({ createAdminClient: () => admin, log: () => {} });
 
   await publishCourseRelease("course-2026-08-03", deps);
 
-  expect(admin.calls).toHaveLength(1);
-  expect(admin.calls[0].fn).toBe("publish_course_release");
+  // Two calls, in this order: the write, then the read that proves it survived.
+  expect(admin.calls.map(({ fn }) => fn)).toEqual([
+    "publish_course_release",
+    "get_course_release",
+  ]);
+  expect(admin.calls[1].args).toEqual({ p_release_id: "course-2026-08-03" });
   const payload = admin.calls[0].args.p_payload as { id: string; checksum: string; modules: unknown };
   expect(payload.id).toBe("course-2026-08-03");
   expect(payload.checksum).toMatch(/^[a-f0-9]{64}$/);
@@ -144,7 +164,9 @@ test("sends exactly one publish_course_release RPC with the checksummed payload"
 });
 
 test("fails when the RPC reports an error", async () => {
-  const admin = fakeAdminClient({ error: { message: "release already published with a different checksum" } });
+  const admin = fakeAdminClient({
+    publishResult: { error: { message: "release already published with a different checksum" } },
+  });
   const deps = baseDeps({ createAdminClient: () => admin });
 
   await expect(publishCourseRelease("course-2026-08-03", deps)).rejects.toThrow(
@@ -166,4 +188,72 @@ test("never logs the service-role key", async () => {
 
   expect(logs.length).toBeGreaterThan(0);
   expect(logs.some((message) => message.includes("sb_secret_do_not_log_me"))).toBe(false);
+});
+
+test("fails when the published release cannot be read back at all", async () => {
+  const admin = fakeAdminClient({ readBack: () => ({ data: null, error: null }) });
+  const deps = baseDeps({ createAdminClient: () => admin });
+
+  await expect(publishCourseRelease("course-2026-08-03", deps)).rejects.toThrow(
+    /reported success but get_course_release returned no payload/,
+  );
+});
+
+test("fails when the read path returns different content from the write path", async () => {
+  // The failure this verification exists for, and the one nothing else catches. Every schema change
+  // is a chance for the insert and the read to disagree, and the dangerous version of that is
+  // content that still parses perfectly — a field silently altered or lost rather than a broken
+  // shape. Here one stage title differs. The write RPC reported success, the payload validates, and
+  // only the checksum recomputed from the returned content shows anything is wrong.
+  const admin = fakeAdminClient({
+    readBack: (published) => {
+      const release = JSON.parse(JSON.stringify(published)) as {
+        modules: { lessons: { stages: { title: string }[] }[] }[];
+      };
+      release.modules[0].lessons[0].stages[0].title = "Quietly different";
+      return { data: release, error: null };
+    },
+  });
+  const deps = baseDeps({ createAdminClient: () => admin });
+
+  await expect(publishCourseRelease("course-2026-08-03", deps)).rejects.toThrow(
+    /does not survive the round trip/,
+  );
+});
+
+test("fails when the read path returns a shape the app would reject", async () => {
+  // Distinct from a checksum mismatch: this payload never reaches the comparison because the
+  // device's own validator would refuse it first, so the error names that rather than a digest.
+  const admin = fakeAdminClient({
+    readBack: (published) => ({
+      data: { ...(published as object), minimumAppVersion: "not-a-version" },
+      error: null,
+    }),
+  });
+  const deps = baseDeps({ createAdminClient: () => admin });
+
+  await expect(publishCourseRelease("course-2026-08-03", deps)).rejects.toThrow(
+    /reads back in a shape the app would reject/,
+  );
+});
+
+test("surfaces a read failure rather than reporting a successful publish", async () => {
+  const admin = fakeAdminClient({
+    readBack: () => ({ error: { message: "permission denied for function get_course_release" } }),
+  });
+  const deps = baseDeps({ createAdminClient: () => admin });
+
+  await expect(publishCourseRelease("course-2026-08-03", deps)).rejects.toThrow(
+    /permission denied for function get_course_release/,
+  );
+});
+
+test("logs only after the round trip is proven", async () => {
+  // A success line printed before verification would be a lie the operator acts on.
+  const logs: string[] = [];
+  const admin = fakeAdminClient({ readBack: () => ({ data: null, error: null }) });
+  const deps = baseDeps({ createAdminClient: () => admin, log: (message) => logs.push(message) });
+
+  await expect(publishCourseRelease("course-2026-08-03", deps)).rejects.toThrow();
+  expect(logs).toEqual([]);
 });

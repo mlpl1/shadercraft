@@ -262,10 +262,11 @@ before it ships.
 - [`docs/superpowers/specs/2026-08-06-curriculum-syllabus-design.md`](../superpowers/specs/2026-08-06-curriculum-syllabus-design.md) —
   the eleven-module arc, Act 1 lesson-by-lesson, and the rationale behind the word minimums and
   stage-count rule.
+- [`docs/data/tutorials.md`](tutorials.md) — the exercise format: how a step's solution doubles as
+  its target render, why nothing is checked automatically, and the authoring rules that follow from
+  that.
 - [`docs/data/curriculum-publishing.md`](curriculum-publishing.md) — publishing a release to
-  Supabase for background delivery to installed apps. Note: as of this writing the remote
-  publishing tables and RPCs still speak the old preset/section shape, so `npm run content:publish`
-  cannot yet emit a release built from stages.
+  Supabase for background delivery to installed apps.
 - For the design rationale behind the SQLite schema and the module/lesson/stage data model, see
   `docs/superpowers/specs/2026-08-03-offline-curriculum-sync-design.md` and
   `docs/superpowers/specs/2026-08-06-curriculum-syllabus-design.md`.

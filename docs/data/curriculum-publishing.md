@@ -1,29 +1,23 @@
 # Publishing curriculum releases to Supabase
 
-**Publishing is currently broken and must not be run.** `supabase/migrations/202608030002_curriculum_releases.sql:47-52`
-still declares `content_lessons.concept_title`, `concept_lede`, `try_hint`, and `preview_caption`
-`NOT NULL`. Those fields belonged to the retired preset-based lesson shape and have no equivalent
-in the current stage-based `CourseLesson` (see `src/data/course/types.ts`), so any payload built
-from current content omits them and `publish_course_release` fails its `NOT NULL` constraints. Do
-not run `npm run content:publish` until a migration adds the stage schema
-(`content_lesson_stages` or equivalent) and drops those retired `NOT NULL` columns. The bundled,
-on-device curriculum described in
-[`docs/data/local-curriculum.md`](local-curriculum.md) is unaffected — this only blocks the remote
-path this document describes below.
+Publishing works. It was broken for the whole of the stage-based rewrite —
+`202608030002_curriculum_releases.sql` still declared `content_lessons.concept_title`,
+`concept_lede`, `try_hint` and `preview_caption` `NOT NULL`, fields belonging to the retired
+preset shape with no equivalent in the current `CourseLesson`, so every payload built from current
+content failed those constraints. `202608080001_curriculum_stages.sql` replaced that schema and
+`202608080002_tutorials.sql` added exercises to it. Nothing was ever published under the old shape,
+so nothing needed migrating.
 
-This document covers the remote publishing layer on top of the local curriculum pipeline
-described in [`docs/data/local-curriculum.md`](local-curriculum.md): how an authored, checksummed
-release gets from `content/*.json` into the `content_releases` tables in Supabase, how a device
-picks it up, what CI checks before and during a publish, and how to roll one back. Nothing here
-changes authoring — version-controlled JSON under `content/` remains the only source of truth;
-publishing only copies a release that already passed `content:build`/`content:check` into a second
-place devices can read it from without an app-store update.
+One safeguard is worth knowing before you run it. `npm run content:publish` now reads the release
+back through `get_course_release` and recomputes its checksum from what came back, failing if the
+two paths disagree. That check exists because the write and read RPCs are independently maintained
+SQL, and a schema change is exactly when they drift — silently, with the publish reporting success.
 
 ## The publishing contract
 
 A published release, and every row nested under it (`content_modules`, `content_lessons`,
-`content_presets`, `content_sections`), is **immutable** once it exists
-(`supabase/migrations/202608030002_curriculum_releases.sql`). A trigger
+`content_stages`, `content_tutorials`, `content_tutorial_steps`), is **immutable** once it exists
+(`supabase/migrations/202608080001_curriculum_stages.sql` and `202608080002_tutorials.sql`). A trigger
 (`reject_published_mutation`) rejects every `UPDATE` and `DELETE` against these tables outright,
 except for one field: `content_releases.active`, which is how the currently-served release moves
 from one id to another. There is no supported way to edit a published release's content — the
@@ -41,7 +35,7 @@ function owner's privileges. Reads (`get_active_course_manifest`, `get_course_re
 `publish_course_release` behaves in one of three ways for a given release id:
 
 - **Unseen id** — inserts the release and every nested row, verifies the inserted counts
-  (modules/lessons/presets/sections) against counts derived independently from the payload's own
+  (modules, lessons, stages, tutorials, steps) against counts derived independently from the payload's own
   JSON structure, and only then flips `active`: the previous active release is deactivated first
   (the schema's partial unique index allows at most one active row at a time), then the new one is
   activated. If the count check fails, the partially inserted release is torn down inside the same
