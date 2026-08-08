@@ -25,12 +25,20 @@ import type { CourseRepository } from "../../data/course/course-repository";
 import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
 import type { ProgressRepository } from "../../data/progress/progress-repository";
 import { createFakeSketchRepository } from "../../data/sketches/testing/fake-sketch-repository";
+import { createFakeTutorialProgressRepository } from "../../data/tutorials/testing/fake-tutorial-progress-repository";
 import {
   STUB_BUNDLED_RELEASE_ID,
   STUB_RELEASE_INSTALLER,
 } from "../../data/course/testing/stub-release-installer";
 
+jest.mock("../../context/auth-context", () => ({
+  useAuth: () => ({ profileId: "profile-a" }),
+}));
+
 jest.mock("expo-router", () => ({
+  // Behaves like an ordinary mount effect rather than a no-op, so the focus-driven reloads these
+  // screens use are actually exercised instead of silently skipped.
+  useFocusEffect: (callback: () => void) => require("react").useEffect(callback, [callback]),
   useRouter: () => ({ back: jest.fn(), push: jest.fn(), replace: jest.fn() }),
 }));
 
@@ -164,6 +172,7 @@ function buildDataValue(
     courseRepository: new FakeCourseRepository(courseReadError),
     progressRepository: new FakeProgressRepository(completedLessonIds),
     sketchRepository: createFakeSketchRepository(),
+    tutorialProgressRepository: createFakeTutorialProgressRepository(),
     retry: jest.fn(),
   };
 }
@@ -252,10 +261,12 @@ describe("HomeScreen", () => {
     expect(screen.getAllByText("Coordinate spaces").length).toBeGreaterThan(0);
   });
 
-  test("offers no bonus tutorial card even once the first module is complete", async () => {
-    // `isFirstModuleComplete` (see `navigation-model.ts`) used to gate a "Bonus tutorial" card
-    // that pushed a hardcoded `/bonus-scanline` route. That route and the preview machinery behind
-    // it are gone; completing the module's only lesson must not resurrect the card.
+  test("offers no practice card when the release carries no tutorials", async () => {
+    // Two things at once, and both matter. `isFirstModuleComplete` (see `navigation-model.ts`) used
+    // to gate a "Bonus tutorial" card pushing a hardcoded `/bonus-scanline` route; that route and
+    // the preview machinery behind it are gone, and completing a module must not resurrect it. The
+    // real Practice card that replaced it is driven by content, so a release with no tutorials — as
+    // this fixture is — must show nothing rather than an empty shell.
     await renderHomeScreen(undefined, ["lesson-1a"]);
 
     await waitFor(() => expect(screen.getAllByText("Coordinate spaces").length).toBeGreaterThan(0));
@@ -270,5 +281,6 @@ describe("HomeScreen", () => {
 
     expect(screen.queryByText("Bonus tutorial")).toBeNull();
     expect(screen.queryByText("Recreate the Scanline S")).toBeNull();
+    expect(screen.queryByTestId("home-featured-tutorial")).toBeNull();
   });
 });

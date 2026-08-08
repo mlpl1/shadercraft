@@ -63,6 +63,7 @@ import { AuthProvider, useAuth } from "../auth-context";
 import { DataContext, type DataContextValue } from "../data-context";
 import { SyncProvider, useSyncStatus } from "../sync-context";
 import { createFakeSketchRepository } from "../../data/sketches/testing/fake-sketch-repository";
+import { createFakeTutorialProgressRepository } from "../../data/tutorials/testing/fake-tutorial-progress-repository";
 import {
   STUB_BUNDLED_RELEASE_ID,
   STUB_RELEASE_INSTALLER,
@@ -138,6 +139,7 @@ function buildDataValue(repository: FakeRepository): DataContextValue {
     // use, exactly like `SqliteProgressRepository` really implements every one of them at once.
     progressRepository: repository as unknown as ProgressRepository,
     sketchRepository: createFakeSketchRepository(),
+    tutorialProgressRepository: createFakeTutorialProgressRepository(),
     // Neither `AuthProvider` nor `SyncProvider` ever reads this; only `ProgressRepository` matters
     // for this suite.
     courseRepository: {} as unknown as CourseRepository,

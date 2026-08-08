@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppIcon } from "./app-icon";
 import { Colors, Spacing } from "../constants/theme";
 
-export type BottomTab = "home" | "course" | "editor";
+export type BottomTab = "home" | "course" | "tutorials" | "editor";
 
 type BottomNavigationProps = {
   activeItem: BottomTab;
@@ -24,6 +24,12 @@ const items = [
     label: "Course",
     icon: { android: "book_2", ios: "book.fill", web: "book_2" } as const,
     fallback: "C",
+  },
+  {
+    key: "tutorials",
+    label: "Practice",
+    icon: { android: "fitness_center", ios: "hammer.fill", web: "build" } as const,
+    fallback: "P",
   },
   {
     key: "editor",
@@ -56,6 +62,11 @@ export function BottomNavigation({ activeItem }: BottomNavigationProps) {
 
     if (destination === "course") {
       router.replace("/course");
+      return;
+    }
+
+    if (destination === "tutorials") {
+      router.replace("/tutorials");
       return;
     }
 
@@ -98,7 +109,7 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
     backgroundColor: Colors.surface,
     paddingTop: Spacing.md,
-    paddingHorizontal: Spacing.xxl,
+    paddingHorizontal: Spacing.md,
   },
   navigation: {
     width: "100%",
@@ -108,7 +119,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
   },
   item: {
-    minWidth: 72,
+    minWidth: 64,
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",

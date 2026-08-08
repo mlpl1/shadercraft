@@ -17,6 +17,7 @@ import { CourseProvider, useCourse } from "../course-context";
 import { DataContext, type DataContextValue } from "../data-context";
 import { ProgressProvider, useProgress } from "../progress-context";
 import { createFakeSketchRepository } from "../../data/sketches/testing/fake-sketch-repository";
+import { createFakeTutorialProgressRepository } from "../../data/tutorials/testing/fake-tutorial-progress-repository";
 import {
   STUB_BUNDLED_RELEASE_ID,
   STUB_RELEASE_INSTALLER,
@@ -166,6 +167,7 @@ describe("course and progress providers", () => {
       courseRepository: fakeCourseRepository,
       progressRepository: fakeProgressRepository,
       sketchRepository: createFakeSketchRepository(),
+      tutorialProgressRepository: createFakeTutorialProgressRepository(),
       retry: jest.fn(),
     };
   });

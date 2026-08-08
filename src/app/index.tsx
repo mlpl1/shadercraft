@@ -1,14 +1,18 @@
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "../components/bottom-navigation";
 import { LessonRow } from "../components/lesson-row";
 import { ShaderPreview } from "../components/shader-preview";
 import { Colors, Radius, Spacing } from "../constants/theme";
+import { useAuth } from "../context/auth-context";
 import { useCourse } from "../context/course-context";
+import { useData } from "../context/data-context";
 import { useProgress } from "../context/progress-context";
 import { buildNavigationModel } from "../data/course/navigation-model";
+import { buildTutorialsModel } from "../data/course/tutorial-model";
 
 function padTwo(value: number): string {
   return String(value).padStart(2, "0");
@@ -25,7 +29,34 @@ export default function HomeScreen() {
     retry: retryProgress,
   } = useProgress();
 
+  const data = useData();
+  const { profileId } = useAuth();
+  const tutorialProgressRepository =
+    data.status === "ready" ? data.tutorialProgressRepository : null;
+  const [completedStepIds, setCompletedStepIds] = useState<ReadonlySet<string>>(new Set());
+
+  // Re-read on focus as well as on mount: a learner arrives back here straight from finishing a
+  // step, and a stale count on the practice card is the first thing they would notice.
+  const reloadTutorialProgress = useCallback(() => {
+    if (!tutorialProgressRepository || !profileId) return;
+    let cancelled = false;
+    void tutorialProgressRepository.getCompletedStepIds(profileId).then((ids) => {
+      if (!cancelled) setCompletedStepIds(ids);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tutorialProgressRepository, profileId]);
+
+  useEffect(reloadTutorialProgress, [reloadTutorialProgress]);
+  useFocusEffect(reloadTutorialProgress);
+
   const model = buildNavigationModel(modules, progress.completedLessonIds, isCourseHydrated);
+  const tutorialsModel = buildTutorialsModel(
+    modules,
+    progress.completedLessonIds,
+    completedStepIds,
+  );
   const progressWidth = `${progressPercent}%` as `${number}%`;
 
   if (!isCourseHydrated || !model.featuredModule || !model.featuredLesson) {
@@ -62,6 +93,7 @@ export default function HomeScreen() {
   }
 
   const { featuredLesson, featuredModule } = model;
+  const featuredTutorial = tutorialsModel.featured;
   const openLesson = (lessonId: string) =>
     router.push({ pathname: "/lesson", params: { lessonId } });
 
@@ -148,6 +180,33 @@ export default function HomeScreen() {
             </View>
           </Pressable>
 
+          {featuredTutorial ? (
+            <Pressable
+              accessibilityLabel={`Practice: ${featuredTutorial.title}`}
+              accessibilityRole="button"
+              onPress={() =>
+                router.push({
+                  pathname: "/tutorial",
+                  params: {
+                    tutorialId: featuredTutorial.id,
+                    stepId: featuredTutorial.resumeStepId,
+                  },
+                })
+              }
+              style={({ pressed }) => [styles.practiceCard, pressed && styles.pressedCard]}
+              testID="home-featured-tutorial"
+            >
+              <View style={styles.unlockedCopy}>
+                <Text style={styles.practiceEyebrow}>
+                  Practice · {featuredTutorial.completedStepCount}/{featuredTutorial.stepCount}
+                </Text>
+                <Text style={styles.unlockedTitle}>{featuredTutorial.title}</Text>
+                <Text style={styles.unlockedBody}>{featuredTutorial.summary}</Text>
+              </View>
+              <Text style={styles.unlockedArrow}>→</Text>
+            </Pressable>
+          ) : null}
+
           {model.isFirstModuleComplete && (
             <View style={styles.unlockedStack}>
               {isAllPublishedComplete && nextPlannedModule ? (
@@ -211,6 +270,24 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  practiceCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Spacing.md,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    borderLeftColor: Colors.violet,
+    borderLeftWidth: 3,
+    padding: Spacing.md,
+  },
+  practiceEyebrow: {
+    color: Colors.violet,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
   safeArea: {
     flex: 1,
     backgroundColor: Colors.background,

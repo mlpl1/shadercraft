@@ -12,6 +12,9 @@ import { BottomNavigation } from "../bottom-navigation";
 const mockReplace = jest.fn();
 
 jest.mock("expo-router", () => ({
+  // Behaves like an ordinary mount effect rather than a no-op, so the focus-driven reloads these
+  // screens use are actually exercised instead of silently skipped.
+  useFocusEffect: (callback: () => void) => require("react").useEffect(callback, [callback]),
   useRouter: () => ({ replace: mockReplace, push: jest.fn() }),
 }));
 

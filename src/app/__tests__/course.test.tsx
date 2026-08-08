@@ -33,6 +33,7 @@ import type { CourseLesson, CourseModule, CourseRelease } from "../../data/cours
 import type { ProgressRepository } from "../../data/progress/progress-repository";
 import { isCloudSyncEnabled } from "../../data/supabase/client";
 import { createFakeSketchRepository } from "../../data/sketches/testing/fake-sketch-repository";
+import { createFakeTutorialProgressRepository } from "../../data/tutorials/testing/fake-tutorial-progress-repository";
 import {
   STUB_BUNDLED_RELEASE_ID,
   STUB_RELEASE_INSTALLER,
@@ -40,7 +41,14 @@ import {
 
 const mockRouter = { back: jest.fn(), push: jest.fn(), replace: jest.fn() };
 
+jest.mock("../../context/auth-context", () => ({
+  useAuth: () => ({ profileId: "profile-a" }),
+}));
+
 jest.mock("expo-router", () => ({
+  // Behaves like an ordinary mount effect rather than a no-op, so the focus-driven reloads these
+  // screens use are actually exercised instead of silently skipped.
+  useFocusEffect: (callback: () => void) => require("react").useEffect(callback, [callback]),
   useRouter: () => mockRouter,
 }));
 
@@ -190,6 +198,7 @@ function buildDataValue(
     courseRepository: new FakeCourseRepository(courseReadError),
     progressRepository: new FakeProgressRepository(completedLessonIds),
     sketchRepository: createFakeSketchRepository(),
+    tutorialProgressRepository: createFakeTutorialProgressRepository(),
     retry: jest.fn(),
   };
 }

@@ -24,6 +24,10 @@ import { importLegacyProgress } from "../data/progress/legacy-import";
 import type { ProgressRepository } from "../data/progress/progress-repository";
 import { SqliteProgressRepository } from "../data/progress/sqlite-progress-repository";
 import type { SketchRepository } from "../data/sketches/sketch-repository";
+import {
+  SqliteTutorialProgressRepository,
+  type TutorialProgressRepository,
+} from "../data/tutorials/tutorial-progress-repository";
 import { SqliteSketchRepository } from "../data/sketches/sqlite-sketch-repository";
 
 /**
@@ -55,6 +59,7 @@ type DataState =
        * so unlike the repositories above it has no remote counterpart.
        */
       sketchRepository: SketchRepository;
+      tutorialProgressRepository: TutorialProgressRepository;
       /**
        * The one installer downloaded releases go through, already wired to notify
        * `courseRepository`'s subscribers after an activation commits. Built here rather than by
@@ -113,6 +118,7 @@ export function DataProvider({
       const courseRepository = new SqliteCourseRepository(driver);
       const progressRepository = new SqliteProgressRepository(driver, courseRepository);
       const sketchRepository = new SqliteSketchRepository(driver);
+      const tutorialProgressRepository = new SqliteTutorialProgressRepository(driver);
 
       // 4. Run legacy progress import.
       await importLegacyProgress(AsyncStorage, progressRepository);
@@ -132,6 +138,7 @@ export function DataProvider({
           courseRepository,
           progressRepository,
           sketchRepository,
+          tutorialProgressRepository,
           releaseInstaller: new ReleaseInstaller(driver, courseRepository),
           bundledReleaseId: bundledCourse.id,
         });

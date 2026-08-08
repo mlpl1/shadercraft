@@ -29,6 +29,7 @@ import type { CourseRepository } from "../../data/course/course-repository";
 import type { CourseLesson, CourseModule, CourseRelease } from "../../data/course/types";
 import type { ProgressMutation, ProgressRepository } from "../../data/progress/progress-repository";
 import { createFakeSketchRepository } from "../../data/sketches/testing/fake-sketch-repository";
+import { createFakeTutorialProgressRepository } from "../../data/tutorials/testing/fake-tutorial-progress-repository";
 import {
   STUB_BUNDLED_RELEASE_ID,
   STUB_RELEASE_INSTALLER,
@@ -38,6 +39,9 @@ const mockRouter = { back: jest.fn(), push: jest.fn(), replace: jest.fn() };
 let mockSearchParams: Record<string, string> = {};
 
 jest.mock("expo-router", () => ({
+  // Behaves like an ordinary mount effect rather than a no-op, so the focus-driven reloads these
+  // screens use are actually exercised instead of silently skipped.
+  useFocusEffect: (callback: () => void) => require("react").useEffect(callback, [callback]),
   useLocalSearchParams: () => mockSearchParams,
   useRouter: () => mockRouter,
 }));
@@ -232,6 +236,7 @@ async function renderRoute(
         courseRepository,
         progressRepository,
         sketchRepository: createFakeSketchRepository(),
+        tutorialProgressRepository: createFakeTutorialProgressRepository(),
         releaseInstaller: STUB_RELEASE_INSTALLER,
         bundledReleaseId: STUB_BUNDLED_RELEASE_ID,
         retry: () => {},

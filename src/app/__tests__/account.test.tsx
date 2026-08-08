@@ -29,6 +29,9 @@ import { isCloudSyncEnabled } from "../../data/supabase/client";
 
 const mockRouter = { back: jest.fn(), push: jest.fn(), replace: jest.fn() };
 jest.mock("expo-router", () => ({
+  // Behaves like an ordinary mount effect rather than a no-op, so the focus-driven reloads these
+  // screens use are actually exercised instead of silently skipped.
+  useFocusEffect: (callback: () => void) => require("react").useEffect(callback, [callback]),
   useRouter: () => mockRouter,
 }));
 
