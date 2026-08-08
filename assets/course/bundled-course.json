@@ -1,6 +1,6 @@
 {
-  "checksum": "1bc5dda55d40ee05df3e009b3c9b29bba4061a15de159853db49371654ffe56b",
-  "id": "bundled-2026-08-08",
+  "checksum": "dad77fed577e505e1fc27945d4bcbd1ba4f3eb0066f3e420c88abca2a9c72a48",
+  "id": "bundled-2026-08-08-2",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -803,17 +803,208 @@
     {
       "description": "Transform, tile, and vary coordinate space before a shape is ever evaluated.",
       "id": "space",
-      "lessons": [],
-      "plannedLessonCount": 5,
-      "plannedTopics": [
-        "Moving the coordinate system",
-        "Rotation and scale",
-        "Polar coordinates",
-        "Tiling with fract",
-        "Cell identity"
+      "lessons": [
+        {
+          "id": "moving-the-coordinate-system",
+          "intro": "Every module so far has built the same three lines of coordinate setup and then left them alone. This one treats those coordinates as material. Change what a pixel believes its position to be and every shape evaluated afterwards moves, without a single shape knowing about it. The catch is a sign: whatever you do to the coordinate, the picture appears to do the opposite, and this lesson makes that concrete before the next four rely on it.",
+          "moduleId": "space",
+          "position": 1,
+          "shortTitle": "Moving the coordinate system",
+          "stages": [
+            {
+              "body": "This is Module 3's placement, revisited on purpose. Subtracting an offset from the coordinate before measuring puts the disc at that offset, up and to the right of centre, and it reads exactly as written: the numbers in the vector are where the shape ends up. Nothing feels reversed here, which is worth noticing now, because the next stage performs the same subtraction in a different place and the result moves the opposite way. The arithmetic will not change. The framing will.",
+              "id": "moving-the-coordinate-system-place",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 offset = vec2(0.25, 0.15);\nfloat d = length(p - offset) - 0.25;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Naming where a shape sits"
+            },
+            {
+              "body": "The same offset, the same disc, and the shape lands in the opposite corner — down and to the left. The difference is that the offset is now added to the coordinate itself and the disc is measured from zero, so nothing was placed anywhere. Every pixel was simply told it is a quarter further right and a little higher than it really is, and a pixel that believes it is at the origin is the one that draws the centre of the disc. Add to the coordinate, and the picture moves away.",
+              "id": "moving-the-coordinate-system-inverse",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 offset = vec2(0.25, 0.15);\np = p + offset;\n\nfloat d = length(p) - 0.25;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Moving the space instead"
+            },
+            {
+              "body": "Two discs are placed at fixed positions in a space that is itself sliding left and right. Neither disc knows this — both are written exactly as in the first stage — yet the pair travels together, and always against the shift: when the shift runs positive the discs move left. That is the payoff for transforming coordinates rather than positions. One line moved a whole scene, and a scene of fifty shapes would have cost the same line.",
+              "id": "moving-the-coordinate-system-scene",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 shift = vec2(sin(iTime) * 0.2, 0.0);\nvec2 q = p + shift;\n\nfloat a = length(q - vec2(-0.16, 0.2)) - 0.14;\nfloat b = length(q - vec2(0.2, -0.18)) - 0.14;\nfloat d = min(a, b);\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "One change, every shape"
+            },
+            {
+              "body": "Here the two ideas sit in the same shader. The camera vector moves the space and the placement vector names a spot inside it, so the disc orbits the position it was given rather than resting on it. Reading it as two steps keeps the sign straight: first decide where the observer is, then place the shape relative to that. The disc traces a small ellipse, opposite in direction to the camera, and never leaves the screen because the two vectors were sized to fit together.",
+              "id": "moving-the-coordinate-system-both",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 camera = vec2(sin(iTime * 0.7) * 0.18, cos(iTime * 0.7) * 0.14);\nvec2 q = p + camera;\n\nfloat d = length(q - vec2(0.12, 0.1)) - 0.18;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Both at once"
+            }
+          ],
+          "takeaway": "Transforming the coordinate transforms every shape downstream of it at once, because you are relabelling where each pixel thinks it is rather than moving anything. Subtracting a vector before measuring names where a shape should sit and reads naturally; adding one to the whole space slides the entire scene the other way. Both are the same arithmetic seen from different ends, and the inverse feel comes from which one you think you are doing.",
+          "title": "Moving the coordinate system",
+          "tryThis": "In the third stage, change the plus to a minus and nothing else. The two discs will still slide together — but the direction they travel relative to the shift will have swapped."
+        },
+        {
+          "id": "rotation-and-scale",
+          "intro": "Translation was addition. Scale is a multiply, and rotation needs a two-by-two matrix — the first time this course has used one. Both obey the inverse rule from the previous lesson, and both share a second property that catches people out far more often: they happen about the coordinate origin, wherever that happens to be. That is the real reason the centring line has been sitting at the top of every stage since Module 1.",
+          "moduleId": "space",
+          "position": 2,
+          "shortTitle": "Rotation and scale",
+          "stages": [
+            {
+              "body": "Multiplying the coordinate by 1.6 shrinks the rounded box to five eighths of its written size, because a pixel now reports a position further from the origin than it truly is and therefore falls outside a shape it would otherwise have been inside. Same inverse rule as translation, same reason. This is also exactly what the zoom in Module 3's last lesson was doing, named properly at last: a scale applied to space rather than to any particular shape.",
+              "id": "rotation-and-scale-zoom",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 q = p * 1.6;\n\nfloat rounding = 0.08;\nvec2 box = abs(q) - (vec2(0.34, 0.22) - rounding);\nfloat d = length(max(box, 0.0)) - rounding;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Scale is a multiply"
+            },
+            {
+              "body": "A rotation matrix is four numbers built from one angle, and GLSL fills a matrix column by column rather than row by row — so this argument order reads as cos, sin down the first column and minus sin, cos down the second. That combination turns the coordinate counter-clockwise, which by the inverse rule turns the box you see clockwise, here by about thirty-four degrees. Get the two middle arguments the wrong way round and everything still compiles and still rotates; it simply goes the other way.",
+              "id": "rotation-and-scale-matrix",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat angle = 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\nvec2 q = mat2(c, s, -s, c) * p;\n\nfloat rounding = 0.06;\nvec2 box = abs(q) - (vec2(0.34, 0.2) - rounding);\nfloat d = length(max(box, 0.0)) - rounding;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Rotation is a matrix"
+            },
+            {
+              "body": "Subtracting a pivot before rotating moves the origin, and the small disc now swings in a circle around a point below and right of centre instead of spinning where it stands. Nothing about the rotation changed — only where zero was when it happened. This is why centring comes first everywhere else in the course: with the usual centred coordinate, zero is the middle of the screen, so shapes turn in place. Skip that line and rotate raw uv, and everything orbits the bottom-left corner.",
+              "id": "rotation-and-scale-pivot",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 pivot = vec2(0.22, -0.18);\nfloat angle = iTime * 0.7;\nfloat c = cos(angle);\nfloat s = sin(angle);\nvec2 q = mat2(c, s, -s, c) * (p - pivot);\n\nfloat d = length(q - vec2(0.0, 0.24)) - 0.09;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Rotation happens about zero"
+            },
+            {
+              "body": "Three transforms in a row, each written as a reassignment so the order is plain: place, spin, breathe. The box slides side to side, turns steadily clockwise, and pulses between roughly six tenths and nine tenths of its written size. Read the chain downward and you are describing what happens to the coordinate; read it upward and you are describing what happens to the shape. Both readings are useful, and mixing them halfway through is the reliable way to get lost.",
+              "id": "rotation-and-scale-chain",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat angle = iTime * 0.5;\nfloat c = cos(angle);\nfloat s = sin(angle);\n\nvec2 q = p;\nq = q - vec2(sin(iTime * 0.9) * 0.16, 0.0);\nq = mat2(c, s, -s, c) * q;\nq = q * (1.4 + sin(iTime * 1.3) * 0.35);\n\nfloat rounding = 0.06;\nvec2 box = abs(q) - (vec2(0.3, 0.2) - rounding);\nfloat d = length(max(box, 0.0)) - rounding;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Chaining transforms"
+            }
+          ],
+          "takeaway": "Multiplying the coordinate by a number scales every shape by its reciprocal, and multiplying by mat2 of cos, sin, minus sin, cos turns the picture clockwise. GLSL builds matrices column by column, so that argument order is the one that gives a counter-clockwise turn of the coordinate and therefore a clockwise turn of what you see. Both operate about zero, so where zero sits decides whether a shape spins in place or orbits.",
+          "title": "Rotation and scale"
+        },
+        {
+          "id": "polar-coordinates",
+          "intro": "A point can be described by how far across and how far up it is, or by how far out and at what angle. The second description has been half-present since Module 3, because length is already the distance half of it. This lesson adds the other half with atan, which hands back an angle, and then uses that angle to drive pattern — spokes, petals and spirals that would be awkward to express any other way.",
+          "moduleId": "space",
+          "position": 3,
+          "shortTitle": "Polar coordinates",
+          "stages": [
+            {
+              "body": "Radius goes into red and angle into green, scaled from its natural minus pi to pi range into 0 to 1. Red therefore grows in circles outward from the centre, clipping to full before the corners. Green sweeps once around, and it is the seam that matters: along the negative x axis, running left from the centre, green jumps from full to nothing in one pixel. That discontinuity is not a bug in atan. It is what happens when a quantity that wraps is read as one that does not.",
+              "id": "polar-coordinates-two-numbers",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p);\nfloat a = atan(p.y, p.x);\n\nfragColor = vec4(r, a / 6.28318 + 0.5, 0.3, 1.0);",
+              "title": "Radius and angle, painted"
+            },
+            {
+              "body": "Multiplying the angle by eight and taking a cosine gives eight bright spokes radiating from the centre, evenly spaced, extending to every edge. The seam from the last stage has gone, and not by accident: a cosine takes the same value at both ends of the angle's range, so the value never jumps. Because eight is a whole number the slopes match there too, so nothing creases either. Try 8.5 and a crease appears along the negative x axis, faint but unmistakable once seen.",
+              "id": "polar-coordinates-spokes",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat a = atan(p.y, p.x);\nfloat spokes = 0.5 + 0.5 * cos(a * 8.0);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.99, 0.86, 0.52), spokes);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Angle drives pattern"
+            },
+            {
+              "body": "A circle is every point whose radius equals a constant. Let that constant vary with angle instead and the circle becomes a flower: five rounded petals, reaching 0.38 at their tips and pulling in to 0.18 between them. The subtraction is the same shape as every distance field so far, which is why fwidth still antialiases it correctly. It is no longer a true distance — the value grows more slowly than real distance along the petal flanks — but for filling a shape that difference never surfaces.",
+              "id": "polar-coordinates-petals",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p);\nfloat a = atan(p.y, p.x);\n\nfloat petals = 0.28 + 0.1 * cos(a * 5.0);\nfloat d = r - petals;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.95, 0.35, 0.42), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "A radius that depends on angle"
+            },
+            {
+              "body": "Adding radius into the same cosine that reads angle tilts the spokes into arms, because a point one step further out needs slightly more angle to stay on the same crest. Three arms, coiling outward, turning steadily as time shifts the phase. The colour comes from Module 4's palette fed by the same value, so the arms sweep through a spectrum rather than fading to grey. Set the radius multiplier to zero and the spiral unwinds back into the plain spokes of two stages ago.",
+              "id": "polar-coordinates-spiral",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p);\nfloat a = atan(p.y, p.x);\n\nfloat v = 0.5 + 0.5 * cos(a * 3.0 + r * 14.0 - iTime * 2.0);\n\nvec3 colour = 0.5 + 0.5 * cos(6.28318 * (v + vec3(0.0, 0.67, 0.33)));\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Both at once makes a spiral"
+            }
+          ],
+          "takeaway": "atan of y and x gives the angle from the positive x axis, running from minus pi to pi, and length gives the radius. Together they are a complete description of a point. The angle wraps, so reading it directly leaves a hard seam along the negative x axis; feeding it through a cosine hides that, and an integer number of cycles removes even the crease, because only then do the slopes match where the two ends meet.",
+          "title": "Polar coordinates"
+        },
+        {
+          "id": "tiling-with-fract",
+          "intro": "One shape can be made to appear hundreds of times without being written hundreds of times, and without a loop. The trick is to fold the coordinate: keep only the fractional part of a scaled position, and every whole-number square of the plane collapses onto the same small patch. Draw one shape in that patch and it appears in all of them. The fold is a single function call, and the interesting part is what it does at the joins.",
+          "moduleId": "space",
+          "position": 4,
+          "shortTitle": "Tiling with fract",
+          "stages": [
+            {
+              "body": "Scaling uv.x by four and keeping only the fractional part turns one ramp into four. Each runs black to almost-white and then drops back to black instantly, because 0.999 keeps its 0.999 while 1.0 becomes 0.0 exactly. Those four hard resets are the cell boundaries, and everything in this lesson happens between them. Note that no shape and no branch was involved: the repetition is a property of the coordinate now, not of anything drawn on it.",
+              "id": "tiling-with-fract-sawtooth",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat v = fract(uv.x * 4.0);\n\nfragColor = vec4(vec3(v), 1.0);",
+              "title": "fract keeps what is after the point"
+            },
+            {
+              "body": "The same fold on both axes at once cuts the plane into squares a third of a unit across, and subtracting a half moves each square's origin to its middle. One circle written once therefore appears in every cell — a grid roughly three and a third wide by six tall on a portrait screen. The cells are square rather than stretched because the aspect line at the top made the units equal in both directions, which is the same reason circles have been round since Module 1.",
+              "id": "tiling-with-fract-cells",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nfloat d = length(cell) - 0.32;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Fold both axes into cells"
+            },
+            {
+              "body": "Here the half is not subtracted, so each cell's origin sits at its bottom-left corner, and the circle is placed near the right-hand edge with a radius large enough to overhang it. Every circle is sliced flat down its right side, and the piece that was cut off does not reappear in the neighbour. That is the one real constraint of this technique: a cell has no knowledge of the cells beside it, so a shape either fits inside one or gets cut.",
+              "id": "tiling-with-fract-seam",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0);\n\nfloat d = length(cell - vec2(0.85, 0.5)) - 0.28;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(1.0, 0.45, 0.42), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "What happens at the join"
+            },
+            {
+              "body": "Centred cells again, with the radius driven by time so the grid pulses between 0.06 and 0.3. Watch what the whole grid does rather than any one circle: every cell pulses in perfect unison, because every cell is running the same expression on the same local coordinate and has no way to tell itself apart from its neighbours. That is not a limitation of tiling so much as a missing ingredient, and supplying it is the whole of the next lesson.",
+              "id": "tiling-with-fract-unison",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nfloat d = length(cell) - (0.18 + 0.12 * sin(iTime));\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Every cell, identically"
+            }
+          ],
+          "takeaway": "fract keeps the part after the decimal point, so fract of a scaled coordinate wraps back to zero at every whole number and cuts the plane into identical cells. Multiplying before the fold sets how many cells there are; subtracting a half after it puts the origin in the middle of each cell, which is where shapes want to be. Anything reaching past a cell boundary is cut off rather than continued, because the neighbouring cell is a separate copy that knows nothing about it.",
+          "title": "Tiling with fract"
+        },
+        {
+          "id": "cell-identity",
+          "intro": "The previous lesson threw something away. Splitting a coordinate into cells produces two halves — where you are within a cell, and which cell that is — and only the first was kept. Recovering the second takes one more function, and it turns a grid of identical copies into a grid whose every member can differ. This lesson also marks the honest edge of what position alone can do, which is exactly where the next module begins.",
+          "moduleId": "space",
+          "position": 5,
+          "shortTitle": "Cell identity",
+          "stages": [
+            {
+              "body": "floor rounds down to the whole number below, so across an entire cell it returns one unchanging pair. Painting that pair straight into red and green gives flat blocks of colour rather than gradients — proof that the value really is constant within each cell and steps only at the boundaries. The identities run negative on the left and bottom, so the scale and offset are chosen to land all six rows evenly between 0 and 1, which is why no two rows share a shade.",
+              "id": "cell-identity-floor",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 id = floor(p * 3.0);\n\nvec3 colour = vec3(id.x, id.y, 0.0) * 0.2 + 0.6;\n\nfragColor = vec4(colour, 1.0);",
+              "title": "floor names the cell"
+            },
+            {
+              "body": "Scale once, then take floor and fract of the same value: identity and local position, no information lost. The local half draws the circle exactly as before; the identity half feeds Module 4's palette, so each cell is tinted by its own coordinates. Cells sharing a diagonal share an identity sum and therefore a colour, which is why the tint sweeps in bands running from lower-right to upper-left rather than varying cell by cell in every direction.",
+              "id": "cell-identity-both-halves",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 scaled = p * 3.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat d = length(cell) - 0.34;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 tint = 0.5 + 0.5 * cos(6.28318 * ((id.x + id.y) * 0.15 + vec3(0.0, 0.67, 0.33)));\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), tint, fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Keep both halves"
+            },
+            {
+              "body": "The same identity now offsets each cell's place in a time cycle instead of its colour. Every circle still pulses at the same rate, but each starts at a different point in that cycle, so a wave appears to travel diagonally across the grid. Nothing here is animated per cell — there is one sine, evaluated once — and the illusion of a travelling wave comes entirely from feeding position into its phase, which is the same idea the spiral used two lessons ago.",
+              "id": "cell-identity-phase",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 scaled = p * 3.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat phase = id.x * 0.9 + id.y * 0.6;\nfloat radius = 0.24 + 0.12 * sin(iTime * 2.0 + phase);\nfloat d = length(cell) - radius;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Identity can drive anything"
+            },
+            {
+              "body": "The circle is placed off-centre so it has a handedness, and alternate cells flip it: mod of the identity sum gives a checkerboard of zeros and ones, and negating the local x mirrors those cells. The result reads as a woven pattern rather than a repeated stamp. It is also as far as position alone goes — every cell here is still a fixed function of where it is, so the pattern stays perfectly regular. Breaking that regularity is what randomness is for.",
+              "id": "cell-identity-mirror",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 scaled = p * 3.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat flip = mod(id.x + id.y, 2.0);\ncell.x = mix(cell.x, -cell.x, flip);\n\nfloat d = length(cell - vec2(0.22, 0.0)) - 0.16;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.99, 0.86, 0.52), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Mirroring, and the edge of position"
+            }
+          ],
+          "takeaway": "floor of a scaled coordinate gives the cell's integer identity, and fract gives the position inside it; together they lose nothing. Because the identity is constant across a whole cell, anything derived from it is constant there too, so it can drive colour, size or phase per cell. All such variation is still a function of position, so it stays regular by construction — irregularity needs a source of randomness, which is Module 6.",
+          "title": "Cell identity"
+        }
       ],
+      "plannedLessonCount": 0,
+      "plannedTopics": [],
       "position": 5,
-      "status": "planned",
+      "status": "published",
       "title": "Space"
     },
     {
