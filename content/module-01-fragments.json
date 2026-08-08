@@ -42,7 +42,7 @@
           "id": "both-axes",
           "position": 4,
           "title": "Both axes at once",
-          "body": "Feeding uv.x into red and uv.y into green makes both axes visible in one image, and gives you a permanently useful debugging tool: when coordinates misbehave, render them as colour and look. Bottom-left is black because both values are zero there. Top-right is yellow because red and green are both at full. Any corner that surprises you means your coordinates are not what you assumed.",
+          "body": "Feeding uv.x into red and uv.y into green makes both axes visible in one image, and gives you a permanently useful debugging tool: when coordinates misbehave, render them as colour and look. Bottom-left is a dark navy rather than black: red and green are both zero there, but the fixed blue stays at 0.22. Top-right is yellow because red and green are both at full. Any corner that surprises you means your coordinates are not what you assumed.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(uv.x, uv.y, 0.22, 1.0);"
         }
       ]

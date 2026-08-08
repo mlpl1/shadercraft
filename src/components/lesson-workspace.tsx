@@ -117,6 +117,7 @@ export function LessonWorkspace({
   // element and throws on a hole. `height: 0` already reads as "unmeasured" to that function, so a
   // freshly seeded entry is indistinguishable from one that just hasn't been measured yet.
   const boundsRef = useRef<StageBounds[]>(stages.map(() => ({ top: 0, height: 0 })));
+  const scrollRef = useRef<ScrollView>(null);
   const scrollYRef = useRef(0);
   const viewportHeightRef = useRef(0);
 
@@ -124,9 +125,17 @@ export function LessonWorkspace({
   // previous lesson's geometry — the same shape of bug as the stage index that used to leak here.
   // `visibility` itself no longer needs resetting here — it is reconciled at render time above — but
   // these refs aren't rendered, so a passive effect is the right place for them.
+  //
+  // The scroll view is moved back to the top rather than only the ref being zeroed. Advancing to the
+  // next lesson keeps the same route and therefore the same `ScrollView`, which holds its offset, so
+  // zeroing the ref alone made it *lie*: visibility was computed as though the reader were at the
+  // top while they were actually part-way down, mounting stages that were off screen and leaving the
+  // on-screen one blank until a scroll happened to fire `onScroll` and correct it. Landing at the
+  // start of a lesson is also simply what a reader expects.
   useEffect(() => {
     boundsRef.current = stages.map(() => ({ top: 0, height: 0 }));
     scrollYRef.current = 0;
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [lesson.id, stages.length]);
 
   const recomputeVisibility = useCallback(() => {

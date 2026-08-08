@@ -1,6 +1,6 @@
 {
-  "checksum": "5752a9e167ad13247e3004c4db7dc331bec96947cba72787a12ff5779726ca2a",
-  "id": "bundled-2026-08-08-5",
+  "checksum": "680ac060e1d0d9b4f0247f2fd6657af231a6c4d6049a11845ddd3493a2808824",
+  "id": "bundled-2026-08-08-6",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -36,7 +36,7 @@
               "title": "Divide by the resolution"
             },
             {
-              "body": "Feeding uv.x into red and uv.y into green makes both axes visible in one image, and gives you a permanently useful debugging tool: when coordinates misbehave, render them as colour and look. Bottom-left is black because both values are zero there. Top-right is yellow because red and green are both at full. Any corner that surprises you means your coordinates are not what you assumed.",
+              "body": "Feeding uv.x into red and uv.y into green makes both axes visible in one image, and gives you a permanently useful debugging tool: when coordinates misbehave, render them as colour and look. Bottom-left is a dark navy rather than black: red and green are both zero there, but the fixed blue stays at 0.22. Top-right is yellow because red and green are both at full. Any corner that surprises you means your coordinates are not what you assumed.",
               "id": "both-axes",
               "position": 4,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(uv.x, uv.y, 0.22, 1.0);",
