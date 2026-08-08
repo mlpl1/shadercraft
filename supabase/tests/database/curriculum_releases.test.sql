@@ -11,7 +11,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(46);
+select plan(54);
 
 -- A minimal, schema-valid release payload. Matches `CourseRelease` in
 -- src/data/course/types.ts / schema.ts: camelCase keys, release -> modules -> lessons -> stages.
@@ -127,6 +127,55 @@ as $$
                 'body', 'body',
                 'source', 'fragColor = vec4(vec3(hash(uv)), 1.0);',
                 'helpers', 'float hash(vec2 p) {' || chr(10) || '  return fract(sin(p.x) * 43758.5453);' || chr(10) || '}'
+              )
+            )
+          )
+        ),
+        -- Two tutorials with two steps and one step, so a step count that multiplied a per-tutorial
+        -- figure, or only inspected the first tutorial, cannot agree by coincidence. The second
+        -- tutorial's only step omits both optional fields, giving the null-stripping checks a case.
+        'tutorials', jsonb_build_array(
+          jsonb_build_object(
+            'id', 'make-it-pulse',
+            'moduleId', 'colors',
+            'position', 1,
+            'title', 'Make it pulse',
+            'summary', 'summary',
+            'steps', jsonb_build_array(
+              jsonb_build_object(
+                'id', 'pulse-one',
+                'position', 1,
+                'title', 'Drive the radius',
+                'brief', 'brief',
+                'starterSource', 'float d = length(uv) - 0.3;',
+                'solutionSource', 'float d = length(uv) - (0.3 + sin(iTime) * 0.1);',
+                'helpers', 'float unused(float x) {' || chr(10) || '  return x;' || chr(10) || '}',
+                'hint', 'Radius is just a number.'
+              ),
+              jsonb_build_object(
+                'id', 'pulse-two',
+                'position', 2,
+                'title', 'Soften the edge',
+                'brief', 'brief',
+                'starterSource', 'fragColor = vec4(vec3(step(d, 0.0)), 1.0);',
+                'solutionSource', 'fragColor = vec4(vec3(smoothstep(0.01, 0.0, d)), 1.0);'
+              )
+            )
+          ),
+          jsonb_build_object(
+            'id', 'weathered',
+            'moduleId', 'colors',
+            'position', 2,
+            'title', 'A weathered surface',
+            'summary', 'summary',
+            'steps', jsonb_build_array(
+              jsonb_build_object(
+                'id', 'weathered-one',
+                'position', 1,
+                'title', 'Wear it away',
+                'brief', 'brief',
+                'starterSource', 'fragColor = vec4(1.0);',
+                'solutionSource', 'fragColor = vec4(vec3(0.5), 1.0);'
               )
             )
           )
@@ -295,6 +344,36 @@ select is(
   'a stage that declares no helpers stores NULL rather than an empty string'
 );
 
+-- Tutorials. Without a count over these, a payload carrying exercises would publish, report success,
+-- and arrive with every one of them missing — the insert loop skips an absent key silently.
+select is(
+  (select count(*) from public.content_tutorials where release_id = 'release-multi')::int,
+  2,
+  'publishing inserts every tutorial row'
+);
+select is(
+  (select count(*) from public.content_tutorial_steps where release_id = 'release-multi')::int,
+  3,
+  'publishing inserts every step row across both tutorials'
+);
+select is(
+  (select solution_source from public.content_tutorial_steps
+    where release_id = 'release-multi' and id = 'pulse-one'),
+  'float d = length(uv) - (0.3 + sin(iTime) * 0.1);',
+  'a step stores the solution source that doubles as its target render'
+);
+select is(
+  (select hint from public.content_tutorial_steps
+    where release_id = 'release-multi' and id = 'pulse-two'),
+  null,
+  'a step with no hint stores NULL rather than an empty string'
+);
+select is(
+  (select count(*) from public.content_tutorials where release_id = 'release-a')::int,
+  0,
+  'a release whose modules carry no tutorials publishes fine with none'
+);
+
 reset role;
 
 -- Public reads of the active manifest and payload.
@@ -347,6 +426,27 @@ select ok(
   (public.get_course_release('release-multi')
     -> 'modules' -> 0 -> 'lessons' -> 0 -> 'stages' -> 0) ? 'source',
   'a stage always carries its source, which is never optional'
+);
+
+select is(
+  (public.get_course_release('release-multi')
+    -> 'modules' -> 0 -> 'tutorials' -> 0 -> 'steps' -> 1 ->> 'id'),
+  'pulse-two',
+  'tutorial steps come back ordered by position'
+);
+select is(
+  (public.get_course_release('release-multi')
+    -> 'modules' -> 0 -> 'tutorials' -> 1 ->> 'id'),
+  'weathered',
+  'tutorials come back ordered by position'
+);
+
+-- A module with no exercises must omit the key rather than carry an empty array: the authoring
+-- schema rejects an empty list so "none" has exactly one representation, and this payload is parsed
+-- by that same schema on the device.
+select ok(
+  not ((public.get_course_release('release-a') -> 'modules' -> 0) ? 'tutorials'),
+  'a module with no tutorials omits the key rather than emitting an empty array'
 );
 
 -- Direct mutation of published content is rejected for every table, not just content_releases, and
