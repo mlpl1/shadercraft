@@ -223,11 +223,15 @@ describe("release installer", () => {
       ],
     };
 
+    // Every other module has its tutorials stripped rather than left as authored, so the
+    // "absent means absent" assertion below stays about the read path instead of about which
+    // modules happen to ship exercises — which is exactly what broke this test once they all did.
     const withTutorials = derivedRelease("remote-tutorials", (release) => ({
       ...release,
-      modules: release.modules.map((module, index) =>
-        index === 0 ? { ...module, tutorials: [TUTORIAL] } : module,
-      ),
+      modules: release.modules.map((module, index) => {
+        const { tutorials: _authored, ...rest } = module;
+        return index === 0 ? { ...rest, tutorials: [TUTORIAL] } : rest;
+      }),
     }));
 
     await expect(installer.stageAndActivate(withTutorials)).resolves.toMatchObject({

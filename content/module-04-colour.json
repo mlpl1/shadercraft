@@ -164,5 +164,43 @@
         }
       ]
     }
+  ],
+  "tutorials": [
+    {
+      "id": "a-sky-gradient",
+      "moduleId": "colour",
+      "position": 1,
+      "title": "A sky gradient",
+      "summary": "Build a sky from two colours, add a third stop where the horizon sits, and then replace the whole list with a palette function.",
+      "steps": [
+        {
+          "id": "a-sky-gradient-two",
+          "position": 1,
+          "title": "Two colours, top to bottom",
+          "brief": "The screen is a flat grey. Blend a warm horizon colour into a deep blue going upward, so the bottom of the frame is warm and the top is cool.",
+          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(0.5, 0.5, 0.5, 1.0);",
+          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = mix(warm, cool, uv.y);\n\nfragColor = vec4(colour, 1.0);",
+          "hint": "uv.y is zero at the bottom of the screen."
+        },
+        {
+          "id": "a-sky-gradient-three",
+          "position": 2,
+          "title": "A third stop",
+          "brief": "mix only ever takes two colours, so reach a third by mixing again over the result. Put a pale band low in the frame and let the deep blue take over above it.",
+          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = mix(warm, cool, uv.y);\n\nfragColor = vec4(colour, 1.0);",
+          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 pale = vec3(0.99, 0.86, 0.62);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = mix(warm, pale, smoothstep(0.0, 0.25, uv.y));\ncolour = mix(colour, cool, smoothstep(0.25, 0.9, uv.y));\n\nfragColor = vec4(colour, 1.0);",
+          "hint": "Each smoothstep is flat outside its own window, so the two never fight."
+        },
+        {
+          "id": "a-sky-gradient-palette",
+          "position": 3,
+          "title": "Replace the list with a function",
+          "brief": "Three named colours is a list you have to maintain. Swap the whole thing for a cosine palette driven by height, and drift its phase with time so the sky slowly changes.",
+          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 pale = vec3(0.99, 0.86, 0.62);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = mix(warm, pale, smoothstep(0.0, 0.25, uv.y));\ncolour = mix(colour, cool, smoothstep(0.25, 0.9, uv.y));\n\nfragColor = vec4(colour, 1.0);",
+          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 a = vec3(0.5);\nvec3 b = vec3(0.45);\nvec3 c = vec3(0.6);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.05;\n\nvec3 colour = a + b * cos(6.28318 * (c * uv.y + phase));\n\nfragColor = vec4(colour, 1.0);",
+          "hint": "The phase vector is what turns three identical waves into a spectrum."
+        }
+      ]
+    }
   ]
 }
