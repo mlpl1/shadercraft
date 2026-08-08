@@ -11,11 +11,14 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(40);
+select plan(46);
 
 -- A minimal, schema-valid release payload. Matches `CourseRelease` in
--- src/data/course/types.ts / schema.ts: camelCase keys, release -> modules -> lessons ->
--- (presets, sections).
+-- src/data/course/types.ts / schema.ts: camelCase keys, release -> modules -> lessons -> stages.
+--
+-- Deliberately omits the two optional fields (`tryThis` on the lesson, `helpers` on the stage) so
+-- the null-stripping assertions below have something absent to check. The multi fixture supplies
+-- both.
 create or replace function pg_temp.fixture_payload(p_id text, p_checksum text)
 returns jsonb
 language sql
@@ -42,30 +45,14 @@ as $$
             'title', 'Fragment output',
             'shortTitle', 'Fragment',
             'intro', 'intro',
-            'conceptTitle', 'concept',
-            'conceptLede', 'lede',
-            'tryHint', 'hint',
             'takeaway', 'takeaway',
-            'previewCaption', 'caption',
-            'presets', jsonb_build_array(
+            'stages', jsonb_build_array(
               jsonb_build_object(
-                'id', 'basic',
+                'id', 'flat-colour',
                 'position', 1,
-                'label', 'Basic',
-                'previewKey', 'solid-color',
-                'previewParameters', jsonb_build_object(),
-                'value', 'red',
-                'filename', 'main.glsl',
-                'codeLines', jsonb_build_array('line one'),
-                'highlightedLines', jsonb_build_array(1)
-              )
-            ),
-            'sections', jsonb_build_array(
-              jsonb_build_object(
-                'id', 'section-one',
-                'position', 1,
-                'title', 'Section',
-                'body', 'body'
+                'title', 'One colour',
+                'body', 'body',
+                'source', 'fragColor = vec4(1.0, 0.0, 0.0, 1.0);'
               )
             )
           )
@@ -75,10 +62,10 @@ as $$
   );
 $$;
 
--- Two lessons in one module, each with its own preset and section. Used to exercise the nested-row
--- count check with something more than the trivially-one-of-everything fixture above: if the
--- independent, payload-derived expected count and the post-insert actual count ever disagreed, this
--- is the shape that would surface it.
+-- Two lessons in one module, with two stages and one stage respectively — deliberately not the same
+-- count per lesson, so a stage-counting regression that summed per-lesson and multiplied, or that
+-- only ever looked at the first lesson, would not accidentally agree. The second lesson carries
+-- `tryThis`, and its stage carries `helpers`, so both optional fields have a present case.
 create or replace function pg_temp.fixture_payload_multi(p_id text, p_checksum text)
 returns jsonb
 language sql
@@ -105,58 +92,41 @@ as $$
             'title', 'Fragment output',
             'shortTitle', 'Fragment',
             'intro', 'intro',
-            'conceptTitle', 'concept',
-            'conceptLede', 'lede',
-            'tryHint', 'hint',
             'takeaway', 'takeaway',
-            'previewCaption', 'caption',
-            'presets', jsonb_build_array(
+            'stages', jsonb_build_array(
               jsonb_build_object(
-                'id', 'basic',
+                'id', 'flat-colour',
                 'position', 1,
-                'label', 'Basic',
-                'previewKey', 'solid-color',
-                'previewParameters', jsonb_build_object(),
-                'value', 'red',
-                'filename', 'main.glsl',
-                'codeLines', jsonb_build_array('line one'),
-                'highlightedLines', jsonb_build_array(1)
-              )
-            ),
-            'sections', jsonb_build_array(
+                'title', 'One colour',
+                'body', 'body',
+                'source', 'fragColor = vec4(1.0, 0.0, 0.0, 1.0);'
+              ),
               jsonb_build_object(
-                'id', 'section-one', 'position', 1, 'title', 'Section', 'body', 'body'
+                'id', 'ramp',
+                'position', 2,
+                'title', 'A ramp',
+                'body', 'body',
+                'source', 'fragColor = vec4(vec3(uv.x), 1.0);'
               )
             )
           ),
           jsonb_build_object(
-            'id', 'fragment-blend',
+            'id', 'noise',
             'moduleId', 'colors',
             'position', 2,
-            'title', 'Fragment blend',
-            'shortTitle', 'Blend',
+            'title', 'Noise',
+            'shortTitle', 'Noise',
             'intro', 'intro',
-            'conceptTitle', 'concept',
-            'conceptLede', 'lede',
-            'tryHint', 'hint',
             'takeaway', 'takeaway',
-            'previewCaption', 'caption',
-            'presets', jsonb_build_array(
+            'tryThis', 'Change the multiplier.',
+            'stages', jsonb_build_array(
               jsonb_build_object(
-                'id', 'blend-basic',
+                'id', 'hashed',
                 'position', 1,
-                'label', 'Basic',
-                'previewKey', 'solid-color',
-                'previewParameters', jsonb_build_object(),
-                'value', 'blue',
-                'filename', 'main.glsl',
-                'codeLines', jsonb_build_array('line one'),
-                'highlightedLines', jsonb_build_array(1)
-              )
-            ),
-            'sections', jsonb_build_array(
-              jsonb_build_object(
-                'id', 'section-two', 'position', 1, 'title', 'Section', 'body', 'body'
+                'title', 'A hash',
+                'body', 'body',
+                'source', 'fragColor = vec4(vec3(hash(uv)), 1.0);',
+                'helpers', 'float hash(vec2 p) {' || chr(10) || '  return fract(sin(p.x) * 43758.5453);' || chr(10) || '}'
               )
             )
           )
@@ -170,8 +140,12 @@ $$;
 select has_table('public', 'content_releases', 'content_releases exists');
 select has_table('public', 'content_modules', 'content_modules exists');
 select has_table('public', 'content_lessons', 'content_lessons exists');
-select has_table('public', 'content_presets', 'content_presets exists');
-select has_table('public', 'content_sections', 'content_sections exists');
+select has_table('public', 'content_stages', 'content_stages exists');
+
+-- The retired shape is gone rather than merely unused: leaving these behind would let a stale
+-- publisher keep writing rows nothing reads.
+select hasnt_table('public', 'content_presets', 'content_presets is gone');
+select hasnt_table('public', 'content_sections', 'content_sections is gone');
 
 select has_function(
   'public', 'get_active_course_manifest', array[]::text[],
@@ -189,6 +163,10 @@ select has_function(
 select ok(
   (select relrowsecurity from pg_class where oid = 'public.content_releases'::regclass),
   'row level security is enabled on content_releases'
+);
+select ok(
+  (select relrowsecurity from pg_class where oid = 'public.content_stages'::regclass),
+  'row level security is enabled on content_stages'
 );
 
 -- Public clients cannot publish, even as a signed-in learner.
@@ -212,7 +190,7 @@ select set_config(
 );
 
 select throws_ok(
-  $q$ select public.publish_course_release(pg_temp.fixture_payload('release-auth', repeat('a', 64))) $q$,
+  $q$ select public.publish_course_release(pg_temp.fixture_payload('release-auth', repeat('b', 64))) $q$,
   '42501',
   null,
   'an authenticated learner cannot publish a release'
@@ -225,10 +203,9 @@ set local role service_role;
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 select lives_ok(
-  $q$ select public.publish_course_release(pg_temp.fixture_payload('release-a', repeat('a', 64))) $q$,
-  'service_role can publish a valid release'
+  $q$ select public.publish_course_release(pg_temp.fixture_payload('release-a', repeat('c', 64))) $q$,
+  'service_role can publish a release'
 );
-
 select is(
   (select count(*) from public.content_releases where id = 'release-a')::int,
   1,
@@ -245,68 +222,46 @@ select is(
   'publishing inserts the lesson row'
 );
 select is(
-  (select count(*) from public.content_presets where release_id = 'release-a')::int,
+  (select count(*) from public.content_stages where release_id = 'release-a')::int,
   1,
-  'publishing inserts the preset row'
+  'publishing inserts the stage row'
 );
 select is(
-  (select count(*) from public.content_sections where release_id = 'release-a')::int,
-  1,
-  'publishing inserts the section row'
+  (select source from public.content_stages where release_id = 'release-a' and id = 'flat-colour'),
+  'fragColor = vec4(1.0, 0.0, 0.0, 1.0);',
+  'a stage stores its runnable source verbatim'
 );
 select is(
   (select active from public.content_releases where id = 'release-a'),
   true,
-  'publishing a release activates it transactionally'
+  'a freshly published release becomes active'
 );
 
 -- Idempotent republish with the same checksum.
 select lives_ok(
-  $q$ select public.publish_course_release(pg_temp.fixture_payload('release-a', repeat('a', 64))) $q$,
-  'republishing the same release id with the same checksum is idempotent'
+  $q$ select public.publish_course_release(pg_temp.fixture_payload('release-a', repeat('c', 64))) $q$,
+  'republishing an identical release is a no-op rather than an error'
 );
 select is(
-  (select count(*) from public.content_releases where id = 'release-a')::int,
+  (select count(*) from public.content_stages where release_id = 'release-a')::int,
   1,
-  'idempotent republish does not duplicate the release row'
+  'republishing does not duplicate child rows'
 );
 
 -- Republish with a different checksum fails.
 select throws_ok(
-  $q$ select public.publish_course_release(pg_temp.fixture_payload('release-a', repeat('b', 64))) $q$,
+  $q$ select public.publish_course_release(pg_temp.fixture_payload('release-a', repeat('d', 64))) $q$,
+  '23505',
   null,
-  null,
-  'republishing the same release id with a different checksum fails'
+  'republishing an id with a different checksum is refused'
 );
 
--- Publish release B and confirm activation flips atomically.
-select lives_ok(
-  $q$ select public.publish_course_release(pg_temp.fixture_payload('release-b', repeat('c', 64))) $q$,
-  'service_role can publish a second release'
-);
-
-select is(
-  (select active from public.content_releases where id = 'release-a'),
-  false,
-  'activating release B deactivates release A'
-);
-select is(
-  (select active from public.content_releases where id = 'release-b'),
-  true,
-  'activating release B makes B active'
-);
-select is(
-  (select count(*) from public.content_releases where id = 'release-a')::int,
-  1,
-  'release A''s row survives deactivation'
-);
-
--- A release with two lessons under one module, each with its own preset and section, exercises the
--- nested-row count check with something more than "one of everything". A regression that decoupled
--- the expected/actual derivation incorrectly would show up here first.
+-- A release with two lessons carrying two stages and one stage exercises the nested-row count check
+-- with something more than "one of everything". A regression that decoupled the expected/actual
+-- derivation incorrectly would show up here first.
 select lives_ok(
   $q$ select public.publish_course_release(pg_temp.fixture_payload_multi('release-multi', repeat('e', 64))) $q$,
-  'service_role can publish a release with multiple lessons, presets, and sections'
+  'service_role can publish a release with multiple lessons and uneven stage counts'
 );
 select is(
   (select count(*) from public.content_lessons where release_id = 'release-multi')::int,
@@ -314,14 +269,30 @@ select is(
   'publishing a multi-lesson release inserts every lesson row'
 );
 select is(
-  (select count(*) from public.content_presets where release_id = 'release-multi')::int,
-  2,
-  'publishing a multi-lesson release inserts every preset row, one per lesson'
+  (select count(*) from public.content_stages where release_id = 'release-multi')::int,
+  3,
+  'publishing a multi-lesson release inserts every stage row across both lessons'
 );
 select is(
-  (select count(*) from public.content_sections where release_id = 'release-multi')::int,
-  2,
-  'publishing a multi-lesson release inserts every section row, one per lesson'
+  (select active from public.content_releases where id = 'release-a'),
+  false,
+  'publishing a newer release deactivates the previous one'
+);
+select is(
+  (select count(*) from public.content_releases where id = 'release-a')::int,
+  1,
+  'release A''s row survives deactivation'
+);
+
+select is(
+  (select helpers from public.content_stages where release_id = 'release-multi' and id = 'hashed'),
+  'float hash(vec2 p) {' || chr(10) || '  return fract(sin(p.x) * 43758.5453);' || chr(10) || '}',
+  'a stage stores multi-line helpers verbatim, newlines included'
+);
+select is(
+  (select helpers from public.content_stages where release_id = 'release-multi' and id = 'flat-colour'),
+  null,
+  'a stage that declares no helpers stores NULL rather than an empty string'
 );
 
 reset role;
@@ -338,28 +309,44 @@ select ok(
   'anon can read the active release payload'
 );
 
--- The fixture omits `defaultPresetId`/`introEyebrow` (on the lesson) and `previewValueLabel` (on the
--- preset). `parseCourseRelease` uses `.strict()` schemas with `z.string().optional()`, which accepts
--- a missing key but throws on an explicit JSON null, so the RPC must omit these keys entirely rather
--- than emit them as null.
+-- Ordering is part of the contract: the client renders stages in array order and does not re-sort.
+select is(
+  (public.get_course_release('release-multi')
+    -> 'modules' -> 0 -> 'lessons' -> 0 -> 'stages' -> 1 ->> 'id'),
+  'ramp',
+  'stages come back ordered by position'
+);
+
+select is(
+  (public.get_course_release('release-multi')
+    -> 'modules' -> 0 -> 'lessons' -> 1 -> 'stages' -> 0 ->> 'helpers'),
+  'float hash(vec2 p) {' || chr(10) || '  return fract(sin(p.x) * 43758.5453);' || chr(10) || '}',
+  'helpers survive the round trip through the payload'
+);
+
+select is(
+  (public.get_course_release('release-multi') -> 'modules' -> 0 -> 'lessons' -> 1 ->> 'tryThis'),
+  'Change the multiplier.',
+  'a present tryThis survives the round trip'
+);
+
+-- `parseCourseRelease` uses `.strict()` schemas with `z.string().optional()`, which accepts a
+-- missing key but throws on an explicit JSON null. The RPC must therefore omit absent optional
+-- fields entirely rather than emit them as null, which `jsonb_strip_nulls` is responsible for.
 select ok(
-  not (
-    (public.get_course_release('release-multi') -> 'modules' -> 0 -> 'lessons' -> 0) ? 'defaultPresetId'
-  ),
-  'an absent defaultPresetId is omitted from the payload rather than emitted as null'
+  not ((public.get_course_release('release-multi')
+    -> 'modules' -> 0 -> 'lessons' -> 0) ? 'tryThis'),
+  'an absent tryThis is omitted from the payload rather than emitted as null'
 );
 select ok(
-  not (
-    (public.get_course_release('release-multi') -> 'modules' -> 0 -> 'lessons' -> 0) ? 'introEyebrow'
-  ),
-  'an absent introEyebrow is omitted from the payload rather than emitted as null'
+  not ((public.get_course_release('release-multi')
+    -> 'modules' -> 0 -> 'lessons' -> 0 -> 'stages' -> 0) ? 'helpers'),
+  'an absent helpers is omitted from the payload rather than emitted as null'
 );
 select ok(
-  not (
-    (public.get_course_release('release-multi') -> 'modules' -> 0 -> 'lessons' -> 0
-      -> 'presets' -> 0) ? 'previewValueLabel'
-  ),
-  'an absent previewValueLabel is omitted from the payload rather than emitted as null'
+  (public.get_course_release('release-multi')
+    -> 'modules' -> 0 -> 'lessons' -> 0 -> 'stages' -> 0) ? 'source',
+  'a stage always carries its source, which is never optional'
 );
 
 -- Direct mutation of published content is rejected for every table, not just content_releases, and
@@ -417,6 +404,22 @@ select throws_ok(
   '42501',
   null,
   'service_role cannot delete a published module row outside publish_course_release'
+);
+
+-- Stages are covered by the same trigger, which is worth asserting separately because it is the one
+-- table this migration introduced and a missing trigger there would be invisible above.
+select throws_ok(
+  $q$ update public.content_stages set source = 'HACKED' where release_id = 'release-multi' $q$,
+  '42501',
+  null,
+  'service_role cannot update a published stage row outside publish_course_release'
+);
+
+select throws_ok(
+  $q$ delete from public.content_stages where release_id = 'release-multi' $q$,
+  '42501',
+  null,
+  'service_role cannot delete a published stage row outside publish_course_release'
 );
 
 reset role;

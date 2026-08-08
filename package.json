@@ -61,7 +61,8 @@
     "content:publish": "tsx scripts/content/publish-course.ts",
     "lint": "expo lint",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "db:test": "supabase test db"
   },
   "private": true
 }
