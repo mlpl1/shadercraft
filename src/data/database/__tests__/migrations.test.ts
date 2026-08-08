@@ -67,6 +67,10 @@ describe("database migrations", () => {
       "sketches",
       "sync_outbox",
       "sync_state",
+      "tutorial_step_drafts",
+      "tutorial_step_progress",
+      "tutorial_steps",
+      "tutorials",
     ]);
   });
 

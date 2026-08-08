@@ -1,7 +1,13 @@
 import type { DatabaseDriver } from "../database/driver";
 import { parseCourseRelease } from "./schema";
 import type { CourseRepository } from "./course-repository";
-import type { CourseLesson, CourseModule, CourseRelease, ModuleStatus } from "./types";
+import type {
+  CourseLesson,
+  CourseModule,
+  CourseRelease,
+  ModuleStatus,
+  Tutorial,
+} from "./types";
 
 type ReleaseRow = {
   id: string;
@@ -29,6 +35,26 @@ type LessonRow = {
   intro: string;
   takeaway: string;
   try_this: string | null;
+};
+
+type TutorialRow = {
+  id: string;
+  module_id: string;
+  position: number;
+  title: string;
+  summary: string;
+};
+
+type TutorialStepRow = {
+  id: string;
+  tutorial_id: string;
+  position: number;
+  title: string;
+  brief: string;
+  starter_source: string;
+  solution_source: string;
+  helpers: string | null;
+  hint: string | null;
 };
 
 type StageRow = {
@@ -59,7 +85,7 @@ export class SqliteCourseRepository implements CourseRepository {
       throw new Error("No active course release is installed");
     }
 
-    const [moduleRows, lessonRows, stageRows] = await Promise.all([
+    const [moduleRows, lessonRows, stageRows, tutorialRows, tutorialStepRows] = await Promise.all([
       this.driver.all<ModuleRow>(
         `SELECT id, position, status, title, description, planned_lesson_count,
                 planned_topics_json
@@ -82,10 +108,27 @@ export class SqliteCourseRepository implements CourseRepository {
          ORDER BY lesson_id, position`,
         [release.id],
       ),
+      this.driver.all<TutorialRow>(
+        `SELECT id, module_id, position, title, summary
+         FROM tutorials
+         WHERE release_id = ?
+         ORDER BY module_id, position`,
+        [release.id],
+      ),
+      this.driver.all<TutorialStepRow>(
+        `SELECT id, tutorial_id, position, title, brief, starter_source, solution_source,
+                helpers, hint
+         FROM tutorial_steps
+         WHERE release_id = ?
+         ORDER BY tutorial_id, position`,
+        [release.id],
+      ),
     ]);
 
     const stagesByLesson = groupBy(stageRows, ({ lesson_id }) => lesson_id);
     const lessonsByModule = groupBy(lessonRows, ({ module_id }) => module_id);
+    const stepsByTutorial = groupBy(tutorialStepRows, ({ tutorial_id }) => tutorial_id);
+    const tutorialsByModule = groupBy(tutorialRows, ({ module_id }) => module_id);
 
     const modules: CourseModule[] = moduleRows.map((module) => ({
       id: module.id,
@@ -98,6 +141,9 @@ export class SqliteCourseRepository implements CourseRepository {
       lessons: (lessonsByModule.get(module.id) ?? []).map((lesson) =>
         toLesson(lesson, stagesByLesson),
       ),
+      // Absent rather than empty for a module with no exercises: `parseCourseRelease` rejects an
+      // empty list precisely so "none" has one representation, and this read feeds straight into it.
+      ...toTutorials(tutorialsByModule.get(module.id), stepsByTutorial),
     }));
 
     return parseCourseRelease({
@@ -149,6 +195,38 @@ export class SqliteCourseRepository implements CourseRepository {
       listener();
     }
   }
+}
+
+/**
+ * Returns a spreadable fragment rather than a value, so a module with no tutorials omits the key
+ * entirely instead of carrying an empty array — which `parseCourseRelease` rejects on purpose.
+ */
+function toTutorials(
+  rows: readonly TutorialRow[] | undefined,
+  stepsByTutorial: ReadonlyMap<string, TutorialStepRow[]>,
+): { tutorials?: Tutorial[] } {
+  if (!rows || rows.length === 0) return {};
+
+  return {
+    tutorials: rows.map((tutorial) => ({
+      id: tutorial.id,
+      moduleId: tutorial.module_id,
+      position: tutorial.position,
+      title: tutorial.title,
+      summary: tutorial.summary,
+      steps: (stepsByTutorial.get(tutorial.id) ?? []).map((step) => ({
+        id: step.id,
+        position: step.position,
+        title: step.title,
+        brief: step.brief,
+        starterSource: step.starter_source,
+        solutionSource: step.solution_source,
+        // Nullable columns; the domain type uses an absent field for the same thing.
+        ...(step.helpers === null ? {} : { helpers: step.helpers }),
+        ...(step.hint === null ? {} : { hint: step.hint }),
+      })),
+    })),
+  };
 }
 
 function toLesson(

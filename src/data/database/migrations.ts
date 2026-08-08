@@ -154,6 +154,73 @@ const migrations: readonly DatabaseMigration[] = [
       await driver.exec("ALTER TABLE lesson_stages ADD COLUMN helpers TEXT");
     },
   },
+  {
+    // Tutorials: released content like modules and lessons, plus two per-learner tables.
+    //
+    // `tutorial_step_drafts` holds work in progress. It is deliberately separate from `sketches`
+    // even though both store learner GLSL: a sketch is a free document the learner named and can
+    // delete, while a draft is anonymous, belongs to exactly one step, and is meaningless without
+    // it. Keying drafts by (profile, step) is what lets a step be reopened where it was left.
+    //
+    // `tutorial_step_progress` mirrors `lesson_progress` in shape but carries no sync columns.
+    // Tutorial completion is local-only for now; the outbox and the remote schema only know about
+    // lessons, and teaching them about steps is a separate change.
+    version: 3,
+    async migrate(driver) {
+      await driver.exec(`
+        CREATE TABLE tutorials (
+          release_id TEXT NOT NULL,
+          id TEXT NOT NULL,
+          module_id TEXT NOT NULL,
+          position INTEGER NOT NULL CHECK (position > 0),
+          title TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          PRIMARY KEY (release_id, id),
+          FOREIGN KEY (release_id, module_id)
+            REFERENCES modules(release_id, id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE tutorial_steps (
+          release_id TEXT NOT NULL,
+          id TEXT NOT NULL,
+          tutorial_id TEXT NOT NULL,
+          position INTEGER NOT NULL CHECK (position > 0),
+          title TEXT NOT NULL,
+          brief TEXT NOT NULL,
+          starter_source TEXT NOT NULL,
+          solution_source TEXT NOT NULL,
+          helpers TEXT,
+          hint TEXT,
+          PRIMARY KEY (release_id, id),
+          FOREIGN KEY (release_id, tutorial_id)
+            REFERENCES tutorials(release_id, id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE tutorial_step_progress (
+          profile_id TEXT NOT NULL,
+          step_id TEXT NOT NULL,
+          completed INTEGER NOT NULL CHECK (completed IN (0, 1)),
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (profile_id, step_id),
+          FOREIGN KEY (profile_id) REFERENCES learner_profiles(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE tutorial_step_drafts (
+          profile_id TEXT NOT NULL,
+          step_id TEXT NOT NULL,
+          source TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (profile_id, step_id),
+          FOREIGN KEY (profile_id) REFERENCES learner_profiles(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX idx_tutorials_release_module_position
+          ON tutorials(release_id, module_id, position);
+        CREATE INDEX idx_tutorial_steps_release_tutorial_position
+          ON tutorial_steps(release_id, tutorial_id, position);
+      `);
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;

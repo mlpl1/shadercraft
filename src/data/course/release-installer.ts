@@ -350,5 +350,34 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
         );
       }
     }
+
+    for (const tutorial of module.tutorials ?? []) {
+      await driver.run(
+        `INSERT INTO tutorials (release_id, id, module_id, position, title, summary)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [release.id, tutorial.id, module.id, tutorial.position, tutorial.title, tutorial.summary],
+      );
+
+      for (const step of tutorial.steps) {
+        await driver.run(
+          `INSERT INTO tutorial_steps
+            (release_id, id, tutorial_id, position, title, brief, starter_source, solution_source,
+             helpers, hint)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            release.id,
+            step.id,
+            tutorial.id,
+            step.position,
+            step.title,
+            step.brief,
+            step.starterSource,
+            step.solutionSource,
+            step.helpers ?? null,
+            step.hint ?? null,
+          ],
+        );
+      }
+    }
   }
 }

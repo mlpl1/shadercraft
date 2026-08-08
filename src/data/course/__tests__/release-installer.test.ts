@@ -199,6 +199,50 @@ describe("release installer", () => {
     expect(notifications).toBe(0);
   });
 
+  test("round-trips a module's tutorials through install and read-back", async () => {
+    const TUTORIAL = {
+      id: "make-it-pulse",
+      moduleId: bundledRelease.modules[0].id,
+      position: 1,
+      title: "Make it pulse",
+      summary:
+        "A summary carrying enough words to clear the twenty word floor the schema applies to it, so this fixture exercises the persistence rather than the validator.",
+      steps: [
+        {
+          id: "pulse-step-one",
+          position: 1,
+          title: "Drive the radius from time",
+          brief:
+            "Take the static disc and make its radius breathe, using the same sine you met in Module 1, so the shape changes size without moving.",
+          starterSource: "float d = length(uv) - 0.3;\nfragColor = vec4(vec3(step(d, 0.0)), 1.0);",
+          solutionSource:
+            "float d = length(uv) - (0.3 + sin(iTime) * 0.1);\nfragColor = vec4(vec3(step(d, 0.0)), 1.0);",
+          helpers: "float unused(float x) {\n  return x;\n}",
+          hint: "Radius is just a number.",
+        },
+      ],
+    };
+
+    const withTutorials = derivedRelease("remote-tutorials", (release) => ({
+      ...release,
+      modules: release.modules.map((module, index) =>
+        index === 0 ? { ...module, tutorials: [TUTORIAL] } : module,
+      ),
+    }));
+
+    await expect(installer.stageAndActivate(withTutorials)).resolves.toMatchObject({
+      releaseId: "remote-tutorials",
+    });
+
+    const modules = await new SqliteCourseRepository(driver).getModules();
+
+    // Deep equality rather than field-by-field: the optional `helpers`/`hint` come back as absent
+    // keys, not nulls, and that distinction is what `parseCourseRelease` enforces on the way out.
+    expect(modules[0].tutorials).toEqual([TUTORIAL]);
+    // A module with no tutorials omits the key rather than carrying an empty array.
+    expect(modules[1].tutorials).toBeUndefined();
+  });
+
   test("round-trips a stage's helpers through install and read-back", async () => {
     const HELPERS = ["float hash(vec2 p) {", "  return fract(sin(p.x) * 43758.5453);", "}"].join(
       "\n",
