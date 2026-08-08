@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { CourseModule, CourseRelease } from "./types";
+import type { CourseModule, CourseRelease, Tutorial } from "./types";
 
 const idPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -29,6 +29,30 @@ const courseLessonSchema = z
   })
   .strict();
 
+const tutorialStepSchema = z
+  .object({
+    id: z.string(),
+    position: z.number().int().positive(),
+    title: z.string(),
+    brief: z.string(),
+    starterSource: z.string(),
+    solutionSource: z.string(),
+    helpers: z.string().optional(),
+    hint: z.string().optional(),
+  })
+  .strict();
+
+const tutorialSchema = z
+  .object({
+    id: z.string(),
+    moduleId: z.string(),
+    position: z.number().int().positive(),
+    title: z.string(),
+    summary: z.string(),
+    steps: z.array(tutorialStepSchema),
+  })
+  .strict();
+
 const courseModuleSchema = z
   .object({
     id: z.string(),
@@ -39,6 +63,7 @@ const courseModuleSchema = z
     plannedLessonCount: z.number().int().nonnegative(),
     plannedTopics: z.array(z.string()),
     lessons: z.array(courseLessonSchema),
+    tutorials: z.array(tutorialSchema).optional(),
   })
   .strict();
 
@@ -126,6 +151,14 @@ const MIN_INTRO_WORDS = 60;
 const MIN_STAGE_BODY_WORDS = 60;
 const MIN_TAKEAWAY_WORDS = 30;
 
+/**
+ * Lower than a stage body's, and deliberately. A stage body explains a shader the learner is only
+ * reading; a step brief sets a task they are about to attempt, and padding it to sixty words would
+ * bury the ask. What it must not be is a single terse imperative, which is the failure this guards.
+ */
+const MIN_STEP_BRIEF_WORDS = 25;
+const MIN_TUTORIAL_SUMMARY_WORDS = 20;
+
 function countWords(value: string): number {
   return value.trim().split(/\s+/).filter(Boolean).length;
 }
@@ -175,10 +208,65 @@ function validateStageHelpers(stageId: string, helpers: string): void {
   }
 }
 
+/**
+ * A tutorial's two sources both compile through the same sandbox wrapper a stage's does, so both
+ * carry the same contract — including `solutionSource`, which is easy to overlook because it is not
+ * what the editor seeds. It is compiled every time the target renders, so a forbidden token there
+ * breaks the reference image rather than the learner's attempt, which is worse: it looks like their
+ * fault.
+ */
+function validateTutorials(
+  tutorials: Tutorial[],
+  moduleId: string,
+  tutorialIds: Set<string>,
+  stepIds: Set<string>,
+): void {
+  if (tutorials.length === 0) {
+    fail(`Module ${moduleId} must omit tutorials rather than carry an empty list`);
+  }
+
+  validateContiguousPositions(tutorials, "tutorial");
+
+  for (const tutorial of tutorials) {
+    validateUniqueId(tutorialIds, tutorial.id, "tutorial");
+    if (tutorial.moduleId !== moduleId) {
+      fail(`Tutorial ${tutorial.id} must belong to module ${moduleId}`);
+    }
+
+    validateWordCount(
+      tutorial.summary,
+      MIN_TUTORIAL_SUMMARY_WORDS,
+      `Tutorial ${tutorial.id} summary`,
+    );
+
+    if (tutorial.steps.length === 0) {
+      fail(`Tutorial ${tutorial.id} must contain at least one step`);
+    }
+    validateContiguousPositions(tutorial.steps, "tutorial step");
+
+    for (const step of tutorial.steps) {
+      validateUniqueId(stepIds, step.id, "tutorial step");
+      validateWordCount(step.brief, MIN_STEP_BRIEF_WORDS, `Tutorial step ${step.id} brief`);
+      validateStageSource(step.id, step.starterSource);
+      validateStageSource(step.id, step.solutionSource);
+      if (step.helpers !== undefined) {
+        validateStageHelpers(step.id, step.helpers);
+      }
+      // A step whose answer is what it hands you teaches nothing, and this is an easy authoring slip
+      // when a step is written by copying the one before it.
+      if (step.starterSource.trim() === step.solutionSource.trim()) {
+        fail(`Tutorial step ${step.id} starter and solution source are identical`);
+      }
+    }
+  }
+}
+
 function validateModules(modules: CourseModule[]): void {
   const moduleIds = new Set<string>();
   const lessonIds = new Set<string>();
   const stageIds = new Set<string>();
+  const tutorialIds = new Set<string>();
+  const tutorialStepIds = new Set<string>();
 
   validateContiguousPositions(modules, "module");
 
@@ -200,6 +288,15 @@ function validateModules(modules: CourseModule[]): void {
       if (module.plannedLessonCount !== module.plannedTopics.length) {
         fail(`Planned module ${module.id} lesson count must match planned topics`);
       }
+      // A tutorial unlocks when its module is completed, and a planned module can never be
+      // completed, so one here would be permanently unreachable rather than merely early.
+      if (module.tutorials !== undefined) {
+        fail(`Planned module ${module.id} cannot carry tutorials`);
+      }
+    }
+
+    if (module.tutorials !== undefined) {
+      validateTutorials(module.tutorials, module.id, tutorialIds, tutorialStepIds);
     }
 
     for (const lesson of module.lessons) {

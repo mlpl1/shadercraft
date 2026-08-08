@@ -207,3 +207,94 @@ describe("stage helpers", () => {
     expect(() => withHelpers("   ")).toThrow(/must not be empty/);
   });
 });
+
+describe("tutorials", () => {
+  const step = (position: number, overrides: Record<string, unknown> = {}) => ({
+    id: `step-${position}`,
+    position,
+    title: `Step ${position}`,
+    brief:
+      "A brief long enough to clear the twenty-five word floor, which exists so a step cannot ship as a single terse imperative telling the learner to go and do something unexplained.",
+    starterSource: "fragColor = vec4(0.0, 0.0, 0.0, 1.0);",
+    solutionSource: "fragColor = vec4(1.0, 0.0, 0.0, 1.0);",
+    ...overrides,
+  });
+
+  const tutorial = (overrides: Record<string, unknown> = {}) => ({
+    id: "a-tutorial",
+    moduleId: "a-module",
+    position: 1,
+    title: "A tutorial",
+    summary:
+      "A summary carrying enough words to clear the twenty word floor that the schema applies to this particular field, so the fixture exercises the rules rather than tripping over them.",
+    steps: [step(1)],
+    ...overrides,
+  });
+
+  const withTutorials = (tutorials: unknown, moduleOverrides: Record<string, unknown> = {}) =>
+    parseAuthoredModules([publishedModule({ tutorials, ...moduleOverrides })]);
+
+  it("accepts a published module carrying a tutorial", () => {
+    expect(() => withTutorials([tutorial()])).not.toThrow();
+  });
+
+  it("accepts a published module with no tutorials at all", () => {
+    expect(() => parseAuthoredModules([publishedModule()])).not.toThrow();
+  });
+
+  it("rejects an empty tutorial list rather than treating it as absent", () => {
+    // Absent and empty would otherwise be two representations of the same thing.
+    expect(() => withTutorials([])).toThrow(/omit tutorials/i);
+  });
+
+  it("rejects a tutorial on a planned module", () => {
+    // A tutorial unlocks when its module completes, and a planned module never completes, so this
+    // would be permanently unreachable rather than merely early.
+    expect(() =>
+      parseAuthoredModules([
+        {
+          id: "b-module",
+          position: 1,
+          status: "planned",
+          title: "Planned",
+          description: "Later.",
+          plannedLessonCount: 1,
+          plannedTopics: ["Something"],
+          lessons: [],
+          tutorials: [tutorial({ moduleId: "b-module" })],
+        },
+      ]),
+    ).toThrow(/cannot carry tutorials/i);
+  });
+
+  it("rejects a step whose starter already contains the solution", () => {
+    // The likeliest authoring slip, because steps get written by copying the one before.
+    expect(() =>
+      withTutorials([
+        tutorial({
+          steps: [step(1, { starterSource: "fragColor = vec4(1.0);", solutionSource: "fragColor = vec4(1.0);" })],
+        }),
+      ]),
+    ).toThrow(/identical/i);
+  });
+
+  it("applies the sandbox contract to the solution source, not only the starter", () => {
+    // The solution compiles every time the target renders, so a forbidden token there breaks the
+    // reference image and reads to the learner as their own mistake.
+    expect(() =>
+      withTutorials([
+        tutorial({ steps: [step(1, { solutionSource: "gl_FragColor = vec4(1.0);" })] }),
+      ]),
+    ).toThrow(/gl_FragColor/);
+  });
+
+  it("rejects a tutorial belonging to a different module", () => {
+    expect(() => withTutorials([tutorial({ moduleId: "elsewhere" })])).toThrow(/must belong/i);
+  });
+
+  it("rejects a step brief that is a bare imperative", () => {
+    expect(() =>
+      withTutorials([tutorial({ steps: [step(1, { brief: "Make it red." })] })]),
+    ).toThrow(/brief must be at least/i);
+  });
+});
