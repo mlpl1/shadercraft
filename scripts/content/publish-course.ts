@@ -33,20 +33,39 @@ export type PublishDeps = {
   log?: (message: string) => void;
 };
 
-type ReleaseCounts = { modules: number; lessons: number; stages: number };
+type ReleaseCounts = {
+  modules: number;
+  lessons: number;
+  stages: number;
+  tutorials: number;
+  steps: number;
+};
 
+/**
+ * What an operator sees after a successful publish, and therefore what they check against.
+ *
+ * Every countable thing a release carries is listed, including whatever was added most recently.
+ * This summary silently omitted tutorials and their steps on the first release that contained any —
+ * the publish was correct and the line read as though the exercises had not gone.
+ */
 function countRelease(release: CourseRelease): ReleaseCounts {
   let lessons = 0;
   let stages = 0;
+  let tutorials = 0;
+  let steps = 0;
 
   for (const module of release.modules) {
     for (const lesson of module.lessons) {
       lessons += 1;
       stages += lesson.stages.length;
     }
+    for (const tutorial of module.tutorials ?? []) {
+      tutorials += 1;
+      steps += tutorial.steps.length;
+    }
   }
 
-  return { modules: release.modules.length, lessons, stages };
+  return { modules: release.modules.length, lessons, stages, tutorials, steps };
 }
 
 /**

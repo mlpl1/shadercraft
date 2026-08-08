@@ -257,3 +257,45 @@ test("logs only after the round trip is proven", async () => {
   await expect(publishCourseRelease("course-2026-08-03", deps)).rejects.toThrow();
   expect(logs).toEqual([]);
 });
+
+test("reports every countable thing the release carries, tutorials included", async () => {
+  // The summary is what an operator checks a publish against, so anything it omits reads as absent.
+  // It omitted tutorials on the first release that had any.
+  const logs: string[] = [];
+  const withTutorial = (): CourseModule[] => {
+    const [module] = validModules();
+    return [
+      {
+        ...module,
+        tutorials: [
+          {
+            id: "a-tutorial",
+            moduleId: module.id,
+            position: 1,
+            title: "A tutorial",
+            summary:
+              "A summary carrying enough words to clear the twenty word floor the schema applies to this field, so the fixture exercises reporting rather than validation.",
+            steps: [1, 2].map((position) => ({
+              id: `step-${position}`,
+              position,
+              title: `Step ${position}`,
+              brief:
+                "A brief long enough to clear the twenty-five word floor, which exists so a step cannot ship as a single terse imperative telling the learner to go and do something unexplained.",
+              starterSource: "fragColor = vec4(0.0);",
+              solutionSource: `fragColor = vec4(${position}.0);`,
+            })),
+          },
+        ],
+      },
+    ];
+  };
+
+  const deps = baseDeps({
+    loadAuthoredModules: withTutorial,
+    log: (message) => logs.push(message),
+  });
+
+  await publishCourseRelease("course-2026-08-03", deps);
+
+  expect(JSON.parse(logs[0])).toMatchObject({ modules: 1, lessons: 1, stages: 3, tutorials: 1, steps: 2 });
+});
