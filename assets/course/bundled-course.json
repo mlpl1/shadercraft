@@ -1,6 +1,6 @@
 {
-  "checksum": "76a1e6b5c355ff35327af9faf7930b62e47d781ca120a5ee0a0e96c4f45b3477",
-  "id": "bundled-2026-08-08-3",
+  "checksum": "3582c272d8104be8b611c1f91d817573d932c4a954a725d3199e76e6535f9441",
+  "id": "bundled-2026-08-08-4",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -1237,15 +1237,137 @@
     {
       "description": "Assemble independent parts into one deliberate image.",
       "id": "composition",
-      "lessons": [],
-      "plannedLessonCount": 3,
-      "plannedTopics": [
-        "Layers and order",
-        "Masks as reusable signals",
-        "Assembling a finished piece"
+      "lessons": [
+        {
+          "id": "layers-and-order",
+          "intro": "Six modules have produced parts: shapes, fields, palettes, patterns, noise. None of them said how to put two things in one picture. The answer has been quietly present since Module 4 and is worth stating plainly, because everything else in this module is built on it. A layer is a colour and a mask, applied over whatever is already there, and an image is a stack of those applied in a deliberate order.",
+          "moduleId": "composition",
+          "position": 1,
+          "shortTitle": "Layers and order",
+          "stages": [
+            {
+              "body": "Three layers, applied in order. A vertical gradient fills the frame, a coral disc goes over it, and a gold bar goes over both. Each layer is the same shape of statement — mix the running colour toward a new one, by a mask — and none of them knows anything about the others. The bar crosses the disc and covers it, because the bar's line runs last. Nothing here is new except the discipline of writing every layer identically.",
+              "id": "layers-and-order-stack",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.08, 0.1, 0.18), vec3(0.16, 0.2, 0.34), uv.y);\n\nfloat discD = length(p - vec2(-0.14, 0.06)) - 0.26;\nfloat discMask = 1.0 - smoothstep(-fwidth(discD), fwidth(discD), discD);\ncolour = mix(colour, vec3(0.95, 0.42, 0.38), discMask);\n\nfloat barD = abs(p.y + 0.15) - 0.07;\nfloat barMask = 1.0 - smoothstep(-fwidth(barD), fwidth(barD), barD);\ncolour = mix(colour, vec3(0.99, 0.86, 0.52), barMask);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "A layer is a colour and a mask"
+            },
+            {
+              "body": "The two layer blocks have swapped places and nothing else changed — same disc, same bar, same masks, same colours. Now the coral disc covers the gold bar where they meet, and the bar appears to pass behind it. There is no depth in this shader and no sorting; the later statement simply writes over the earlier one. That is the whole of occlusion here, and it is worth being deliberate about because moving one block silently changes the picture.",
+              "id": "layers-and-order-swapped",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.08, 0.1, 0.18), vec3(0.16, 0.2, 0.34), uv.y);\n\nfloat barD = abs(p.y + 0.15) - 0.07;\nfloat barMask = 1.0 - smoothstep(-fwidth(barD), fwidth(barD), barD);\ncolour = mix(colour, vec3(0.99, 0.86, 0.52), barMask);\n\nfloat discD = length(p - vec2(-0.14, 0.06)) - 0.26;\nfloat discMask = 1.0 - smoothstep(-fwidth(discD), fwidth(discD), discD);\ncolour = mix(colour, vec3(0.95, 0.42, 0.38), discMask);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Order decides what is in front"
+            },
+            {
+              "body": "A fourth layer goes on top, and its mask comes from fractal noise rather than from a shape. Nothing about the compositing changed: it is the same mix against the same running colour. Because five-octave noise sits mostly between 0.3 and 0.67, the threshold is set inside that band rather than at a half by habit: roughly the brighter third of the field clears it at all, and only the brightest patches reach full strength. Drifting the coordinate makes the wisps move across the shapes beneath.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
+              "id": "layers-and-order-noise",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.08, 0.1, 0.18), vec3(0.16, 0.2, 0.34), uv.y);\n\nfloat discD = length(p - vec2(-0.14, 0.06)) - 0.26;\ncolour = mix(colour, vec3(0.95, 0.42, 0.38), 1.0 - smoothstep(-fwidth(discD), fwidth(discD), discD));\n\nfloat barD = abs(p.y + 0.15) - 0.07;\ncolour = mix(colour, vec3(0.99, 0.86, 0.52), 1.0 - smoothstep(-fwidth(barD), fwidth(barD), barD));\n\nfloat wisps = smoothstep(0.52, 0.66, fbm(p * 3.0 + vec2(iTime * 0.12, 0.0)));\ncolour = mix(colour, vec3(0.85, 0.9, 1.0), wisps * 0.55);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "A layer can be anything that makes a mask"
+            },
+            {
+              "body": "Two independent softenings, worth separating in your head. The disc's mask now ramps across a wide band instead of a pixel, so its edge is a long fade rather than a boundary — that is softness. And the whole mask is then scaled by 0.6, so even at its centre the disc only ever reaches six tenths of the way to coral and the gradient behind stays visible through it — that is opacity. The bar keeps a hard edge at full strength for contrast.",
+              "id": "layers-and-order-partial",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.08, 0.1, 0.18), vec3(0.16, 0.2, 0.34), uv.y);\n\nfloat barD = abs(p.y + 0.15) - 0.07;\ncolour = mix(colour, vec3(0.99, 0.86, 0.52), 1.0 - smoothstep(-fwidth(barD), fwidth(barD), barD));\n\nfloat discD = length(p - vec2(-0.14, 0.06)) - 0.26;\nfloat soft = 1.0 - smoothstep(-0.14, 0.1, discD);\ncolour = mix(colour, vec3(0.95, 0.42, 0.38), soft * 0.6);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Masks need not be all or nothing"
+            }
+          ],
+          "takeaway": "Compositing is one line repeated: take what you have, mix a new colour over it, and let a mask decide where. Because each layer only reads the accumulated colour, layers stay independent and can be reordered, removed or written in any order you like — but the sequence they run in decides what covers what. A mask is an ordinary number between 0 and 1, so partial and soft coverage cost nothing extra.",
+          "title": "Layers and order",
+          "tryThis": "In the last stage, raise the disc's opacity from 0.6 to 1.0 while leaving its soft mask alone. It becomes solid in the middle and still fades at the rim, which shows that edge softness and layer opacity are two separate controls."
+        },
+        {
+          "id": "masks-as-reusable-signals",
+          "intro": "Module 3 made the case that a field is worth keeping because it can be read more than one way. This lesson spends that idea properly, with the shape written once as a function and then asked several different questions. It also treats masks as what they are — plain numbers — which means they combine with ordinary arithmetic rather than needing anything new, and can be built from noise or angle just as readily as from a shape.",
+          "moduleId": "composition",
+          "position": 2,
+          "shortTitle": "Masks as reusable signals",
+          "stages": [
+            {
+              "body": "The shape is a rounded box united with a circle overlapping its top edge — Module 3's min, written once as a function. Three masks come out of the single field it returns: a glow that fades over the 0.4 outside it, a fill for everything inside, and an outline for the thin band where the field is near zero. They are composited in that order, so the outline sits over the fill and both sit over the glow. One evaluation, three layers.",
+              "helpers": "float scene(vec2 p) {\n  vec2 q = abs(p) - vec2(0.26, 0.16);\n  float box = length(max(q, 0.0)) - 0.08;\n  float ball = length(p - vec2(0.0, 0.26)) - 0.13;\n  return min(box, ball);\n}",
+              "id": "masks-as-reusable-signals-three",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = scene(p);\nfloat w = fwidth(d);\n\nfloat glow = 1.0 - smoothstep(0.0, 0.4, d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\nfloat outline = 1.0 - smoothstep(0.008, 0.016, abs(d));\n\nvec3 colour = vec3(0.05, 0.05, 0.09);\ncolour = mix(colour, vec3(0.16, 0.34, 0.5), glow);\ncolour = mix(colour, vec3(0.1, 0.14, 0.26), fill);\ncolour = mix(colour, vec3(0.55, 0.86, 1.0), outline);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "One field, three questions"
+            },
+            {
+              "body": "A mask is a number, so the ordinary arithmetic already means something. Multiplying two masks keeps only where both are high, which is an intersection: the shape's fill times a stripe pattern gives roughly nineteen bands that stop exactly at the shape's edge, because outside it one factor is zero. Subtracting a mask from 1 inverts it, which is how the stripes are tinted rather than punched out. No new function was needed for either.",
+              "helpers": "float scene(vec2 p) {\n  vec2 q = abs(p) - vec2(0.26, 0.16);\n  float box = length(max(q, 0.0)) - 0.08;\n  float ball = length(p - vec2(0.0, 0.26)) - 0.13;\n  return min(box, ball);\n}",
+              "id": "masks-as-reusable-signals-arithmetic",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = scene(p);\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfloat stripes = smoothstep(0.35, 0.65, 0.5 + 0.5 * cos(p.y * 60.0));\n\nvec3 colour = vec3(0.05, 0.05, 0.09);\ncolour = mix(colour, vec3(0.12, 0.18, 0.3), fill);\ncolour = mix(colour, vec3(0.99, 0.86, 0.52), fill * stripes);\ncolour = mix(colour, vec3(0.3, 0.44, 0.62), fill * (1.0 - stripes) * 0.5);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Masks combine like numbers"
+            },
+            {
+              "body": "The shape's fill is multiplied by a noise mask, and the intersection wears the shape away in patches — paint flaking off metal. Nothing about the shape changed and nothing about the noise knows a shape exists; the multiplication is the only thing connecting them. This is the argument for keeping masks as plain signals rather than baking them into whatever drew them, because a mask built for one purpose combines with one built for another without either being rewritten.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}\n\nfloat scene(vec2 p) {\n  vec2 q = abs(p) - vec2(0.26, 0.16);\n  float box = length(max(q, 0.0)) - 0.08;\n  float ball = length(p - vec2(0.0, 0.26)) - 0.13;\n  return min(box, ball);\n}",
+              "id": "masks-as-reusable-signals-noise",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = scene(p);\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfloat wear = smoothstep(0.44, 0.58, fbm(p * 7.0));\n\nvec3 colour = vec3(0.05, 0.05, 0.09);\ncolour = mix(colour, vec3(0.16, 0.2, 0.3), fill);\ncolour = mix(colour, vec3(0.86, 0.72, 0.45), fill * (1.0 - wear));\n\nfragColor = vec4(colour, 1.0);",
+              "title": "A mask from somewhere else entirely"
+            },
+            {
+              "body": "A drop shadow is the same field asked about a different place. Calling scene with the coordinate shifted puts a copy down and to the right, and reading it with a wide smoothstep rather than fwidth makes that copy soft instead of crisp. Composited underneath at just over half strength, it reads as a shadow. Writing the shape as a function is what made this three lines: the alternative is maintaining two copies of a shape and hoping they stay in step.",
+              "helpers": "float scene(vec2 p) {\n  vec2 q = abs(p) - vec2(0.26, 0.16);\n  float box = length(max(q, 0.0)) - 0.08;\n  float ball = length(p - vec2(0.0, 0.26)) - 0.13;\n  return min(box, ball);\n}",
+              "id": "masks-as-reusable-signals-shadow",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.14, 0.15, 0.2), vec3(0.24, 0.26, 0.33), uv.y);\n\nfloat shadowD = scene(p - vec2(0.05, -0.05));\nfloat shadow = 1.0 - smoothstep(0.0, 0.09, shadowD);\ncolour = mix(colour, vec3(0.03, 0.03, 0.05), shadow * 0.55);\n\nfloat d = scene(p);\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\ncolour = mix(colour, vec3(0.95, 0.55, 0.35), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "The same function, moved"
+            }
+          ],
+          "takeaway": "Write the shape as a function and every treatment becomes a question you ask it: fill inside, outline near zero, glow outside, shadow from the same function sampled at an offset. Masks are numbers between 0 and 1, so multiplying intersects them, taking a max unites them, and subtracting from 1 inverts them. Nothing in this lesson needed a new built-in — only the discipline of naming the field once.",
+          "title": "Masks as reusable signals"
+        },
+        {
+          "id": "assembling-a-finished-piece",
+          "intro": "This is the last lesson of the first half of the course, and it does not introduce anything. Instead it builds one image from nothing to finished across four stages, adding a single layer at a time and saying why each one earns its place. Every technique in it has a lesson behind it, and the point is to watch a picture assemble the way you would actually write one: background first, subject next, then the things that make it sit together.",
+          "moduleId": "composition",
+          "position": 3,
+          "shortTitle": "Assembling a finished piece",
+          "stages": [
+            {
+              "body": "A vertical gradient from warm at the bottom to deep blue by around five sixths of the way up, then a vignette that dims the frame toward its corners. The vignette is the same radial field from Module 3 used as a multiplier rather than a shape, and it drops the corners to a little under six tenths of full brightness. Neither layer is interesting alone. Both exist so that everything added later has something to sit against.",
+              "id": "assembling-a-finished-piece-sky",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.85, 0.52, 0.38), vec3(0.09, 0.13, 0.32), smoothstep(0.0, 0.85, uv.y));\n\nfloat vignette = 1.0 - smoothstep(0.5, 1.25, length(p));\ncolour *= mix(0.55, 1.0, vignette);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Background first"
+            },
+            {
+              "body": "A sun: a circle left of centre and slightly above the middle, with a broad halo taken from the same field before the disc is drawn over it. The halo goes down first at just under half strength so the disc's crisp edge survives on top of it, and both use the warm end of the palette so they belong to the gradient rather than sitting on it. This is Module 2's soft edge and Module 3's glow doing exactly what they did there, in service of something.",
+              "id": "assembling-a-finished-piece-sun",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.85, 0.52, 0.38), vec3(0.09, 0.13, 0.32), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sunD = length(p - vec2(-0.18, 0.12)) - 0.16;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.75, sunD)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sunD), fwidth(sunD), sunD));\n\nfragColor = vec4(colour, 1.0);",
+              "title": "The subject"
+            },
+            {
+              "body": "A horizon, built by sampling fractal noise along one axis and treating the result as a height. Wherever a pixel sits below that height it belongs to the ground, which is the same sign test every field in Module 3 used, applied to a line that happens to wobble. Worth knowing: a single line through two-dimensional noise travels far less than the field does, so the amplitude here is deliberately larger than it looks like it should be. The ridge runs between roughly 0.15 and 0.44 below the centre line, clear of the sun at both ends.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
+              "id": "assembling-a-finished-piece-terrain",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.85, 0.52, 0.38), vec3(0.09, 0.13, 0.32), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sunD = length(p - vec2(-0.18, 0.12)) - 0.16;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.75, sunD)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sunD), fwidth(sunD), sunD));\n\nfloat height = -0.28 + (fbm(vec2(p.x * 3.0 + 4.0, 1.7)) - 0.5) * 1.4;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), 1.0 - smoothstep(-fwidth(ground), fwidth(ground), ground));\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Ground the picture"
+            },
+            {
+              "body": "Three final layers, none of which announces itself. Haze warms a band hugging the horizon, so the land meets the sky instead of being pasted onto it. Grain adds a hashed value per pixel at three percent, which breaks up the perfectly smooth gradient the way film would. And a contrast nudge around the mid grey from Module 4 firms the whole thing up, clamped because pushing away from a pivot leaves the range at both ends. Compare it against the previous stage.",
+              "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}\n\nvec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
+              "id": "assembling-a-finished-piece-grade",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.85, 0.52, 0.38), vec3(0.09, 0.13, 0.32), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sunD = length(p - vec2(-0.18, 0.12)) - 0.16;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.75, sunD)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sunD), fwidth(sunD), sunD));\n\nfloat height = -0.28 + (fbm(vec2(p.x * 3.0 + 4.0, 1.7)) - 0.5) * 1.4;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), 1.0 - smoothstep(-fwidth(ground), fwidth(ground), ground));\n\nfloat haze = 1.0 - smoothstep(0.0, 0.22, abs(ground));\ncolour = mix(colour, vec3(0.95, 0.7, 0.55), haze * 0.25);\n\ncolour += (hash(floor(fragCoord)) - 0.5) * 0.03;\ncolour = clamp((colour - 0.5) * 1.08 + 0.5, 0.0, 1.0);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "The layers nobody notices"
+            }
+          ],
+          "takeaway": "A finished image is usually a short stack of unremarkable layers. Build the background before the subject, and the atmosphere after both, because each layer wants to read against what is already there. The last stage adds nothing anyone would notice individually — haze, grain, a contrast nudge — and the difference between it and the stage before is most of what separates a shader that looks assembled from one that looks placed.",
+          "title": "Assembling a finished piece"
+        }
       ],
+      "plannedLessonCount": 0,
+      "plannedTopics": [],
       "position": 7,
-      "status": "planned",
+      "status": "published",
       "title": "Composition"
     },
     {
