@@ -18,7 +18,7 @@ const publishedLessons = release.modules
  * module five lessons — Module 4 has four. The first attempt at this multiplied a module count by
  * five and would have broken again the moment that turned out to be false, which it did.
  */
-const LESSONS_PER_PUBLISHED_MODULE = [5, 5, 5, 4, 5];
+const LESSONS_PER_PUBLISHED_MODULE = [5, 5, 5, 4, 5, 5];
 
 const PUBLISHED_MODULE_COUNT = LESSONS_PER_PUBLISHED_MODULE.length;
 

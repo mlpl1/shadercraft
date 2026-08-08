@@ -1,6 +1,6 @@
 {
-  "checksum": "dad77fed577e505e1fc27945d4bcbd1ba4f3eb0066f3e420c88abca2a9c72a48",
-  "id": "bundled-2026-08-08-2",
+  "checksum": "76a1e6b5c355ff35327af9faf7930b62e47d781ca120a5ee0a0e96c4f45b3477",
+  "id": "bundled-2026-08-08-3",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -1010,17 +1010,228 @@
     {
       "description": "Generate and shape procedural randomness.",
       "id": "randomness-and-noise",
-      "lessons": [],
-      "plannedLessonCount": 5,
-      "plannedTopics": [
-        "Deterministic randomness",
-        "Value noise",
-        "Gradient noise",
-        "Fractal noise",
-        "Domain warping"
+      "lessons": [
+        {
+          "id": "deterministic-randomness",
+          "intro": "Module 5 ended by naming its own ceiling: everything a cell could know about itself was a tidy function of where it sat, so every pattern came out regular. This lesson supplies the missing ingredient. A shader has no random number generator and no memory between frames, so what it uses instead is a function that scrambles its input so thoroughly the output looks random — while still returning the same answer every single time it is asked.",
+          "moduleId": "randomness-and-noise",
+          "position": 1,
+          "shortTitle": "Deterministic randomness",
+          "stages": [
+            {
+              "body": "This is the first stage in the course to declare a function, which it can do because helpers sit above mainImage where GLSL allows definitions. hash takes a cell coordinate and returns a value between 0 and 1. Feeding it floored positions gives one value per cell, and the screen fills with roughly two thousand square specks of unrelated brightness — television static. There is no seed and no state anywhere in this shader. Every speck is simply a function of where it is.",
+              "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}",
+              "id": "deterministic-randomness-hash",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = hash(floor(p * 30.0));\n\nfragColor = vec4(vec3(n), 1.0);",
+              "title": "A number from a position"
+            },
+            {
+              "body": "Scrolling the coordinate before flooring it slides the static sideways, a whole cell at a time. Watch one bright speck: it keeps its exact brightness as it travels, because that brightness belongs to a cell identity that is moving, not to a pixel being re-rolled each frame. If this were a real random generator the screen would boil instead, a fresh field every frame. Determinism is not a limitation being worked around here. It is the property that makes the value reusable.",
+              "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}",
+              "id": "deterministic-randomness-attached",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = hash(floor(p * 30.0 + vec2(iTime * 4.0, 0.0)));\n\nfragColor = vec4(vec3(n), 1.0);",
+              "title": "Attached to the coordinate, not the frame"
+            },
+            {
+              "body": "The same expression with the multiplier and fract removed, on a continuous coordinate. What comes back is not random at all: about twenty-five fine stripes, running almost horizontally and tilted around nine degrees, because the dot product collapses the plane onto one axis and the sine repeats along it. The randomness is not in the sine. It arrives when that smooth output is multiplied by a large number and only the fractional part kept, which throws neighbouring inputs to unrelated places.",
+              "helpers": "float wave(vec2 p) {\n  return 0.5 + 0.5 * sin(dot(p, vec2(12.9898, 78.233)));\n}",
+              "id": "deterministic-randomness-inside",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(vec3(wave(p)), 1.0);",
+              "title": "What is inside the trick"
+            },
+            {
+              "body": "The tiling from the previous module, with the cell identity now passed through hash before it decides anything. Each circle takes a radius between 0.1 and 0.42, and the grid reads as genuinely irregular rather than as a pattern — no diagonal banding, no repeat, nothing the eye can predict from one cell to the next. The only change from Module 5's last lesson is one function call. Identity gave each cell a name; the hash turns that name into something unrepeatable.",
+              "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}",
+              "id": "deterministic-randomness-cells",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 scaled = p * 4.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat radius = 0.1 + hash(id) * 0.32;\nfloat d = length(cell) - radius;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "The thing Module 5 could not do"
+            }
+          ],
+          "takeaway": "A hash turns a coordinate into a value that looks random but is not: the same input always gives the same output, which is exactly what a shader needs when nothing is remembered between frames. The usual construction takes a dot product to collapse two numbers into one, a sine to fold it into a bounded range, and a large multiplier before fract to make neighbouring inputs land far apart.",
+          "title": "Deterministic randomness",
+          "tryThis": "Change 43758.5453 to something small, like 7.0, in the first stage. The static collapses into visible structure, which shows how much of the apparent randomness is doing violence to the sine rather than coming from it."
+        },
+        {
+          "id": "value-noise",
+          "intro": "A hash gives one unrelated number per cell, which is why the last lesson looked like static: neighbouring cells know nothing about each other. Noise is what you get when those isolated values are made to agree along the way between them. The recipe is short — a random value at every lattice point, then interpolation across each cell — and the quality of the result turns almost entirely on which interpolation you choose.",
+          "moduleId": "randomness-and-noise",
+          "position": 2,
+          "shortTitle": "Value noise",
+          "stages": [
+            {
+              "body": "The starting point, at a much coarser scale than the static two stages ago so individual cells are large enough to study. Flooring throws away where inside the cell a pixel is, so every pixel in a cell gets the identical value and the result is a mosaic of flat squares about four and a half across by eight down. Everything from here is about recovering that discarded fraction and using it to travel smoothly between neighbouring squares.",
+              "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}",
+              "id": "value-noise-blocky",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = hash(floor(p * 4.0));\n\nfragColor = vec4(vec3(n), 1.0);",
+              "title": "One value per cell"
+            },
+            {
+              "body": "Both halves of the split from Module 5 are back, and this time the fraction does the work. Three mixes blend the four corner values: two across the bottom and top edges, then one between those. The flat squares are gone, but something has replaced them — a faint diamond quilting, with visible creases running along every cell boundary. The value is continuous there; its rate of change is not, and the eye is far better at spotting a kink than a step.",
+              "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}\n\nfloat valueNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  float a = hash(i);\n  float b = hash(i + vec2(1.0, 0.0));\n  float c = hash(i + vec2(0.0, 1.0));\n  float d = hash(i + vec2(1.0, 1.0));\n  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);\n}",
+              "id": "value-noise-linear",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = valueNoise(p * 4.0);\n\nfragColor = vec4(vec3(n), 1.0);",
+              "title": "Blend between the four corners"
+            },
+            {
+              "body": "One line is different: the fraction is bent through f times f times three minus two f before being used as a blend factor. That expression is smoothstep, written out — the very curve Module 2 introduced — and its useful property here is that its slope is zero at both 0 and 1. Arriving at a cell boundary with no rate of change means the neighbouring cell can pick up without a kink, and the quilting vanishes into soft, rolling blobs.",
+              "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}\n\nfloat valueNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = hash(i);\n  float b = hash(i + vec2(1.0, 0.0));\n  float c = hash(i + vec2(0.0, 1.0));\n  float d = hash(i + vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y);\n}",
+              "id": "value-noise-smoothed",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = valueNoise(p * 4.0);\n\nfragColor = vec4(vec3(n), 1.0);",
+              "title": "Smooth the fraction, not the value"
+            },
+            {
+              "body": "Subtracting a half turns the noise into something with a sign, which is the shape of every field from Module 3 — negative in some places, positive in others, zero along a boundary. fwidth antialiases that boundary exactly as it did for a circle, and the result reads as coastline: irregular islands with soft edges, drifting as time slides the coordinate. Noise became geometry without a single new idea, because a field never cared where its numbers came from.",
+              "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}\n\nfloat valueNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = hash(i);\n  float b = hash(i + vec2(1.0, 0.0));\n  float c = hash(i + vec2(0.0, 1.0));\n  float d = hash(i + vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y);\n}",
+              "id": "value-noise-threshold",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = valueNoise(p * 4.0 + vec2(iTime * 0.2, 0.0)) - 0.5;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.1, 0.2), vec3(0.85, 0.82, 0.6), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Noise as a shape"
+            }
+          ],
+          "takeaway": "Value noise puts a hashed value at every whole-numbered point and blends between the four surrounding it. Straight linear blending leaves the slope jumping at every cell edge, which the eye reads as a grid of creases; running the fraction through the same smoothstep curve from Module 2 flattens the slope to zero at the boundaries and the creases disappear. The result is continuous, repeatable, and cheap.",
+          "title": "Value noise"
+        },
+        {
+          "id": "gradient-noise",
+          "intro": "Value noise works, and at a glance it looks fine. Look at it for a while, though, and a grid starts to show through: light and dark patches keep landing on the same square lattice, because that is precisely where the hashed values live. Gradient noise fixes this by storing something different at each lattice point — not a value, but a direction — and reading the result off the slope instead. The change costs one dot product per corner.",
+          "moduleId": "randomness-and-noise",
+          "position": 3,
+          "shortTitle": "Gradient noise",
+          "stages": [
+            {
+              "body": "hash2 returns two numbers rather than one, a random vector somewhere in the square from minus one to one. Each corner contributes the dot product of its vector with the offset from that corner to the pixel, which is zero when the pixel sits on the corner and grows as it moves away. Interpolating those four contributions gives a field that hovers around a mid grey, rarely reaching pure black or white, and whose soft patches sit at no particular angle.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}",
+              "id": "gradient-noise-first",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = gradientNoise(p * 4.0);\n\nfragColor = vec4(vec3(n), 1.0);",
+              "title": "Slopes instead of heights"
+            },
+            {
+              "body": "Value noise on the bottom half, gradient noise on the top, at the same scale and with a hairline between them. The bottom is higher in contrast, reaching much closer to black and white, and its light patches line up into rows and columns once you look for them. The top is gentler and its patches drift at arbitrary angles. Neither is better in the abstract, but only one of them stops looking like a grid the longer you stare.",
+              "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}\n\nvec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat valueNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), w.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), w.x), w.y);\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}",
+              "id": "gradient-noise-compare",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat top = gradientNoise(p * 4.0);\nfloat bottom = valueNoise(p * 4.0);\n\nfloat n = mix(bottom, top, step(0.0, p.y));\nn = mix(n, 0.35, 1.0 - smoothstep(0.004, 0.008, abs(p.y)));\n\nfragColor = vec4(vec3(n), 1.0);",
+              "title": "The two, side by side"
+            },
+            {
+              "body": "This marks in red everywhere the noise sits within a whisker of 0.5. What appears is a web of curves rather than isolated dots, because 0.5 is a contour that runs continuously across the field — but look where those curves cross. Every intersection lands exactly on a lattice point, because there the offset from the nearest corner is zero, so all four dot products vanish and the value is pinned to 0.5. Value noise puts its extremes on the lattice; gradient noise puts its midpoint there.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}",
+              "id": "gradient-noise-lattice",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = gradientNoise(p * 4.0);\n\nfloat atMid = 1.0 - smoothstep(0.004, 0.012, abs(n - 0.5));\n\nvec3 colour = mix(vec3(n), vec3(0.95, 0.2, 0.25), atMid);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Zero at every lattice point"
+            },
+            {
+              "body": "The noise drives Module 4's palette instead of a grey, and drifts slowly as time moves the coordinate. Because gradient noise keeps to the middle of its range the palette never sweeps its full spectrum, so the image stays within a related band of colour rather than cycling through everything — which is usually what you want and is worth knowing before you go looking for a bug that is not there. Widen the range by scaling around 0.5.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}",
+              "id": "gradient-noise-used",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = gradientNoise(p * 3.0 + vec2(iTime * 0.15, 0.0));\n\nvec3 colour = 0.5 + 0.5 * cos(6.28318 * (n + vec3(0.0, 0.67, 0.33)));\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Put it to work"
+            }
+          ],
+          "takeaway": "Gradient noise hashes a random vector at each lattice point and takes its dot product with the offset from that point, so the result is always exactly zero at the lattice itself and gets all its variation from between the points. That is the opposite of value noise, whose extremes sit on the grid, and it is why gradient noise shows no square bias. The interpolation and the smoothing curve are unchanged.",
+          "title": "Gradient noise"
+        },
+        {
+          "id": "fractal-noise",
+          "intro": "One layer of noise gives features at exactly one size, which is why it reads as blobs rather than as anything from the world. Real surfaces have detail at every scale at once — a coastline has bays, and coves inside the bays, and rocks inside the coves. Fractal noise imitates that by adding the same function to itself several times over, each layer half as strong and twice as fine, and it is the single most useful thing in this module.",
+          "moduleId": "randomness-and-noise",
+          "position": 4,
+          "shortTitle": "Fractal noise",
+          "stages": [
+            {
+              "body": "The loop runs once, so this is the previous lesson's noise wearing a new name, and the picture is the same soft blobs. Two details are worth reading now while the loop is trivial. Dividing by the accumulated weight rather than a fixed number keeps the output in the same range however many times the loop runs, so the next three stages are directly comparable. And doubling the coordinate each pass is what makes the next layer finer.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 1; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
+              "id": "fractal-noise-one",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(vec3(fbm(p * 3.0)), 1.0);",
+              "title": "One octave"
+            },
+            {
+              "body": "One character changed and the surface acquires texture. The large shapes are still exactly where they were — the first octave is unchanged and carries four sevenths of the total — but each is now roughened by a half-strength layer at twice the frequency, and that in turn by a quarter-strength layer at four times. The eye reads the combination as detail rather than as three separate patterns, which is the whole trick. Nothing was added but a bigger number in the loop.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 3; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
+              "id": "fractal-noise-three",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(vec3(fbm(p * 3.0)), 1.0);",
+              "title": "Three octaves"
+            },
+            {
+              "body": "Six octaves, and the difference from three is far smaller than the difference three made over one. The sixth layer arrives at one thirty-second of the first's strength and thirty-two times its frequency, which on this preview is finer than a pixel and contributes little but cost — four hashed corners per octave, twenty-four of them a pixel by the sixth. Knowing when the next octave stops earning its keep is a judgement the last module of the course is entirely about.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 6; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
+              "id": "fractal-noise-six",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(vec3(fbm(p * 3.0)), 1.0);",
+              "title": "Six octaves, and where it stops paying"
+            },
+            {
+              "body": "Amplitude falloff is now a parameter, sweeping between 0.2 and 0.7. Low, and the later octaves barely register: the surface goes smooth and rolling, dominated by its first layer. High, and each octave keeps most of its predecessor's strength, so fine detail competes with coarse and the surface turns gritty and restless. The frequency multiplier is the other control, held at two throughout this module; raising it spreads the octaves further apart and starts to look like separate layers rather than one material.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p, float gain) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * gain;\n  }\n  return total / weight;\n}",
+              "id": "fractal-noise-gain",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat gain = 0.45 + sin(iTime * 0.6) * 0.25;\n\nfragColor = vec4(vec3(fbm(p * 3.0, gain)), 1.0);",
+              "title": "The two controls"
+            }
+          ],
+          "takeaway": "Summing octaves means adding several passes of noise, each at higher frequency and lower amplitude. Two numbers control the character: how fast frequency rises, and how fast amplitude falls. Halving amplitude while doubling frequency is the usual choice and gives natural-looking detail; keeping more amplitude in the later octaves gives a rougher, grittier surface. Dividing by the total amplitude keeps the output in the same range whatever the octave count.",
+          "title": "Fractal noise"
+        },
+        {
+          "id": "domain-warping",
+          "intro": "Module 5 spent five lessons transforming coordinates with things you chose: an offset, an angle, a grid. This lesson transforms them with something you did not choose — noise. Feeding a noise field back into the position another noise field is sampled at produces structure that neither could make alone, and it is how most convincing procedural clouds, smoke and marble are actually built. The idea takes one line and repays it generously.",
+          "moduleId": "randomness-and-noise",
+          "position": 5,
+          "shortTitle": "Domain warping",
+          "stages": [
+            {
+              "body": "Five octaves of fractal noise, unwarped, so the next three stages have something to be compared against. It is a perfectly good cloudy texture and it has one giveaway: everything in it is roughly the same size and roughly round. There are no long thin structures, nothing that looks stretched or swept, because every octave was sampled on a grid that runs straight. That is the specific shortcoming the next stage removes.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
+              "id": "domain-warping-baseline",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(vec3(fbm(p * 3.0)), 1.0);",
+              "title": "Before the warp"
+            },
+            {
+              "body": "Two more fbm calls build an offset vector, and the field is sampled at the position plus that offset. Every pixel is now reading the texture from somewhere slightly else, and because the offset varies smoothly the whole image looks pushed around — stretched in some places, bunched in others, with the round blobs pulled into curved sweeps. The two offset components are sampled at deliberately different places, so they vary independently rather than dragging everything along one diagonal.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
+              "id": "domain-warping-once",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 base = p * 3.0;\nvec2 offset = vec2(fbm(base), fbm(base + vec2(5.2, 1.3)));\n\nfloat n = fbm(base + offset * 0.9);\n\nfragColor = vec4(vec3(n), 1.0);",
+              "title": "Offset the coordinate by noise"
+            },
+            {
+              "body": "The same move applied twice: the first offset warps a second offset, which warps the final sample. The result is qualitatively different rather than merely more so — long filaments appear, with fine wisps trailing off them and dense knots where the warp folded the field back on itself. This is the shape people recognise as smoke or marble, and it costs five fractal-noise calls a pixel — twenty-five noise layers, a hundred hashed corners — which is worth knowing before reaching for it in something that has to hold sixty frames a second.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
+              "id": "domain-warping-twice",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 base = p * 3.0;\n\nvec2 first = vec2(fbm(base), fbm(base + vec2(5.2, 1.3)));\nvec2 second = vec2(fbm(base + first * 4.0 + vec2(1.7, 9.2)), fbm(base + first * 4.0 + vec2(8.3, 2.8)));\n\nfloat n = fbm(base + second * 1.4);\n\nfragColor = vec4(vec3(n), 1.0);",
+              "title": "Warp the warp"
+            },
+            {
+              "body": "Warped noise driving a palette, drifting on time, with the warp vector itself brightening the places it stretched hardest. Every idea in it has a lesson behind it: normalised aspect-corrected coordinates, a cosine palette, a hash, gradient noise, summed octaves, and a coordinate transform — except the transform is noise rather than a matrix. Six modules of machinery, sixteen lines of shader, and nothing in it that has not already been explained.",
+              "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
+              "id": "domain-warping-finished",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 base = p * 2.6 + vec2(iTime * 0.08, 0.0);\n\nvec2 first = vec2(fbm(base), fbm(base + vec2(5.2, 1.3)));\nvec2 second = vec2(fbm(base + first * 4.0 + vec2(1.7, 9.2)), fbm(base + first * 4.0 + vec2(8.3, 2.8)));\n\nfloat n = fbm(base + second * 1.4);\nfloat stretch = length(second - 0.5);\n\nvec3 colour = 0.5 + 0.5 * cos(6.28318 * (n * 1.4 + vec3(0.0, 0.67, 0.33)));\ncolour = mix(colour, vec3(1.0), clamp(stretch * 0.5, 0.0, 0.35));\n\nfragColor = vec4(colour, 1.0);",
+              "title": "The whole course in one image"
+            }
+          ],
+          "takeaway": "Domain warping means offsetting a coordinate by the output of a noise function before sampling noise again. One pass stretches and folds the field into something that looks flowed rather than sprinkled; feeding the result back a second time produces the wispy, filament-like structure associated with smoke and marble. The warp strength is the control worth reaching for first, and past about one unit the image stops being recognisable.",
+          "title": "Domain warping"
+        }
       ],
+      "plannedLessonCount": 0,
+      "plannedTopics": [],
       "position": 6,
-      "status": "planned",
+      "status": "published",
       "title": "Randomness & Noise"
     },
     {
