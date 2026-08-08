@@ -199,6 +199,45 @@ describe("release installer", () => {
     expect(notifications).toBe(0);
   });
 
+  test("round-trips a stage's helpers through install and read-back", async () => {
+    const HELPERS = ["float hash(vec2 p) {", "  return fract(sin(p.x) * 43758.5453);", "}"].join(
+      "\n",
+    );
+
+    // The column is nullable and most stages leave it unset, so the interesting case is that a
+    // value survives the whole path -- INSERT, SELECT, and the row-to-domain mapping -- while its
+    // absent neighbours come back absent rather than as null or empty string.
+    const withHelpers = derivedRelease("remote-helpers", (release) => ({
+      ...release,
+      modules: release.modules.map((module, moduleIndex) =>
+        moduleIndex !== 0
+          ? module
+          : {
+              ...module,
+              lessons: module.lessons.map((lesson, lessonIndex) =>
+                lessonIndex !== 0
+                  ? lesson
+                  : {
+                      ...lesson,
+                      stages: lesson.stages.map((stage, stageIndex) =>
+                        stageIndex === 0 ? { ...stage, helpers: HELPERS } : stage,
+                      ),
+                    },
+              ),
+            },
+      ),
+    }));
+
+    await expect(installer.stageAndActivate(withHelpers)).resolves.toMatchObject({
+      releaseId: "remote-helpers",
+    });
+
+    const modules = await new SqliteCourseRepository(driver).getModules();
+    const stages = modules[0].lessons[0].stages;
+
+    expect(stages[0].helpers).toBe(HELPERS);
+    expect(stages[1].helpers).toBeUndefined();
+  });
   test("rejects a stage source violating the sandbox contract before any SQL write", async () => {
     const counting = new CountingTransactionDriver(":memory:");
     await migrateDatabase(counting);

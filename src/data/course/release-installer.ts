@@ -333,9 +333,20 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
       for (const stage of lesson.stages) {
         await driver.run(
           `INSERT INTO lesson_stages
-            (release_id, id, lesson_id, position, title, body, source)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [release.id, stage.id, lesson.id, stage.position, stage.title, stage.body, stage.source],
+            (release_id, id, lesson_id, position, title, body, source, helpers)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            release.id,
+            stage.id,
+            lesson.id,
+            stage.position,
+            stage.title,
+            stage.body,
+            stage.source,
+            // `null`, not `undefined`: the driver binds undefined as a missing parameter rather than
+            // SQL NULL, which is a bind-count error instead of an absent value.
+            stage.helpers ?? null,
+          ],
         );
       }
     }

@@ -28,13 +28,18 @@ export function LessonStageBlock({ stage, isMounted, isVisible }: LessonStageBlo
       <Text style={styles.title}>{stage.title}</Text>
 
       {isMounted ? (
-        <ShaderSandbox active={isVisible} height={PREVIEW_HEIGHT} source={stage.source} />
+        <ShaderSandbox
+          active={isVisible}
+          height={PREVIEW_HEIGHT}
+          helpers={stage.helpers}
+          source={stage.source}
+        />
       ) : (
         // Same height as the sandbox, so mounting never shifts the layout under the reader.
         <View style={styles.placeholder} testID="stage-preview-placeholder" />
       )}
 
-      <StageSourceView source={stage.source} />
+      <StageSourceView helpers={stage.helpers} source={stage.source} />
 
       <Text style={styles.body}>{stage.body}</Text>
     </View>

@@ -11,6 +11,7 @@ const lessonStageSchema = z
     title: z.string(),
     body: z.string(),
     source: z.string(),
+    helpers: z.string().optional(),
   })
   .strict();
 
@@ -150,6 +151,30 @@ function validateStageSource(stageId: string, source: string): void {
   }
 }
 
+/**
+ * Helper declarations are spliced above `mainImage`, so they carry the wrapper's constraints too —
+ * plus one of their own. `SHADER_SOURCE_FORBIDDEN_TOKENS` bans `void main(`, which does not match
+ * `void mainImage(`: the substring after `void main` is `I`, not `(`. A stage that declared its own
+ * `mainImage` would therefore pass every existing check and fail to link with a duplicate
+ * definition, so the name is rejected outright.
+ *
+ * An empty string is rejected rather than treated as absent, so "has helpers" is never ambiguous
+ * between the field being missing and being blank.
+ */
+function validateStageHelpers(stageId: string, helpers: string): void {
+  if (helpers.trim().length === 0) {
+    fail(`Stage ${stageId} helpers must not be empty when present`);
+  }
+  for (const token of SHADER_SOURCE_FORBIDDEN_TOKENS) {
+    if (helpers.includes(token)) {
+      fail(`Stage ${stageId} helpers must not contain ${token}`);
+    }
+  }
+  if (helpers.includes("mainImage")) {
+    fail(`Stage ${stageId} helpers must not define mainImage`);
+  }
+}
+
 function validateModules(modules: CourseModule[]): void {
   const moduleIds = new Set<string>();
   const lessonIds = new Set<string>();
@@ -195,6 +220,9 @@ function validateModules(modules: CourseModule[]): void {
         validateUniqueId(stageIds, stage.id, "stage");
         validateWordCount(stage.body, MIN_STAGE_BODY_WORDS, `Stage ${stage.id} body`);
         validateStageSource(stage.id, stage.source);
+        if (stage.helpers !== undefined) {
+          validateStageHelpers(stage.id, stage.helpers);
+        }
       }
     }
   }

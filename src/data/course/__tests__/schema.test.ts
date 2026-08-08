@@ -173,3 +173,37 @@ describe("tryThis", () => {
     expect(() => parseAuthoredModules([publishedModule({ lessons })])).not.toThrow();
   });
 });
+
+describe("stage helpers", () => {
+  const withHelpers = (helpers: unknown) =>
+    parseAuthoredModules([
+      publishedModule({
+        lessons: [lesson({ stages: [stage(1, { helpers }), stage(2), stage(3)] })],
+      }),
+    ]);
+
+  it("accepts a stage that declares helper functions", () => {
+    expect(() => withHelpers("float hash(vec2 p) {\n  return fract(p.x);\n}")).not.toThrow();
+  });
+
+  it("rejects helpers that redefine mainImage", () => {
+    // `SHADER_SOURCE_FORBIDDEN_TOKENS` bans `void main(`, which does NOT match `void mainImage(` —
+    // the character after `void main` is `I`, not `(`. Without a dedicated check this would pass
+    // validation and fail to link on device with a duplicate definition.
+    expect(() =>
+      withHelpers("void mainImage(out vec4 fragColor, in vec2 fragCoord) {}"),
+    ).toThrow(/mainImage/);
+  });
+
+  it("rejects helpers carrying wrapper-owned declarations", () => {
+    expect(() => withHelpers("precision highp float;\nfloat f() { return 1.0; }")).toThrow(
+      /precision/,
+    );
+    expect(() => withHelpers("#version 300 es")).toThrow(/#version/);
+  });
+
+  it("rejects a present but blank helpers field", () => {
+    // Absent and blank would otherwise mean the same thing in two representations.
+    expect(() => withHelpers("   ")).toThrow(/must not be empty/);
+  });
+});

@@ -42,6 +42,7 @@ export class ShaderProgramHost {
   private active: ActiveProgram | null = null;
   private buffer: WebGLBuffer | null = null;
   private lastCompiledBody: string | null = null;
+  private lastCompiledHelpers: string | undefined = undefined;
 
   constructor(gl: ExpoWebGLRenderingContext) {
     this.gl = gl;
@@ -62,7 +63,7 @@ export class ShaderProgramHost {
    * Returns the outcome rather than throwing: half-typed source is the normal state of an editor, not
    * an exceptional one.
    */
-  setBody(body: string): HostCompileResult {
+  setBody(body: string, helpers?: string): HostCompileResult {
     if (body.trim().length === 0) {
       return {
         ok: false,
@@ -72,9 +73,11 @@ export class ShaderProgramHost {
       };
     }
 
-    if (body === this.lastCompiledBody) return { ok: true };
+    // Helpers are part of the compiled program, so a stage whose body is unchanged but whose helper
+    // block differs must still recompile.
+    if (body === this.lastCompiledBody && helpers === this.lastCompiledHelpers) return { ok: true };
 
-    const { source, lineOffset } = wrapMainImageBody(body);
+    const { source, lineOffset } = wrapMainImageBody(body, helpers);
     const gl = this.gl;
 
     const vertexShader = this.compileShader(gl.VERTEX_SHADER, VERTEX_SHADER_SOURCE);
@@ -116,6 +119,7 @@ export class ShaderProgramHost {
       time: gl.getUniformLocation(program, "iTime"),
     };
     this.lastCompiledBody = body;
+    this.lastCompiledHelpers = helpers;
     this.ensureBuffer(program);
 
     return { ok: true };
@@ -140,6 +144,7 @@ export class ShaderProgramHost {
     this.active = null;
     this.buffer = null;
     this.lastCompiledBody = null;
+    this.lastCompiledHelpers = undefined;
   }
 
   private compileShader(

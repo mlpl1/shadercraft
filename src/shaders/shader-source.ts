@@ -18,13 +18,20 @@
  * breaks. Every device new enough to run this app supports it; the weaker directive just keeps the
  * blast radius to the stage that asked for it.
  */
-const PROLOGUE_LINES = [
+const HEADER_LINES = [
   "#extension GL_OES_standard_derivatives : enable",
   "precision highp float;",
   "uniform vec3 iResolution;",
   "uniform float iTime;",
-  "void mainImage(out vec4 fragColor, in vec2 fragCoord) {",
 ] as const;
+
+/**
+ * Split from the header so an optional block of helper declarations can sit between them. GLSL has
+ * no nested functions, and a stage body is spliced inside `mainImage`, so without this split a stage
+ * could never declare one — which blocks fractal noise, domain warping, and every ray-marching
+ * lesson in Act 2, none of which have an inline form.
+ */
+const MAIN_IMAGE_OPEN = "void mainImage(out vec4 fragColor, in vec2 fragCoord) {";
 
 /**
  * Closes `mainImage` and calls it. `main` writes through a local instead of passing `gl_FragColor`
@@ -40,8 +47,13 @@ const EPILOGUE_LINES = [
   "}",
 ] as const;
 
-/** How many wrapper lines sit above the learner's line 1. */
-export const SHADER_BODY_LINE_OFFSET = PROLOGUE_LINES.length;
+/**
+ * How many wrapper lines sit above line 1 of a body carrying no helpers — the Editor tab's case, and
+ * every stage authored before helpers existed. A stage that declares helpers pushes `mainImage` down
+ * by their line count, so the real offset is whatever {@link wrapMainImageBody} returns; this
+ * constant is the floor it reduces to, not a value to correct errors by on its own.
+ */
+export const SHADER_BODY_LINE_OFFSET = HEADER_LINES.length + 1;
 
 /**
  * One diagnostic from a shader or program info log.
@@ -57,10 +69,31 @@ export type CompileError = {
   raw: string;
 };
 
-export function wrapMainImageBody(body: string): { source: string; lineOffset: number } {
+/**
+ * Wraps `body` into a complete shader, optionally declaring `helpers` above `mainImage`.
+ *
+ * `helpers` is trimmed before its lines are counted, so a stray leading or trailing newline in
+ * authored content cannot shift every reported error line by one.
+ *
+ * A diagnostic pointing inside the helpers still clamps to body line 1, which is wrong but harmless:
+ * helpers exist only in authored lesson stages, which are read-only, and the raw log is always shown
+ * beside the mapped lines. The Editor tab, where a learner's own typing is what fails, passes no
+ * helpers at all and so is unaffected.
+ */
+export function wrapMainImageBody(
+  body: string,
+  helpers?: string,
+): { source: string; lineOffset: number } {
+  const trimmedHelpers = helpers?.trim() ?? "";
+  const aboveBody = [
+    ...HEADER_LINES,
+    ...(trimmedHelpers.length > 0 ? trimmedHelpers.split("\n") : []),
+    MAIN_IMAGE_OPEN,
+  ];
+
   return {
-    source: [...PROLOGUE_LINES, body, ...EPILOGUE_LINES].join("\n"),
-    lineOffset: SHADER_BODY_LINE_OFFSET,
+    source: [...aboveBody, body, ...EPILOGUE_LINES].join("\n"),
+    lineOffset: aboveBody.length,
   };
 }
 

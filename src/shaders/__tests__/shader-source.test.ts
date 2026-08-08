@@ -32,6 +32,32 @@ describe("wrapMainImageBody", () => {
     );
   });
 
+  it("declares helpers above mainImage and pushes the body's offset down by their line count", () => {
+    const helpers = "float hash(vec2 p) {\n  return fract(sin(p.x) * 43758.5453);\n}";
+    const { source, lineOffset } = wrapMainImageBody("float n = hash(uv);", helpers);
+    const lines = source.split("\n");
+
+    // GLSL has no nested functions, so a helper declared inside `mainImage` would not compile. Its
+    // position relative to the opener is the whole point of the field.
+    expect(lines.indexOf("float hash(vec2 p) {")).toBeLessThan(
+      lines.findIndex((line) => line.startsWith("void mainImage")),
+    );
+    expect(lineOffset).toBe(SHADER_BODY_LINE_OFFSET + 3);
+    expect(lines[lineOffset]).toBe("float n = hash(uv);");
+  });
+
+  it("ignores helpers that are absent, empty or whitespace", () => {
+    const bare = wrapMainImageBody("fragColor = vec4(1.0);");
+
+    // Trimmed before its lines are counted: a stray newline in authored content would otherwise
+    // shift every reported error line by one, which is invisible until a learner hits an error.
+    for (const helpers of [undefined, "", "   ", "\n\n"]) {
+      const withHelpers = wrapMainImageBody("fragColor = vec4(1.0);", helpers);
+      expect(withHelpers.lineOffset).toBe(SHADER_BODY_LINE_OFFSET);
+      expect(withHelpers.source).toBe(bare.source);
+    }
+  });
+
   it("places the body's first line directly after the prologue", () => {
     const { source, lineOffset } = wrapMainImageBody("float a = 1.0;\nfloat b = 2.0;");
     const lines = source.split("\n");

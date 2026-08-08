@@ -10,6 +10,8 @@ const DEFAULT_HEIGHT = 220;
 type ShaderSandboxProps = {
   /** A `mainImage` body. The wrapper is added by `wrapMainImageBody`. */
   source: string;
+  /** Optional GLSL declared above `mainImage`, for a stage whose shader defines its own functions. */
+  helpers?: string;
   paused?: boolean;
   /**
    * `false` stops the render loop entirely — no animation frame, no draw, no `endFrameEXP`. Used for
@@ -27,6 +29,7 @@ type ShaderSandboxProps = {
 
 export function ShaderSandbox({
   source,
+  helpers,
   paused = false,
   active = true,
   restartToken = 0,
@@ -42,6 +45,7 @@ export function ShaderSandbox({
   /** Set once the context exists, so the effect below can restart a loop that stopped itself. */
   const renderRef = useRef<(() => void) | null>(null);
   const sourceRef = useRef(source);
+  const helpersRef = useRef(helpers);
   const onCompileResultRef = useRef(onCompileResult);
   const [hasRendered, setHasRendered] = useState(false);
 
@@ -71,13 +75,14 @@ export function ShaderSandbox({
 
   useEffect(() => {
     sourceRef.current = source;
+    helpersRef.current = helpers;
     const host = hostRef.current;
     if (!host) return;
 
-    const result = host.setBody(source);
+    const result = host.setBody(source, helpers);
     onCompileResultRef.current?.(result);
     if (host.hasProgram()) setHasRendered(true);
-  }, [source]);
+  }, [source, helpers]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -99,7 +104,7 @@ export function ShaderSandbox({
     hostRef.current = host;
     startedAtRef.current = globalThis.performance.now();
 
-    const result = host.setBody(sourceRef.current);
+    const result = host.setBody(sourceRef.current, helpersRef.current);
     onCompileResultRef.current?.(result);
     if (host.hasProgram()) setHasRendered(true);
 

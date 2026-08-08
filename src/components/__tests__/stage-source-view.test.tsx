@@ -89,3 +89,38 @@ it("drops a pending confirmation when the stage's source changes", async () => {
     jest.useRealTimers();
   }
 });
+
+describe("helpers", () => {
+  const HELPERS = "float hash(vec2 p) {\n  return fract(sin(p.x) * 43758.5453);\n}";
+  const BODY = "float n = hash(uv);";
+
+  it("shows helpers above the body, separated by a blank line", async () => {
+    await render(<StageSourceView helpers={HELPERS} source={BODY} />);
+
+    // The prose discusses these functions, and the compiled shader declares them above mainImage.
+    // A listing that omitted them would leave the reader looking for code that is not there.
+    expect(screen.getByTestId("stage-source-code").props.children).toBe(`${HELPERS}\n\n${BODY}`);
+  });
+
+  it("copies helpers along with the body", async () => {
+    await render(<StageSourceView helpers={HELPERS} source={BODY} />);
+
+    await fireEvent.press(screen.getByTestId("stage-source-copy"));
+
+    // Copying the body alone would hand over code that cannot compile: hash would be undeclared.
+    expect(mockSetStringAsync).toHaveBeenCalledWith(`${HELPERS}\n\n${BODY}`);
+  });
+
+  it("numbers the helper lines too", async () => {
+    await render(<StageSourceView helpers={HELPERS} source={BODY} />);
+
+    // Three helper lines, one blank separator, one body line.
+    expect(screen.getByText("5")).toBeTruthy();
+  });
+
+  it("leaves the listing untouched when a stage declares none", async () => {
+    await render(<StageSourceView source={BODY} />);
+
+    expect(screen.getByTestId("stage-source-code").props.children).toBe(BODY);
+  });
+});

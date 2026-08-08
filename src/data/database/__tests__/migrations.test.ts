@@ -32,7 +32,16 @@ describe("database migrations", () => {
   });
 
   test("selects only migrations newer than the current schema", () => {
-    expect(getPendingMigrations(0).map((migration) => migration.version)).toEqual([1]);
+    // Written against the chain's shape rather than its current length, which was `[1]` until a
+    // second migration existed and broke this alongside two others that hardcoded the same number.
+    const all = getPendingMigrations(0).map((migration) => migration.version);
+
+    expect(all[0]).toBe(1);
+    expect(all.at(-1)).toBe(LATEST_SCHEMA_VERSION);
+    expect(all).toEqual([...all].sort((left, right) => left - right));
+
+    // The selection itself: from the first version, that one is dropped and the rest survive.
+    expect(getPendingMigrations(1).map((migration) => migration.version)).toEqual(all.slice(1));
     expect(getPendingMigrations(LATEST_SCHEMA_VERSION)).toEqual([]);
     expect(() => getPendingMigrations(LATEST_SCHEMA_VERSION + 1)).toThrow(/newer schema/i);
   });
@@ -41,7 +50,7 @@ describe("database migrations", () => {
     await migrateDatabase(driver);
 
     expect(await driver.first<{ user_version: number }>("PRAGMA user_version")).toEqual({
-      user_version: 1,
+      user_version: LATEST_SCHEMA_VERSION,
     });
 
     const tables = await driver.all<{ name: string }>(
@@ -67,6 +76,7 @@ describe("database migrations", () => {
     const columns = await driver.all<TableInfoRow>("PRAGMA table_info(lesson_stages)");
     expect(columns.map(({ name }) => name).sort()).toEqual([
       "body",
+      "helpers",
       "id",
       "lesson_id",
       "position",
@@ -74,7 +84,13 @@ describe("database migrations", () => {
       "source",
       "title",
     ]);
-    expect(columns.every(({ notnull }) => notnull === 1)).toBe(true);
+
+    // `helpers` is the one nullable column, and deliberately so: most stages declare no functions,
+    // and NULL keeps "no helpers" a single representation rather than splitting it between NULL on
+    // rows written before the column existed and '' on rows written after. Named here rather than
+    // asserted away with `every`, so adding a second nullable column has to be a decision.
+    const nullable = columns.filter(({ notnull }) => notnull === 0).map(({ name }) => name);
+    expect(nullable).toEqual(["helpers"]);
 
     const foreignKeys = await driver.all<ForeignKeyRow>("PRAGMA foreign_key_list(lesson_stages)");
     expect(foreignKeys.map(({ from }) => from).sort()).toEqual(["lesson_id", "release_id"]);
@@ -117,7 +133,7 @@ describe("database migrations", () => {
     await migrateDatabase(driver);
 
     expect(await driver.first<{ user_version: number }>("PRAGMA user_version")).toEqual({
-      user_version: 1,
+      user_version: LATEST_SCHEMA_VERSION,
     });
   });
 

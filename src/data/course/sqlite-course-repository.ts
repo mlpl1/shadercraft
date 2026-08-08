@@ -38,6 +38,7 @@ type StageRow = {
   title: string;
   body: string;
   source: string;
+  helpers: string | null;
 };
 
 export class SqliteCourseRepository implements CourseRepository {
@@ -75,7 +76,7 @@ export class SqliteCourseRepository implements CourseRepository {
         [release.id],
       ),
       this.driver.all<StageRow>(
-        `SELECT id, lesson_id, position, title, body, source
+        `SELECT id, lesson_id, position, title, body, source, helpers
          FROM lesson_stages
          WHERE release_id = ?
          ORDER BY lesson_id, position`,
@@ -170,6 +171,8 @@ function toLesson(
       title: stage.title,
       body: stage.body,
       source: stage.source,
+      // Column is nullable; the domain type uses an absent field for the same thing.
+      ...(stage.helpers === null ? {} : { helpers: stage.helpers }),
     })),
   };
 }

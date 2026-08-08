@@ -145,6 +145,15 @@ const migrations: readonly DatabaseMigration[] = [
       await driver.exec(CREATE_INITIAL_SCHEMA);
     },
   },
+  {
+    // Optional GLSL declared above `mainImage`, for stages needing their own functions. Nullable
+    // rather than defaulted to empty text, so "no helpers" stays one representation end to end
+    // instead of splitting into NULL from old rows and '' from new ones.
+    version: 2,
+    async migrate(driver) {
+      await driver.exec("ALTER TABLE lesson_stages ADD COLUMN helpers TEXT");
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;

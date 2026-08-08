@@ -6,9 +6,20 @@ import { Colors, Radius, Spacing } from "../constants/theme";
 
 type StageSourceViewProps = {
   source: string;
+  helpers?: string;
 };
 
 const MONOSPACE_LINE_HEIGHT = 20;
+
+/**
+ * Helpers are declared above `mainImage`, and the listing shows them the same way, separated by a
+ * blank line. Hiding them would leave the prose discussing a function the learner cannot see, and
+ * copying only the body would hand over code that does not compile.
+ */
+function joinListing(source: string, helpers?: string): string {
+  const trimmed = helpers?.trim() ?? "";
+  return trimmed.length > 0 ? `${trimmed}\n\n${source}` : source;
+}
 
 /** How long the button confirms a copy before returning to its resting label. */
 const COPIED_FEEDBACK_MS = 1600;
@@ -35,8 +46,9 @@ const COPIED_FEEDBACK_MS = 1600;
  * The copy button overlays the code rather than sitting above it, so it costs no vertical space in a
  * lesson that already stacks a preview, a listing and prose per stage.
  */
-export function StageSourceView({ source }: StageSourceViewProps) {
-  const lines = source.split("\n");
+export function StageSourceView({ source, helpers }: StageSourceViewProps) {
+  const listing = joinListing(source, helpers);
+  const lines = listing.split("\n");
   const [copied, setCopied] = useState(false);
 
   // Cleared on unmount so a copy made just before a stage scrolls away cannot set state on a gone
@@ -48,16 +60,16 @@ export function StageSourceView({ source }: StageSourceViewProps) {
     return () => {
       if (resetTimer.current) clearTimeout(resetTimer.current);
     };
-  }, [source]);
+  }, [listing]);
 
   const copy = useCallback(() => {
     // Deliberately not awaited: the confirmation is about the learner's tap, and on iOS and Android
     // this always resolves true anyway, so gating the label on the promise would only add latency.
-    void Clipboard.setStringAsync(source);
+    void Clipboard.setStringAsync(listing);
     setCopied(true);
     if (resetTimer.current) clearTimeout(resetTimer.current);
     resetTimer.current = setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS);
-  }, [source]);
+  }, [listing]);
 
   return (
     <View style={styles.container} testID="stage-source">
@@ -78,7 +90,7 @@ export function StageSourceView({ source }: StageSourceViewProps) {
           {/* `selectable` is also how a learner copies: long-press raises the platform selection
               toolbar, whose Copy action needs no clipboard dependency of our own. */}
           <Text selectable style={styles.codeLine} testID="stage-source-code">
-            {source}
+            {listing}
           </Text>
         </View>
       </ScrollView>

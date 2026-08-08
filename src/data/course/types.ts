@@ -12,6 +12,12 @@ export type LessonStage = {
   title: string;
   body: string;
   source: string;
+  /**
+   * Optional GLSL spliced above `mainImage`, for stages whose shader needs to declare functions —
+   * GLSL has no nested functions, and `source` is spliced inside `mainImage`. Absent on every stage
+   * that does not, which is most of them.
+   */
+  helpers?: string;
 };
 
 export type CourseLesson = {
