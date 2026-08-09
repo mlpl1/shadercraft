@@ -46,10 +46,16 @@
   | --- | --- |
   | Anything in `p` units — radii, offsets, `t` values | Any specific horizontal distance |
   | Vertical claims: `p.y` is ±1 on every device | Corner colours and corner distances |
-  | `uv`-space claims — `uv` is 0..1 on both axes | Side-edge midpoint values |
-  | "never reaches the side edges" below 1.40 | "N per cent of the way to the side edges" |
-  | "reaches the top and bottom edges" at extents ≥ 1 | "runs off both side edges" below 2.40 |
-  | "roughly twice as wide as it is tall" | Any number derived from one device's aspect |
+  | `uv`-space claims — `uv` is 0..1 on both axes | A side-edge value given as one number |
+  | A side-edge value given as a device-named pair: "0.731 on the narrowest phone, 0.530 on the widest" | "N per cent of the way to the side edges" |
+  | "never reaches the side edges" below 1.40 | "runs off both side edges" below 2.40 |
+  | "reaches the top and bottom edges" at extents ≥ 1 | Any number derived from one device's aspect |
+  | "a landscape band, 1.4 to 2.4 times as wide as it is tall" | "roughly twice as wide as it is tall" |
+
+  Two traps inside the safe column. A **side-edge midpoint is not the frame's extremum** — the
+  corner is further out on both axes, so "0.731 at the side edge" does not answer "what is the
+  lowest value on screen". Say which traverse you mean. And a **bound quoted at the narrow end
+  must be rounded away from the value, not toward it**: 3.49833 is not "3.50 or more".
 
   A shape must exceed **1.40** in `p` units before it can clip horizontally on ANY device, and exceed
   **2.40** before it clips on ALL of them. Between those two figures the answer depends on the phone,
