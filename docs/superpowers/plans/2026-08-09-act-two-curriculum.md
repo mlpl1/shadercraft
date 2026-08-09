@@ -25,24 +25,36 @@
 
 - **The frame is a landscape band, and its width is not a constant.** A lesson preview is
   `PREVIEW_HEIGHT = 200`dp tall (`src/components/lesson-stage-block.tsx:8`) and as wide as the content
-  column, `min(screenWidth, 520) − 40` (`src/components/lesson-workspace.tsx:372,378`). That is
-  **371 × 200 (aspect 1.857) on a 411dp phone, ranging 1.75 to 2.40 across devices.** After
-  `p.x *= iResolution.x / iResolution.y`, `p.y` runs −1..1 on every device but **`p.x` runs ±1.75 to
-  ±2.40**. Module 8 was first authored against a portrait frame at ±0.5625 and every horizontal claim
-  in it had to be rewritten; do not repeat that.
+  column, `min(screenWidth, 520) − 40` (`src/components/lesson-workspace.tsx:372,378`). Measured:
+
+  | device width | preview | aspect |
+  | --- | --- | --- |
+  | 320dp (small phone) | 280 × 200 | 1.40 |
+  | 360dp (common Android floor) | 320 × 200 | 1.60 |
+  | 411dp (test emulator) | 371 × 200 | 1.857 |
+  | ≥560dp (column capped) | 480 × 200 | 2.40 |
+
+  After `p.x *= iResolution.x / iResolution.y`, `p.y` runs −1..1 on every device but **`p.x` runs
+  ±1.40 to ±2.40**. Module 8 was first authored against a portrait frame at ±0.5625 and every
+  horizontal claim in it had to be rewritten; do not repeat that.
+
+  **Anchor horizontal claims at `p.x = ±1.0`**, which is on screen at every width in the table. Do
+  not anchor at ±1.5: it holds from 360dp up but falls off a 320dp screen. Never anchor at a frame
+  edge or corner — those move with the device.
 
   | Safe to claim | Not authorable |
   | --- | --- |
   | Anything in `p` units — radii, offsets, `t` values | Any specific horizontal distance |
   | Vertical claims: `p.y` is ±1 on every device | Corner colours and corner distances |
   | `uv`-space claims — `uv` is 0..1 on both axes | Side-edge midpoint values |
-  | "never reaches the side edges" below 1.75 | "N per cent of the way to the side edges" |
-  | "reaches the top and bottom edges" at extents ≥ 1 | "runs off both side edges" below 1.75 |
+  | "never reaches the side edges" below 1.40 | "N per cent of the way to the side edges" |
+  | "reaches the top and bottom edges" at extents ≥ 1 | "runs off both side edges" below 2.40 |
   | "roughly twice as wide as it is tall" | Any number derived from one device's aspect |
 
-  A shape must exceed **1.75** in `p` units before it can be said to clip horizontally on any device,
-  and exceed **2.40** before it certainly does on all of them.
-- **Bump `BUNDLED_RELEASE_ID`** in `scripts/content/release-metadata.ts` in the same commit as any content change. A device that installed an id rejects a different checksum under that id permanently. Current value: `bundled-2026-08-08-6`.
+  A shape must exceed **1.40** in `p` units before it can clip horizontally on ANY device, and exceed
+  **2.40** before it clips on ALL of them. Between those two figures the answer depends on the phone,
+  so no clipping claim is authorable there.
+- **Bump `BUNDLED_RELEASE_ID`** in `scripts/content/release-metadata.ts` in the same commit as any content change. A device that installed an id rejects a different checksum under that id permanently. Current value: `bundled-2026-08-09-3`.
 - **Do not run `npm run content:publish`.** Publishing to the linked Supabase project is the user's call.
 
 ---
