@@ -271,6 +271,10 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   practiceCard: {
+    // This screen spaces its sections with each one's own top margin rather than a container `gap`,
+    // so a card without this sits flush against the one above it — which is what this did, pressing
+    // the practice card into the featured lesson card with no seam between two competing actions.
+    marginTop: Spacing.lg,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
