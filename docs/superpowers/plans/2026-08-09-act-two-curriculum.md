@@ -28,6 +28,15 @@
   shader uses — `t < 20.0` — not by strict convergence. The two differ by around 7×10⁻⁴, which
   is invisible on screen but silently moves the fourth decimal of every silhouette figure, and
   only shows up when two independent transcriptions are compared.
+- **Sample real pixels, not the axes.** The preview is 200px tall, so rows sit at
+  `p.y = ±0.005, ±0.015, …` — **`p.y = 0` is never a row**. Columns are offset by
+  `0.005 − W/200 (mod 0.01)`, which is 0.005 on an even preview width and **0.000 on an odd
+  one**: 280, 320 and 480 px are even, but 371px (the 411dp test emulator) is odd, so `p.x = 0`
+  is a column there and is not one anywhere else. A figure measured on an axis can be off by a
+  fraction of a pixel — invisible, but wrong, and wrong differently per device. Prefer a claim
+  that does not depend on which pixel you landed on; if you must quote one, quote it as a
+  device-named pair like every other horizontal figure. **Never quote a rim or silhouette
+  pixel**: near a tangency the sampled column moves the value by more than the rounding.
 - **Bisect with care, or do not bisect.** A distance field is not monotone in the radius, so a
   bisection over a wide bracket can latch a crossing that is not the silhouette. A fine linear
   scan found the true single hit→miss flip where a bisection over [0, 1.2] was wrong by 7×10⁻⁶.
