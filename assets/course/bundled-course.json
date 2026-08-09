@@ -1,6 +1,6 @@
 {
-  "checksum": "9f494c24fa0ec4eed68de49d58d5e6de55e10c8b418cc1efb4c4cd34b0a4eb8b",
-  "id": "bundled-2026-08-09",
+  "checksum": "eda62e260ec61a13acb0aa646a8c3936407a15d241cc3c2a27cb3da55bfeb831",
+  "id": "bundled-2026-08-09-2",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -1643,17 +1643,224 @@
     {
       "description": "March a ray through space and find where it hits a 3D shape.",
       "id": "ray-marching",
-      "lessons": [],
-      "plannedLessonCount": 5,
-      "plannedTopics": [
-        "Camera and ray setup",
-        "A 3D sphere",
-        "The march loop",
-        "The hit test",
-        "Depth"
+      "lessons": [
+        {
+          "id": "camera-and-ray-setup",
+          "intro": "Every shader up to here has answered a question about a point on a flat plane: given this coordinate, what colour? Ray marching asks something different. From an eye somewhere in space, looking out through this pixel, what is there? Answering that needs two vectors per pixel — where the ray starts, and which way it points — and building those is all this lesson does. There is no geometry yet and nothing to hit, so every stage paints the direction itself, which is the only honest way to check a camera before there is a scene to check it against.",
+          "moduleId": "ray-marching",
+          "position": 1,
+          "shortTitle": "Camera and rays",
+          "stages": [
+            {
+              "body": "The first three lines are Module 1's, unchanged: a coordinate running from minus one to one vertically and about minus 0.5625 to 0.5625 across. The two that follow are the entire camera. Every pixel shares one origin, and each gets its own direction, built by treating the screen coordinate as x and y and bolting 1.5 on as z. normalize scales that to unit length, which is what makes a distance travelled along it mean a distance in the world. Painting z alone shows how little the rays spread: exactly 1.0 dead ahead, 0.936 at the left and right edge midpoints, 0.832 top and bottom, 0.794 into the corners. A faint vignette — and ro sits there unread, because nothing yet asks where a ray started.",
+              "id": "camera-and-ray-setup-rays",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfragColor = vec4(vec3(rd.z), 1.0);",
+              "title": "One ray per pixel"
+            },
+            {
+              "body": "A unit vector has components between minus one and one, and half-plus-half lifts that into the 0 to 1 a colour needs — x into red, y into green, z into blue. What comes out is a lavender wash rather than the vivid spectrum the code suggests, and the numbers say why. Blue never falls below 0.897 anywhere on screen, because every ray points mostly forward. Red runs 0.324 at the left edge to 0.676 at the right, green 0.223 at the bottom to 0.777 at the top, and the top-right corner lands on 0.649, 0.765, 0.897. The whole image lives in the middle of the colour cube, which is what a narrow cone of directions looks like.",
+              "id": "camera-and-ray-setup-direction",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nvec3 colour = rd * 0.5 + 0.5;\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Paint the direction"
+            },
+            {
+              "body": "The 1.5 was never explained, and it is the field of view. A direction with a large z points more nearly straight ahead once normalized, so raising it narrows the cone the camera sees through and lowering it widens it. Here it swings between 0.6 and 2.4 every 12.6 seconds, which is a vertical field of view of 118.1 degrees at the wide end and 45.2 at the narrow, against 67.4 at the 1.5 the rest of the module uses. Watch the corners rather than the centre: they run from 0.717, 0.886, 0.732 wide open to 0.606, 0.688, 0.951 stopped down, while the centre pixel stays 0.5, 0.5, 1.0 throughout, because the ray straight ahead is the one the lens cannot tilt.",
+              "id": "camera-and-ray-setup-focal",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat focal = 1.5 + sin(iTime * 0.5) * 0.9;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, focal));\n\nvec3 colour = rd * 0.5 + 0.5;\n\nfragColor = vec4(colour, 1.0);",
+              "title": "The third component is the lens"
+            },
+            {
+              "body": "ro finally moves. It traces a circle of radius 3 about the point 3 units ahead, passing through the origin once every 15.7 seconds, and the direction is yawed by the same angle using Module 5's mat2 rotation applied to x and z instead of x and y — so the camera keeps looking at the centre of its own orbit. The centre pixel cycles through 0.5, 0.5, 1.0 then 0.0, 0.5, 0.5 then 0.5, 0.5, 0.0 then 1.0, 0.5, 0.5 at the quarter turns, which is the forward direction swinging all the way round. Change the orbit radius and nothing at all happens on screen. An origin is invisible until a ray hits something, and the next lesson builds the something.",
+              "id": "camera-and-ray-setup-orbit",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat a = iTime * 0.4;\nfloat ca = cos(a);\nfloat sa = sin(a);\n\nvec3 ro = vec3(sa * 3.0, 0.0, 3.0 - ca * 3.0);\nvec3 rd = normalize(vec3(p, 1.5));\nrd.xz = mat2(ca, sa, -sa, ca) * rd.xz;\n\nvec3 colour = rd * 0.5 + 0.5;\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Move the camera"
+            }
+          ],
+          "takeaway": "A camera is two vectors: an origin every pixel shares, and a direction that differs per pixel. The direction is the screen coordinate with a third component bolted on, and normalize scales it to unit length so that a distance travelled along it is a distance in the world. That third component is the field of view — raise it and the cone narrows, lower it and the cone widens — and the origin changes nothing you can see until there is something in front of it to miss.",
+          "title": "Camera and ray setup",
+          "tryThis": "Set the focal length in the third stage to a fixed 0.4 and work out the corner colour before you look at it. Then change the 3.0 in the last stage's orbit radius and confirm that nothing on screen responds at all."
+        },
+        {
+          "id": "a-3d-sphere",
+          "intro": "Module 3 built a circle out of length(p) minus a radius and never had to mention how many dimensions were involved, because length does not care. That is most of this lesson: hand the same expression a vec3 and it is a sphere. What genuinely changes is the viewing problem. A field defined throughout a volume cannot be shown all at once on a flat screen, so until the next lesson supplies a ray to look along, these stages cut one flat slice through the volume at a time and paint that slice as though it were the whole thing.",
+          "moduleId": "ray-marching",
+          "position": 2,
+          "shortTitle": "A 3D sphere",
+          "stages": [
+            {
+              "body": "sdSphere is Module 3's circle with vec2 changed to vec3, and nothing else at all. The source builds a 3D point from the screen coordinate with a z of zero, which cuts the sphere through its equator, so the cross-section is a circle of the full radius 0.45 — eighty per cent of the way to the left and right edges, and forty-five per cent of the half-height. The render is pixel-for-pixel a Module 3 disc, and that is the point: nothing has been gained yet except the knowledge that the formula survives the extra dimension. What has changed is that there is now a whole volume of field the screen is not showing you.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}",
+              "id": "a-3d-sphere-slice",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 q = vec3(p, 0.0);\nfloat d = sdSphere(q, 0.45);\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "One more component"
+            },
+            {
+              "body": "Driving the slice's z from time cuts the same sphere at a different depth every frame, and the disc that comes back is the cross-section there. Its radius is 0.45 times the cosine of the driving angle: 0.45 at the equator, 0.390 once the slice reaches z 0.225, 0.270 at z 0.36, and zero at the poles — a pinch to nothing every 4.5 seconds, twice per nine-second cycle. That shrinking is the only evidence on screen that this is a sphere rather than a cylinder, and it is evidence you have to watch accumulate over time rather than read off any single frame.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}",
+              "id": "a-3d-sphere-cross-section",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat z = sin(iTime * 0.7) * 0.45;\nvec3 q = vec3(p, z);\nfloat d = sdSphere(q, 0.45);\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Slide the slice"
+            },
+            {
+              "body": "Subtracting a centre before measuring moves the sphere, exactly as it moved the circle two modules ago. The slice stays at z zero now and the sphere is what travels: a small circle of radius 0.1 in x and y every 10.5 seconds, and separately back and forth through the slice by 0.35 every 7.0 seconds. On screen those read as two unrelated effects — the disc slides about, and independently its radius breathes between 0.283 and 0.45. Both are one object moving. That a slide and a resize are indistinguishable in kind here is precisely the ambiguity a single slice cannot resolve, and the reason the next lesson stops slicing.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}",
+              "id": "a-3d-sphere-moving",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 centre = vec3(sin(iTime * 0.6) * 0.1, cos(iTime * 0.6) * 0.1, sin(iTime * 0.9) * 0.35);\n\nvec3 q = vec3(p, 0.0);\nfloat d = sdSphere(q - centre, 0.45);\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Move the sphere instead"
+            },
+            {
+              "body": "map is the name this module and the three that follow use for the function returning the whole scene's distance, and here it is two spheres joined by min — Module 3's union, unchanged by the extra dimension. The two sit 0.44 apart in x and 0.3 apart in z, which is 0.533 in space, closer than the 0.68 sum of their radii, so they genuinely intersect. Watch them trade sizes as the slice sweeps: at z zero the left disc is 0.34 and the right 0.16, at z 0.15 both are 0.305 and merged into one outline, at z 0.3 the sizes have swapped. The right one disappears completely for about 46 per cent of the cycle, which is the slice leaving that sphere behind.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  float a = sdSphere(p - vec3(-0.22, 0.0, 0.0), 0.34);\n  float b = sdSphere(p - vec3(0.22, 0.0, 0.3), 0.34);\n  return min(a, b);\n}",
+              "id": "a-3d-sphere-two",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat z = sin(iTime * 0.6) * 0.3;\nvec3 q = vec3(p, z);\nfloat d = map(q);\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Two spheres, one field"
+            }
+          ],
+          "takeaway": "length(p) minus r is a sphere for exactly the reason it was a circle: length measures distance from the origin in any number of dimensions, and subtracting a radius moves the zero surface out to where the edge should fall. Subtracting a centre first moves the sphere, and min unites two of them into one field. These are Module 3's operators carrying one more component, and the function that returns the whole scene's field is conventionally called map.",
+          "title": "A 3D sphere"
+        },
+        {
+          "id": "the-march-loop",
+          "intro": "A slice shows one depth and has no room for the rest, and no amount of care choosing the depth fixes that. The way out is a different question. Send a ray from the camera through the pixel and ask how far it travels before it meets a surface. Nothing computes that distance directly, but a distance field answers something almost as useful at every point in space — how far you may move from here without hitting anything — and asking that question over and over is the entire algorithm.",
+          "moduleId": "ray-marching",
+          "position": 3,
+          "shortTitle": "The march loop",
+          "stages": [
+            {
+              "body": "Four steps, written out rather than hidden inside a function. Each asks map how far the nearest surface is and moves exactly that far, which is safe precisely because nothing can be nearer than the nearest thing. The first step is identical for every pixel — map at the camera is 3 minus 1, so every ray leaps 2.0 — and only after that do they diverge. Painting the distance still remaining shows how far each one got: black across a core of radius 0.426, 0.051 out at the silhouette, 0.1 at radius 0.585, and not reaching white until 0.899, with the corners far past it at 2.21. Four steps is already most of the way in.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}",
+              "id": "the-march-loop-steps",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat t = 0.0;\nfor (int i = 0; i < 4; i++) {\n  t += map(ro + rd * t);\n}\n\nfloat d = map(ro + rd * t);\n\nfragColor = vec4(vec3(d), 1.0);",
+              "title": "Step by the distance you have"
+            },
+            {
+              "body": "Sixty-four steps in a loop, with two ways out: the distance dropping below 0.001, which means the ray has arrived, and the total passing 20, which means it never will. The sphere sits 3 units ahead with radius 1, so the tangent ray leaves the camera at asin of one third, 19.47 degrees; multiplying its tangent by the focal length of 1.5 predicts a silhouette of radius 0.530. What renders is 0.533 — just over half the frame's height, and 94.8 per cent of the way to the side edges. Every hit falls between t of 2.0 dead ahead and 2.828 at the rim, so 20 is a very generous place to give up.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}\n\nfloat march(vec3 ro, vec3 rd) {\n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < 0.001) break;\n    t += d;\n    if (t > 20.0) break;\n  }\n  return t;\n}",
+              "id": "the-march-loop-hit",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat t = march(ro, rd);\n\nvec3 colour = vec3(0.05, 0.05, 0.08);\nif (t < 20.0) {\n  colour = vec3(0.31, 0.84, 1.0);\n}\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Enough steps, and a test"
+            },
+            {
+              "body": "The same scene marched twice, once with the full sixty-four steps and once with twelve, painted so that the disagreement is what you see: cyan where both find the sphere, coral where only the twelve-step march claims to. The coral is a ring from radius 0.533 out to 0.669 — a silhouette twenty-five per cent too wide, wide enough to run off both side edges wherever the height is under 0.362. Of the rays that genuinely hit, 92.4 per cent converge inside twelve steps, and the failures are all within a hair of the rim, where the steps become tiny. Why the error goes outward rather than inward is the whole of the next lesson.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}\n\nfloat march(vec3 ro, vec3 rd) {\n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < 0.001) break;\n    t += d;\n    if (t > 20.0) break;\n  }\n  return t;\n}\n\nfloat marchCoarse(vec3 ro, vec3 rd) {\n  float t = 0.0;\n  for (int i = 0; i < 12; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < 0.001) break;\n    t += d;\n    if (t > 20.0) break;\n  }\n  return t;\n}",
+              "id": "the-march-loop-count",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat coarse = marchCoarse(ro, rd);\nfloat t = march(ro, rd);\n\nvec3 colour = vec3(0.05, 0.05, 0.08);\nif (coarse < 20.0) {\n  colour = vec3(1.0, 0.45, 0.42);\n}\nif (t < 20.0) {\n  colour = vec3(0.31, 0.84, 1.0);\n}\n\nfragColor = vec4(colour, 1.0);",
+              "title": "What the extra steps buy"
+            },
+            {
+              "body": "Each pixel here is the safe distance at the point its own ray has reached, squashed through d over one plus d so that it stays on screen, with the number of steps sweeping from 0 to 8 and restarting every 7.5 seconds. At zero steps the frame is a flat 0.667, because map at the camera is 2.0 for everyone. Then the centre drops to black and the black core spreads: 0.087, 0.255, 0.362, 0.426, 0.465, 0.489, 0.505, 0.515. Meanwhile the corners climb from 0.463 to 0.970 as those rays run away. That brightness is the radius of a ball around the ray guaranteed to be empty, and stepping across it is what gives the technique its other name.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}\n\nfloat clearance(vec3 ro, vec3 rd, float steps) {\n  float t = 0.0;\n  for (int i = 0; i < 8; i++) {\n    if (float(i) >= steps) break;\n    t += map(ro + rd * t);\n  }\n  return map(ro + rd * t);\n}",
+              "id": "the-march-loop-sphere-tracing",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat steps = mod(iTime * 1.2, 9.0);\nfloat d = clearance(ro, rd, steps);\n\nfragColor = vec4(vec3(d / (1.0 + d)), 1.0);",
+              "title": "Why it is called sphere tracing"
+            }
+          ],
+          "takeaway": "map returns the distance to the nearest surface, and that is by definition a distance the ray can travel safely. So march: step that far, resample, step again. The steps shrink as the surface approaches, so the ray converges on it and never passes through, while rays that miss take ever larger steps until they leave — which is why the loop needs a distance at which it gives up as well as a count of tries. More steps buy accuracy at the silhouette and almost nothing anywhere else.",
+          "title": "The march loop"
+        },
+        {
+          "id": "the-hit-test",
+          "intro": "Three numbers went into the last lesson's loop without an argument for any of them: the distance below which it declares a hit, the number of iterations it may spend, and the distance at which it concludes the ray has escaped. None of the three is a property of the sphere. All three are decisions about how much you are willing to spend and how much error you are prepared to accept, and every one of them shows up in the render when it is set wrong. Each stage here moves one of them and measures the damage.",
+          "moduleId": "ray-marching",
+          "position": 4,
+          "shortTitle": "The hit test",
+          "stages": [
+            {
+              "body": "The threshold is an argument now, swinging from 0.001 to 0.351 and back every 10.5 seconds. A ray stops as soon as the surface is within it, so what it really stops against is a sphere of radius one plus the threshold, and 1.5 times the tangent of asin of that over 3 predicts a disc growing from 0.531 to 0.757. The render gives 0.533 to 0.749, the shortfall at the loose end being big steps skipping straight past the thin shell. That is forty per cent wider in radius, and past a threshold of only 0.054 the disc already overruns the side edges — which it does for three-quarters of the cycle.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}\n\nfloat march(vec3 ro, vec3 rd, float epsilon) {\n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < epsilon) break;\n    t += d;\n    if (t > 20.0) break;\n  }\n  return t;\n}",
+              "id": "the-hit-test-threshold",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat epsilon = 0.001 + (sin(iTime * 0.6) * 0.5 + 0.5) * 0.35;\nfloat t = march(ro, rd, epsilon);\n\nvec3 colour = vec3(0.05, 0.05, 0.08);\nif (t < 20.0) {\n  colour = vec3(0.31, 0.84, 1.0);\n}\n\nfragColor = vec4(colour, 1.0);",
+              "title": "How near counts as a hit"
+            },
+            {
+              "body": "Twelve steps, and the loop now says which way it ended: it returns the distance when it converged, and the negation of that distance when it gave up. Painting both readings apart is unkind to the usual test. Cyan marks where the march actually reached the surface, out to radius 0.490. Coral is everything the plain t-under-20 test would have called a hit as well, out to 0.669. The true silhouette is 0.530 and sits inside the coral band — the honest test falls 0.040 short, the loose one runs 0.138 long. Raise the ceiling back to sixty-four and the loose test's error drops to 0.003, which is why the previous lesson got away with it.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}\n\nfloat march(vec3 ro, vec3 rd) {\n  float t = 0.0;\n  for (int i = 0; i < 12; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < 0.001) return t;\n    t += d;\n    if (t > 20.0) break;\n  }\n  return -t;\n}",
+              "id": "the-hit-test-steps",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat t = march(ro, rd);\n\nvec3 colour = vec3(0.05, 0.05, 0.08);\nif (abs(t) < 20.0) {\n  colour = vec3(1.0, 0.45, 0.42);\n}\nif (t > 0.0) {\n  colour = vec3(0.31, 0.84, 1.0);\n}\n\nfragColor = vec4(colour, 1.0);",
+              "title": "When the loop runs out"
+            },
+            {
+              "body": "The far distance is the one that looks like a background control and is not. It swings between 1.6 and 3.2 here, and because the nearest point of the sphere sits at t of 2.0, anything below 2.0 empties the screen completely — a third of the cycle, about 4.2 seconds of nothing at all. Above it the disc grows back through 0.191 at 2.05, 0.359 at 2.2, 0.463 at 2.4 and 0.514 at 2.6, reaching its full 0.531 at 2.828, which is the distance to the rim. Beyond that it buys nothing: 3.2 gives 0.533. A far distance inside your scene does not trim the background, it removes scene.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}\n\nfloat march(vec3 ro, vec3 rd, float maxDistance) {\n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < 0.001) break;\n    t += d;\n    if (t > maxDistance) break;\n  }\n  return t;\n}",
+              "id": "the-hit-test-far",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat maxDistance = 2.4 + sin(iTime * 0.5) * 0.8;\nfloat t = march(ro, rd, maxDistance);\n\nvec3 colour = vec3(0.05, 0.05, 0.08);\nif (t < maxDistance) {\n  colour = vec3(0.31, 0.84, 1.0);\n}\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Where space stops"
+            },
+            {
+              "body": "A threshold of 0.3, six steps and a far distance of 2.4, marched alongside a correct sixty-four-step march so that the difference is on screen: cyan where the good one hits, coral where only the broken one does. The coral reaches radius 0.639, twenty per cent too wide and off both side edges for heights under 0.303. The worse damage is invisible here. Since map at the camera is 2.0 for every pixel, and the second sample is already under 0.3 anywhere inside radius 0.532, every ray on the face of the sphere returns t of exactly 2.0 — a constant. The depth is gone, which matters because the next lesson reads nothing but t.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}\n\nfloat march(vec3 ro, vec3 rd) {\n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < 0.001) break;\n    t += d;\n    if (t > 20.0) break;\n  }\n  return t;\n}\n\nfloat marchBadly(vec3 ro, vec3 rd, float epsilon, float maxDistance) {\n  float t = 0.0;\n  for (int i = 0; i < 6; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < epsilon) break;\n    t += d;\n    if (t > maxDistance) break;\n  }\n  return t;\n}",
+              "id": "the-hit-test-badly",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat epsilon = 0.3;\nfloat maxDistance = 2.4;\n\nfloat bad = marchBadly(ro, rd, epsilon, maxDistance);\nfloat good = march(ro, rd);\n\nvec3 colour = vec3(0.05, 0.05, 0.08);\nif (bad < maxDistance) {\n  colour = vec3(1.0, 0.45, 0.42);\n}\nif (good < 20.0) {\n  colour = vec3(0.31, 0.84, 1.0);\n}\n\nfragColor = vec4(colour, 1.0);",
+              "title": "All three, set badly"
+            }
+          ],
+          "takeaway": "The threshold decides how near counts as touching, and because raising it lets grazing rays stop against a wider band of surface, it swells the silhouette rather than softening it. The step ceiling decides how long the loop may creep, and when it runs out the t it returns is neither a hit nor a miss — so a loop that can exhaust should say so rather than let the caller guess from t alone. The far distance decides where space stops, and set too near it cuts the scene instead of the background.",
+          "title": "The hit test"
+        },
+        {
+          "id": "depth",
+          "intro": "Every march so far has thrown away almost everything it worked out. The loop returns t, the distance the ray travelled before stopping, and each shader has asked exactly one question of it: is that small enough to count as a hit? But t is depth. It says how far away the surface is at this pixel, in the same units the scene itself is built in, and it is already sitting in a variable that cost nothing extra to fill. This lesson spends it four ways, and the first two are worth doing mostly for what they expose.",
+          "moduleId": "ray-marching",
+          "position": 5,
+          "shortTitle": "Depth",
+          "stages": [
+            {
+              "body": "Dividing t by 20 and painting it grey is the naive move, and it is worth watching it fail. The background is pure white, because a ray that escapes returns something at or above 20 and the division cannot bring that under one. The sphere is a near-black disc: 0.100 dead ahead, 0.107 at radius 0.3, 0.126 at 0.5, and 0.139 at the rim. That is the entire shape rendered inside a band 0.039 wide out of a possible 1.0. The depth is real and it is correct — it is simply measured in world units, and nothing about world units maps onto a colour channel.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}\n\nfloat march(vec3 ro, vec3 rd) {\n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < 0.001) break;\n    t += d;\n    if (t > 20.0) break;\n  }\n  return t;\n}",
+              "id": "depth-raw",
+              "position": 1,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat t = march(ro, rd);\n\nfragColor = vec4(vec3(t / 20.0), 1.0);",
+              "title": "Paint t and see almost nothing"
+            },
+            {
+              "body": "Two colours and a smoothstep from 1.2 to 3.7 turn depth into something readable, and the camera slides along z by 0.8 either way so there is a range to read — the first time moving ro has changed a single pixel. At its nearest the sphere is 2.2 away: the disc swells to radius 0.766, off both side edges, and the mix never rises above 0.221, so it reads as the near colour throughout. At its furthest, 3.8, it shrinks to 0.409 and the mix runs 0.705 to 1.000, which is the far colour with a trace of warmth left at the pole. Across one sphere the effect is far weaker: at the middle position the mix runs 0.242 at the pole, 0.296 halfway out, 0.477 at 88 per cent and 0.720 at the rim, so just over half the swing hides in the outer eighth of the radius.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}\n\nfloat march(vec3 ro, vec3 rd) {\n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < 0.001) break;\n    t += d;\n    if (t > 20.0) break;\n  }\n  return t;\n}",
+              "id": "depth-near-and-far",
+              "position": 2,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, sin(iTime * 0.5) * 0.8);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat t = march(ro, rd);\n\nvec3 nearColour = vec3(1.0, 0.45, 0.42);\nvec3 farColour = vec3(0.18, 0.42, 0.55);\n\nvec3 colour = vec3(0.05, 0.05, 0.08);\nif (t < 20.0) {\n  colour = mix(nearColour, farColour, smoothstep(1.2, 3.7, t));\n}\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Near and far as colour"
+            },
+            {
+              "body": "One comparison turns depth into a one-bit signal, and Module 7 spent a lesson on what one-bit signals are for. Here it composites the sphere over a sky built from the ray direction's y — a gradient spanning only 0.223 at the bottom of the frame to 0.777 at the top, because the rays never tilt further than that, so its ends read 0.079, 0.132, 0.185 and 0.151, 0.338, 0.445 rather than the two colours in full. The disc is flat cyan at radius 0.533 with a hard edge, because a mask carries no shading whatever. What it does carry is a shape sitting over a background the very same rays produced.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}\n\nfloat march(vec3 ro, vec3 rd) {\n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < 0.001) break;\n    t += d;\n    if (t > 20.0) break;\n  }\n  return t;\n}",
+              "id": "depth-as-a-mask",
+              "position": 3,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat t = march(ro, rd);\n\nvec3 sky = mix(vec3(0.05, 0.05, 0.08), vec3(0.18, 0.42, 0.55), rd.y * 0.5 + 0.5);\nfloat hit = 1.0 - step(20.0, t);\n\nvec3 colour = mix(sky, vec3(0.31, 0.84, 1.0), hit);\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Depth as a mask"
+            },
+            {
+              "body": "Module 4's cosine palette takes any scalar at all, and t is a scalar. With c at 2.0 the depth range across the disc, 2.0 to 2.828, covers 1.66 cycles, and the drifting phase turns the whole thing over every 12.5 seconds. The bands are wildly uneven, and that is the finding rather than a flaw: measured outward from the centre, successive quarter-cycles land at 0, 55.0, 73.8, 85.5, 93.0, 97.5 and 99.6 per cent of the radius. Depth barely changes across the face of a sphere and then changes all at once at the rim, and a palette shows that in a way the grey ramp two stages ago could not.",
+              "helpers": "float sdSphere(vec3 p, float r) {\n  return length(p) - r;\n}\n\nfloat map(vec3 p) {\n  return sdSphere(p - vec3(0.0, 0.0, 3.0), 1.0);\n}\n\nfloat march(vec3 ro, vec3 rd) {\n  float t = 0.0;\n  for (int i = 0; i < 64; i++) {\n    vec3 p = ro + rd * t;\n    float d = map(p);\n    if (d < 0.001) break;\n    t += d;\n    if (t > 20.0) break;\n  }\n  return t;\n}",
+              "id": "depth-palette",
+              "position": 4,
+              "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 ro = vec3(0.0, 0.0, 0.0);\nvec3 rd = normalize(vec3(p, 1.5));\n\nfloat t = march(ro, rd);\n\nvec3 a = vec3(0.5);\nvec3 b = vec3(0.5);\nvec3 c = vec3(2.0);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.08;\n\nvec3 colour = vec3(0.05, 0.05, 0.08);\nif (t < 20.0) {\n  colour = a + b * cos(6.28318 * (c * t + phase));\n}\n\nfragColor = vec4(colour, 1.0);",
+              "title": "Depth into a palette"
+            }
+          ],
+          "takeaway": "t is a depth buffer you already own. Painting it raw is useless, because its range has nothing to do with 0 to 1 and has to be remapped by hand. Even remapped it makes a poor shading cue: on a sphere, depth changes slowly across the face and violently at the rim, so any ramp piles up in the outermost tenth of the radius. Where depth earns its keep is as a mask, and as the scalar behind a palette.",
+          "title": "Depth"
+        }
       ],
+      "plannedLessonCount": 0,
+      "plannedTopics": [],
       "position": 8,
-      "status": "planned",
+      "status": "published",
       "title": "Ray Marching"
     },
     {
