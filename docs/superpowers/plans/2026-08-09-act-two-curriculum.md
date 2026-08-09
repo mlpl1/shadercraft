@@ -21,7 +21,16 @@
 - **A published module** must have at least one lesson and `plannedLessonCount: 0` with `plannedTopics: []`.
 - **Loop bounds must be compile-time constants.** `for (int i = 0; i < 64; i++)` is valid; `break` is permitted and was verified on device.
 - **No forward references.** A lesson may use only what Act 1 introduced plus what earlier Act 2 lessons introduced. `smin` belongs to Module 9 and may not appear in Module 8.
-- **Every numeric render claim is computed, not described.** Six prose-versus-render defects have been found so far, one introduced while fixing another.
+- **Every numeric render claim is computed, not described.** Nine prose-versus-render defects have been found so far, two of them introduced while fixing another.
+- **A silhouette is where the march STOPS, not where it converges.** The prelude's `march`
+  returns `t` and the body tests `t < 20.0`, which accepts a 64-step march that never reached
+  `d < 0.001` as a hit. Measure any "where is the edge" claim with the same predicate the
+  shader uses — `t < 20.0` — not by strict convergence. The two differ by around 7×10⁻⁴, which
+  is invisible on screen but silently moves the fourth decimal of every silhouette figure, and
+  only shows up when two independent transcriptions are compared.
+- **Bisect with care, or do not bisect.** A distance field is not monotone in the radius, so a
+  bisection over a wide bracket can latch a crossing that is not the silhouette. A fine linear
+  scan found the true single hit→miss flip where a bisection over [0, 1.2] was wrong by 7×10⁻⁶.
 
 - **The frame is a landscape band, and its width is not a constant.** A lesson preview is
   `PREVIEW_HEIGHT = 200`dp tall (`src/components/lesson-stage-block.tsx:8`) and as wide as the content
