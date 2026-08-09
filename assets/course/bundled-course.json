@@ -1,6 +1,6 @@
 {
-  "checksum": "680ac060e1d0d9b4f0247f2fd6657af231a6c4d6049a11845ddd3493a2808824",
-  "id": "bundled-2026-08-08-6",
+  "checksum": "9f494c24fa0ec4eed68de49d58d5e6de55e10c8b418cc1efb4c4cd34b0a4eb8b",
+  "id": "bundled-2026-08-09",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -1646,9 +1646,9 @@
       "lessons": [],
       "plannedLessonCount": 5,
       "plannedTopics": [
-        "The march loop",
         "Camera and ray setup",
         "A 3D sphere",
+        "The march loop",
         "The hit test",
         "Depth"
       ],
