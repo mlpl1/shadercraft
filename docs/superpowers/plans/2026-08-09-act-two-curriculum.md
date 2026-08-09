@@ -22,6 +22,26 @@
 - **Loop bounds must be compile-time constants.** `for (int i = 0; i < 64; i++)` is valid; `break` is permitted and was verified on device.
 - **No forward references.** A lesson may use only what Act 1 introduced plus what earlier Act 2 lessons introduced. `smin` belongs to Module 9 and may not appear in Module 8.
 - **Every numeric render claim is computed, not described.** Six prose-versus-render defects have been found so far, one introduced while fixing another.
+
+- **The frame is a landscape band, and its width is not a constant.** A lesson preview is
+  `PREVIEW_HEIGHT = 200`dp tall (`src/components/lesson-stage-block.tsx:8`) and as wide as the content
+  column, `min(screenWidth, 520) − 40` (`src/components/lesson-workspace.tsx:372,378`). That is
+  **371 × 200 (aspect 1.857) on a 411dp phone, ranging 1.75 to 2.40 across devices.** After
+  `p.x *= iResolution.x / iResolution.y`, `p.y` runs −1..1 on every device but **`p.x` runs ±1.75 to
+  ±2.40**. Module 8 was first authored against a portrait frame at ±0.5625 and every horizontal claim
+  in it had to be rewritten; do not repeat that.
+
+  | Safe to claim | Not authorable |
+  | --- | --- |
+  | Anything in `p` units — radii, offsets, `t` values | Any specific horizontal distance |
+  | Vertical claims: `p.y` is ±1 on every device | Corner colours and corner distances |
+  | `uv`-space claims — `uv` is 0..1 on both axes | Side-edge midpoint values |
+  | "never reaches the side edges" below 1.75 | "N per cent of the way to the side edges" |
+  | "reaches the top and bottom edges" at extents ≥ 1 | "runs off both side edges" below 1.75 |
+  | "roughly twice as wide as it is tall" | Any number derived from one device's aspect |
+
+  A shape must exceed **1.75** in `p` units before it can be said to clip horizontally on any device,
+  and exceed **2.40** before it certainly does on all of them.
 - **Bump `BUNDLED_RELEASE_ID`** in `scripts/content/release-metadata.ts` in the same commit as any content change. A device that installed an id rejects a different checksum under that id permanently. Current value: `bundled-2026-08-08-6`.
 - **Do not run `npm run content:publish`.** Publishing to the linked Supabase project is the user's call.
 
@@ -245,7 +265,9 @@ fragColor = vec4(colour, 1.0);
 
 - [ ] **Step 3: Compute every render claim before writing the prose that states it**
 
-For each stage, work out what actually appears and write the body against that. Concretely: with `ro` at the origin, `rd = normalize(vec3(p, 1.5))` and the sphere at `z = 3` with radius 1, the sphere's silhouette has angular radius `asin(1/3) = 19.47°`, so it spans `tan(19.47°) * 1.5 = 0.53` in `p` units — just over half the half-height of a portrait preview. Claims like "fills about half the frame" must come from arithmetic like this, not from looking.
+For each stage, work out what actually appears and write the body against that. Concretely: with `ro` at the origin, `rd = normalize(vec3(p, 1.5))` and the sphere at `z = 3` with radius 1, the sphere's silhouette has angular radius `asin(1/3) = 19.47°`, so it spans `tan(19.47°) * 1.5 = 0.53` in `p` units — just over half the half-height of the frame. Claims like "fills about half the frame" must come from arithmetic like this, not from looking.
+
+**Read the frame geometry before computing anything horizontal.** See "The frame" in Global Constraints. An earlier draft of this plan asserted a portrait preview and every horizontal claim in Module 8 had to be rewritten.
 
 - [ ] **Step 4: Run the checker**
 
