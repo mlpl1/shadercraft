@@ -37,6 +37,15 @@
   that does not depend on which pixel you landed on; if you must quote one, quote it as a
   device-named pair like every other horizontal figure. **Never quote a rim or silhouette
   pixel**: near a tangency the sampled column moves the value by more than the rounding.
+- **Quote only what float32 supports.** The sandbox prepends `precision highp float;`
+  (`src/shaders/shader-source.ts:23`), so the driver computes in float32 while your harness
+  computes in double. Sphere tracing self-corrects, so a marched `t` is robust — but a
+  **central difference is not**: `map` returns `length(p) − 1` near 1.0008, each call is
+  quantised to one float32 ulp at 1.0 (1.1921e-7), and dividing by `2·ε` amplifies that into a
+  ~3e-5 lattice on the painted value. A figure sitting within a quarter-quantum of a rounding
+  boundary renders either way on a real device. **Check anything quoted past three decimals
+  under a full `Math.fround`-per-operation model as well as in double, and drop to a precision
+  both agree on.** Three decimals has been safe everywhere so far.
 - **Bisect with care, or do not bisect.** A distance field is not monotone in the radius, so a
   bisection over a wide bracket can latch a crossing that is not the silhouette. A fine linear
   scan found the true single hit→miss flip where a bisection over [0, 1.2] was wrong by 7×10⁻⁶.
