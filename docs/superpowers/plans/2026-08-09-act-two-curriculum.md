@@ -46,6 +46,16 @@
   boundary renders either way on a real device. **Check anything quoted past three decimals
   under a full `Math.fround`-per-operation model as well as in double, and drop to a precision
   both agree on.** Three decimals has been safe everywhere so far.
+- **Derive the pixel coordinate the way the shader does, not algebraically.** `p.x = ((i+0.5)/W·2−1)·(W/H)`
+  and the shortcut `(2i+1−W)/200` are equal in reals and **not** in float32: at W = 280 column 93
+  they differ in the seventh decimal, and they disagree on 160 of 280 columns and 104 of 200 rows.
+  A harness that takes the shortcut produces float32 values no driver will ever compute, and the
+  error is invisible on `p.x = 0` — where the aspect multiply is exact — so a calibration anchor
+  scanned up the centre column is structurally blind to it. Address pixels by index through the
+  real `uv → p` chain.
+- **Any figure attached to a frame-wide extremum needs a width dimension.** The extremum's
+  *location* moves between grids even when its *value* rounds the same: Module 11's brightest
+  pixel is (0.355, 0.385) at 24 steps on 280/320/480 and (0.360, 0.385) at 29 steps on 371.
 - **Bisect with care, or do not bisect.** A distance field is not monotone in the radius, so a
   bisection over a wide bracket can latch a crossing that is not the silhouette. A fine linear
   scan found the true single hit→miss flip where a bisection over [0, 1.2] was wrong by 7×10⁻⁶.
