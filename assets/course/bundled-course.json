@@ -1,6 +1,6 @@
 {
-  "checksum": "9224e5d03880df7feb5d52056332debdefc9a5f903c2c3dd789fc1cf16eb281f",
-  "id": "bundled-2026-08-11-19",
+  "checksum": "366224ec77902da0e4a23d4b94254639843a6166d59d8102f8a8287068a216c9",
+  "id": "bundled-2026-08-11-20",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -182,7 +182,7 @@
               "title": "The body you write"
             },
             {
-              "body": "Here is the complete program your body actually becomes, exactly as docs/data/shader-sandbox.md describes it: precision highp float; uniform vec3 iResolution; uniform float iTime; void mainImage(out vec4 fragColor, in vec2 fragCoord) { — your lines land here, unindented in the real file — } void main() { vec4 shadercraftColor = vec4(0.0, 0.0, 0.0, 1.0); mainImage(shadercraftColor, gl_FragCoord.xy); gl_FragColor = shadercraftColor; }. The precision line tells the GPU how much floating-point accuracy to spend; the two uniform lines are the only two values that exist beyond what you compute yourself; mainImage is the function every stage's source has secretly been the body of all along; and main() is what a GLSL program must define to run at all, calling your body through a local variable before writing the result to the built-in gl_FragColor, because passing that built-in straight through as an out parameter is rejected by some drivers.",
+              "body": "Here is the complete program your body actually becomes, exactly as docs/data/shader-sandbox.md describes it: #extension GL_OES_standard_derivatives : enable, then precision highp float; uniform vec3 iResolution; uniform float iTime; void mainImage(out vec4 fragColor, in vec2 fragCoord) { — your lines land here, unindented in the real file — } void main() { vec4 shadercraftColor = vec4(0.0, 0.0, 0.0, 1.0); mainImage(shadercraftColor, gl_FragCoord.xy); gl_FragColor = shadercraftColor; }. The extension line has no trailing semicolon, since a preprocessor directive is not a statement, and it comes first because #extension is only legal above every other token; the precision line tells the GPU how much floating-point accuracy to spend; the two uniform lines are the only two values that exist beyond what you compute yourself; mainImage is the function every stage's source has secretly been the body of all along; and main() is what a GLSL program must define to run at all, calling your body through a local variable before writing the result to the built-in gl_FragColor, because passing that built-in straight through as an out parameter is rejected by some drivers.",
               "id": "the-whole-program",
               "position": 2,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nfragColor = vec4(uv.x, uv.y, 0.5, 1.0);",

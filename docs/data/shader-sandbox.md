@@ -12,12 +12,16 @@ is blank, read it first.
 Not a whole program — the body of `mainImage`. The app supplies everything around it:
 
 ```glsl
-precision highp float;                                  // 1
+#extension GL_OES_standard_derivatives : enable         // 1
+precision highp float;
 uniform vec3  iResolution;   // x = width, y = height, z = pixel aspect
-uniform float iTime;         // seconds since the sandbox started
-void mainImage(out vec4 fragColor, in vec2 fragCoord) { // 4
+uniform float iTime;         // seconds since the sandbox started    // 4
 
-  // ← the authored body goes here, its line 1 landing on line 5
+  // ← an optional block of stage `helpers` sits here, when the stage declares one
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+
+  // ← the authored body goes here, its line 1 landing on line 6 when there are no helpers
 
 }
 void main() {
@@ -27,10 +31,19 @@ void main() {
 }
 ```
 
-Four prologue lines sit above the body, so **`SHADER_BODY_LINE_OFFSET` is 4** and every reported error
-line is corrected by it. That constant is derived from the prologue array rather than hardcoded:
-adding a line to the prologue shifts every error message in the app, and deriving it is what stops
-that happening silently.
+Four header lines plus the `mainImage` opener sit above the body, so **`SHADER_BODY_LINE_OFFSET` is
+5** — `HEADER_LINES.length + 1` — and every reported error line is corrected by it. That constant is
+derived from the header array rather than hardcoded: adding a line shifts every error message in the
+app, and deriving it is what stops that happening silently.
+
+The `#extension` directive arrived with Module 3, which needs `fwidth`, and this document said "four
+prologue lines … the offset is 4" for some time afterwards. Deriving the constant meant the app was
+never wrong; only the prose was. A stage that quotes the wrapper back to the learner — Module 1's
+`the-whole-program` — has to be updated with it.
+
+When a stage declares `helpers`, that block is spliced between the header and the `mainImage`
+opener, so the body's line 1 lands further down still. `wrapMainImageBody` returns the actual offset
+alongside the source rather than assuming this one; the constant is the no-helpers case.
 
 `main` writes through a local rather than passing `gl_FragColor` straight in as the `out` argument.
 Both forms are arguably legal, but built-in variables as `out` parameters are rejected by some
