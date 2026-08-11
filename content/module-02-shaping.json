@@ -42,7 +42,7 @@
           "id": "step-shows-its-cost",
           "position": 4,
           "title": "Where step starts to hurt",
-          "body": "A vertical edge hides step's weakness, because a vertical line already agrees with the pixel grid. Averaging uv.x and uv.y produces a value that increases toward the top right, so the threshold now falls along a diagonal running from the bottom right corner to the top left. Look closely at that diagonal and you will see a staircase: each row of pixels switches from black to white one step further along than the row beneath it, because every pixel must be entirely one or entirely the other. The measurement crossing the threshold was smooth. The decision made from it was not, and that is what the next lesson fixes.",
+          "body": "A vertical edge hides step's weakness, because a vertical line already agrees with the pixel grid. Averaging uv.x and uv.y produces a value that increases toward the top right, so the threshold now falls along a diagonal running from the bottom right corner to the top left. Look closely and you will see a staircase: each row of pixels flips from black to white a little to the left of the row beneath it, because every pixel must be entirely one or entirely the other. Each tread is exactly one row tall, and the boundary crosses the whole frame width over that height: one or two pixels per row on the narrowest phone, two or three on the widest. The measurement crossing the threshold was smooth. The decision made from it was not, and that is what the next lesson fixes.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = step(0.5, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);"
         }
       ]
@@ -61,21 +61,21 @@
           "id": "smoothstep-the-staircase-again",
           "position": 1,
           "title": "The staircase, one more time",
-          "body": "This is the closing stage of the previous lesson unchanged, so the comparison over the next few stages is exact rather than remembered. The diagonal boundary runs from the bottom right to the top left, black below it and white above, and each row of pixels flips one position further along than the row below. Put your eye close to the screen if you can. The staircase is small, but on a moving edge it does something worse than look rough: it crawls, because the exact pixel where the flip happens jumps by a whole step at a time rather than sliding.",
+          "body": "This is the closing stage of the previous lesson unchanged, so the comparison over the next few stages is exact rather than remembered. The diagonal boundary runs from the bottom right to the top left, black below it and white above, and each row of pixels flips a little to the left of the row below, in treads one row tall and one to three pixels long depending on how wide your preview is. Put your eye close to the screen if you can. The staircase is small, but on a moving edge it does something worse than look rough: it crawls, because the exact pixel where the flip happens jumps by a whole step at a time rather than sliding.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = step(0.5, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);"
         },
         {
           "id": "smoothstep-replaces-the-cliff",
           "position": 2,
           "title": "smoothstep replaces the cliff",
-          "body": "Two thresholds either side of the old one, 0.48 and 0.52, give the transition somewhere to happen. Below 0.48 the result is still exactly zero and above 0.52 it is still exactly one, so the flat black and flat white regions are untouched; only the boundary between them changed. The staircase is gone, replaced by a narrow band of greys a few pixels wide. That band is doing the work the pixel grid could not: where a boundary falls partway across a pixel, the pixel can now take a value partway between the two sides instead of being forced to pick one.",
+          "body": "Two thresholds either side of the old one, 0.48 and 0.52, give the transition somewhere to happen. Below 0.48 the result is still exactly zero and above 0.52 it is still exactly one, so the flat black and flat white regions are untouched; only the boundary between them changed. The staircase is gone, replaced by a band of greys about seven percent of the frame's height thick, measured straight across the diagonal rather than along a row. That band is doing the work the pixel grid could not: where a boundary falls partway across a pixel, the pixel can now take a value partway between the two sides instead of being forced to pick one.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = smoothstep(0.48, 0.52, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);"
         },
         {
           "id": "smoothstep-widen-the-band",
           "position": 3,
           "title": "The thresholds are the width",
-          "body": "Moving the two thresholds far apart, to 0.3 and 0.7, shows what they actually control. The midpoint is unchanged, still at 0.5, so the boundary has not moved. What changed is how much of the image is spent crossing it: the flat black region now ends at 0.3, the flat white does not begin until 0.7, and the entire middle 40 percent of the screen is transition. At this width it no longer reads as a soft edge at all, it reads as a gradient with flat regions on either side. Edge and gradient are the same operation with different numbers.",
+          "body": "Moving the two thresholds far apart, to 0.3 and 0.7, shows what they actually control. The midpoint is unchanged, still at 0.5, so the boundary has not moved. What changed is how much of the image is spent crossing it: the flat black region now ends at 0.3, the flat white does not begin until 0.7, and because the value being tested is a diagonal, that 0.4 window of values covers 64 percent of the frame, leaving flat black only in the bottom left corner and flat white in the top right, 18 percent each. At this width it no longer reads as a soft edge at all, it reads as a gradient with flat regions on either side. Edge and gradient are the same operation with different numbers.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = smoothstep(0.3, 0.7, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);"
         },
         {
@@ -155,7 +155,7 @@
           "id": "clamp-factor-extrapolates",
           "position": 3,
           "title": "An unbounded factor breaks a mix",
-          "body": "Here the same kind of stretched value is used as a factor rather than as a colour, running from minus 0.6 at the left edge to 1.9 at the right. mix does not clip out-of-range factors, it keeps going along the line through both colours and out the other side. To the left the result overshoots past cool into an oversaturated cyan the palette never contained; to the right it overshoots past coral into a hard red. Both extremes are then clipped by the screen, so the edges of the image are flat, blown-out slabs rather than the two colours that were chosen.",
+          "body": "Here the same kind of stretched value is used as a factor rather than as a colour, running from minus 0.6 at the left edge to 1.9 at the right. mix does not clip out-of-range factors, it keeps going along the line through both colours and out the other side. To the left the result overshoots past cool into an oversaturated cyan the palette never contained; to the right it overshoots past coral into a hard red. Both extremes are then clipped by the screen, though only the left one goes truly flat: the leftmost six percent of the width is one blown-out cyan, while the right side never settles into a slab at all, darkening toward a hard red right up to the final column.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec3 cool = vec3(0.31, 0.84, 1.0);\nvec3 warm = vec3(1.0, 0.42, 0.42);\nfloat factor = uv.x * 2.5 - 0.6;\nvec3 colour = mix(cool, warm, factor);\nfragColor = vec4(colour, 1.0);"
         },
         {

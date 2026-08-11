@@ -21,14 +21,14 @@
           "id": "distance-as-a-field-raw",
           "position": 1,
           "title": "Paint the measurement itself",
-          "body": "This paints the distance from the centre straight into all three colour channels, so brightness is distance. The centre reads zero and comes out black, and every direction brightens away from it. Pure white is reached exactly one unit out — and because the aspect line squeezes x, one unit is nearer on the vertical axis than the horizontal. On a tall screen that means the regions above and below the middle clip to flat white, while the left and right edges only reach around 0.56, a mid grey. The rings of equal brightness are perfect circles: that is what a field looks like when you look at it directly.",
+          "body": "This paints the distance from the centre straight into all three colour channels, so brightness is distance. The centre reads zero and comes out black, and every direction brightens away from it. Pure white is reached exactly one unit out, and after the aspect line one unit is the same distance on both axes. The preview is two units tall and wider still, so that boundary is a true circle inscribed between the top and bottom edges: it grazes them without clipping, while the outer region left and right of it clips to flat white. The rings of equal brightness are perfect circles: that is what a field looks like when you look at it directly.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\n\nfragColor = vec4(vec3(d), 1.0);"
         },
         {
           "id": "distance-as-a-field-signed",
           "position": 2,
           "title": "Subtract a radius to place the edge",
-          "body": "Subtracting 0.5 slides the whole field down by half a unit, so zero no longer sits at the centre — it now falls on a circle of radius 0.5. Inside that circle the value is negative. This is the single most useful move in the module, and the render undersells it badly: negative and zero both display as black, so you see a solid black disc with no visible boundary, fading up to roughly 0.65 grey at the corners and never reaching white at all. The sign is real and the code can read it. The screen simply has no way to show it.",
+          "body": "Subtracting 0.5 slides the whole field down by half a unit, so zero no longer sits at the centre — it now falls on a circle of radius 0.5. Inside that circle the value is negative. This is the single most useful move in the module, and the render undersells it badly: negative and zero both display as black, so you see a solid black disc with no visible boundary, fading up through grey and clipping to flat white before the frame runs out — corner wedges only on the narrowest phone, the whole outer band left and right on the widest. The sign is real and the code can read it. The screen simply has no way to show it.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.5;\n\nfragColor = vec4(vec3(d), 1.0);"
         },
         {
@@ -42,7 +42,7 @@
           "id": "distance-as-a-field-ring",
           "position": 4,
           "title": "One field, a third reading",
-          "body": "Here the same d again, read a third way. One smoothstep rises just before the edge and another rises just after it, and subtracting the second from the first leaves a band that is 1 only between roughly -0.03 and 0.03. Everything outside that window cancels to 0. What you get is a thin yellow-green ring hanging at radius 0.5 on a near-black background — no fill anywhere, because the band never includes the middle of the disc. A mask could not have produced this. Only a field that still knows how far away it is at every pixel can.",
+          "body": "Here the same d again, read a third way. One smoothstep rises just before the edge and another rises just after it, and subtracting the second from the first leaves a band that holds at 1 between -0.02 and 0.02 and tapers back to 0 by -0.04 and 0.04. Everything beyond that window cancels to 0. What you get is a thin yellow-green ring hanging at radius 0.5 on a near-black background — no fill anywhere, because the band never includes the middle of the disc. A mask could not have produced this. Only a field that still knows how far away it is at every pixel can.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.5;\n\nfloat ring = smoothstep(-0.04, -0.02, d) - smoothstep(0.02, 0.04, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), ring);\n\nfragColor = vec4(colour, 1.0);"
         }
       ]
@@ -99,7 +99,7 @@
           "id": "boxes-and-rounded-boxes-abs",
           "position": 1,
           "title": "abs folds the plane",
-          "body": "abs applied to a vec2 takes the absolute value of each component separately, which mirrors the left half onto the right and the bottom half onto the top. Painting the folded coordinate shows it plainly: the centre is dark blue where both components are zero, red grows toward the left and right edges, green grows toward the top and bottom, and all four corners land on the same pale yellow-green. Top-left, top-right, bottom-left and bottom-right are pixel-identical. Anything you build from the folded coordinate is symmetric about both axes without you arranging for it.",
+          "body": "abs applied to a vec2 takes the absolute value of each component separately, which mirrors the left half onto the right and the bottom half onto the top. Painting the folded coordinate shows it plainly: the centre is dark blue where both components are zero, red climbs to full at p.x of plus or minus 1 and flat-tops out to the side edges, green only at the very top and bottom, and all four corners land on the same saturated lemon yellow. Top-left, top-right, bottom-left and bottom-right are pixel-identical. Anything you build from the folded coordinate is symmetric about both axes without you arranging for it.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 q = abs(p);\n\nfragColor = vec4(q.x, q.y, 0.25, 1.0);"
         },
         {
@@ -120,7 +120,7 @@
           "id": "boxes-and-rounded-boxes-rounded",
           "position": 4,
           "title": "Rounding is a subtraction",
-          "body": "Subtracting a constant from a distance field moves its zero line outward by that amount in every direction at once, and around a corner every direction means a quarter circle. So rounding is free: shrink the half-size by the rounding first, then subtract the rounding from the field. The shrink is what keeps the outer size unchanged — this box still measures 0.68 by 0.44, exactly like the last two stages, but now with corners of radius 0.1. Push rounding up to the smaller half-size and the box becomes a capsule, then a circle.",
+          "body": "Subtracting a constant from a distance field moves its zero line outward by that amount in every direction at once, and around a corner every direction means a quarter circle. So rounding is free: shrink the half-size by the rounding first, then subtract the rounding from the field. The shrink is what keeps the outer size unchanged — this box still measures 0.68 by 0.44, exactly like the last two stages, but now with corners of radius 0.1. Push rounding up to the smaller half-size and the box becomes a capsule. Push further and it narrows into a lens, not a circle — only a square box rounds all the way to one.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat rounding = 0.1;\nvec2 q = abs(p) - (vec2(0.34, 0.22) - rounding);\n\nfloat d = length(max(q, 0.0)) - rounding;\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);"
         }
       ]
@@ -170,7 +170,7 @@
       "position": 5,
       "title": "Edges that survive scaling",
       "shortTitle": "Edges that survive scaling",
-      "intro": "Every stage so far has softened its edge with the same hand-picked 0.012, and every one of them looked fine, because nothing has changed scale yet. That number is measured in the field's units, not in pixels, so the moment a shape grows or shrinks it stops being right — too soft at one size, jagged at another. This lesson makes that failure visible and then removes the guesswork entirely, using a function that can tell you how large a pixel is.",
+      "intro": "Every filled shape so far has taken its soft edge from the same hand-picked 0.012, and every one of them looked fine, because nothing has changed scale yet. That number is measured in the field's units, not in pixels, so the moment a shape grows or shrinks it stops being right — too soft at one size, jagged at another. This lesson makes that failure visible and then removes the guesswork entirely, using a function that can tell you how large a pixel is.",
       "takeaway": "A hand-tuned edge width is tied to one scale and one screen. fwidth reports how much a value changes across a single pixel, so smoothstep between minus and plus that width gives an edge about two pixels wide no matter how the shape is scaled or what resolution it is rendered at. It works on any field, however that field was built, which is the last thing that makes distance fields worth the trouble.",
       "stages": [
         {
@@ -198,7 +198,7 @@
           "id": "edges-that-survive-scaling-together",
           "position": 4,
           "title": "Everything at once",
-          "body": "The whole module in nine lines. A rounded box built from abs and max, a circle placed to overlap its top edge, min uniting them into one shape, and fwidth keeping the outline honest while the zoom drives it. The join between the box and the circle is seamless because they were combined as fields rather than drawn in sequence. Nothing here is new — every line is from an earlier lesson — and that is the point: fields compose, and the edge treatment does not care how the field was assembled.",
+          "body": "The whole module in thirteen lines. A rounded box built from abs and max, a circle placed to overlap its top edge, min uniting them into one shape, and fwidth keeping the outline honest while the zoom drives it. The join between the box and the circle is seamless because they were combined as fields rather than drawn in sequence. Nothing here is new — every line is from an earlier lesson — and that is the point: fields compose, and the edge treatment does not care how the field was assembled.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat zoom = 1.85 + sin(iTime * 0.6) * 1.15;\nvec2 p = (uv * 2.0 - 1.0) * zoom;\np.x *= iResolution.x / iResolution.y;\n\nfloat rounding = 0.08;\nvec2 q = abs(p) - (vec2(0.3, 0.2) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat ball = length(p - vec2(0.0, 0.3)) - 0.14;\n\nfloat d = min(box, ball);\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);"
         }
       ]

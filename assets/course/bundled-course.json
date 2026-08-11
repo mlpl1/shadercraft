@@ -1,6 +1,6 @@
 {
-  "checksum": "581b0b66e3b3d65bc76db6c1a9c7f2a4b0350300c6db25cc910e1629e94fbcf1",
-  "id": "bundled-2026-08-10-18",
+  "checksum": "9224e5d03880df7feb5d52056332debdefc9a5f903c2c3dd789fc1cf16eb281f",
+  "id": "bundled-2026-08-11-19",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -22,7 +22,7 @@
               "title": "One colour, everywhere"
             },
             {
-              "body": "fragCoord tells you which pixel this copy of the function is responsible for, measured in pixels from the bottom-left corner. Feeding it into red makes position visible as a gradient. But notice the divisor: four hundred is a guess. On a narrower screen the gradient finishes early, and on a wider one it never reaches full brightness. The coordinate is real, but the scale is arbitrary.",
+              "body": "fragCoord tells you which pixel this copy of the function is responsible for, measured in pixels from the bottom-left corner. Feeding it into red makes position visible as a gradient. But notice the divisor: four hundred is a guess, and fragCoord counts real device pixels, of which this preview has far more than four hundred across. Red therefore reaches full brightness partway along and sits flat from there to the right edge. How far along that happens depends on the phone's width and on how many device pixels it packs into each point, neither of which this shader can know. The coordinate is real, but the scale is arbitrary.",
               "id": "raw-pixel-coordinates",
               "position": 2,
               "source": "fragColor = vec4(fragCoord.x / 400.0, 0.28, 0.22, 1.0);",
@@ -49,7 +49,7 @@
         },
         {
           "id": "from-pixels-to-uv",
-          "intro": "Lesson 1 divided fragCoord by iResolution.xy without asking what either side of that division actually contains. This lesson slows down on that one line: which corner of the screen is (0, 0), why iResolution is a vec3 instead of a vec2, and why uv survives a phone rotating from portrait to landscape when a raw pixel count does not. It also flags a naming mismatch you will meet immediately outside this app: plenty of shader code calls this uniform u_resolution and declares it as a vec2.",
+          "intro": "Lesson 1 divided fragCoord by iResolution.xy without asking what either side of that division actually contains. This lesson slows down on that one line: which corner of the screen is (0, 0), why iResolution is a vec3 instead of a vec2, and why uv survives a change of screen width when a raw pixel count does not. It also flags a naming mismatch you will meet immediately outside this app: plenty of shader code calls this uniform u_resolution and declares it as a vec2.",
           "moduleId": "fragments-and-coordinates",
           "position": 2,
           "shortTitle": "Pixels to UV",
@@ -69,11 +69,11 @@
               "title": "iResolution.xy versus iResolution.z"
             },
             {
-              "body": "This diagonal blend runs from a dark navy blue in the bottom-left corner to a bright, pale yellow in the top-right, because uv.x and uv.y are each already a fraction from 0 to 1 of their own axis before they are added and halved; the fixed 0.4 in blue is what keeps either corner from reading as pure black or pure white. Rotate the phone from portrait to landscape and iResolution.xy swaps its width and height, but the corners stay the corners: bottom-left is still 0, top-right is still 1, so the image reflows correctly without the shader being recompiled. Compare that with Lesson 1's raw fragCoord.x / 400.0: that divisor was a guess baked into the shader, so the same rotation would change how far across the screen the gradient reaches, sometimes clipping to solid colour before the edge.",
+              "body": "This diagonal blend runs from a dark navy blue in the bottom-left corner to a bright, pale yellow in the top-right, because uv.x and uv.y are each already a fraction from 0 to 1 of their own axis before they are added and halved; the fixed 0.4 in blue is what keeps either corner from reading as pure black or pure white. This preview is 280 points across on the narrowest phone and 480 on the widest, and iResolution.x reports whichever it happens to be, but the corners stay the corners: bottom-left is still 0, top-right is still 1, so the image refills the width without the shader being recompiled. Lesson 1's raw fragCoord.x / 400.0 cannot do that: the divisor was a guess baked into the shader, so it clips to a flat colour before the right edge, and where it clips moves with the device.",
               "id": "gradient-survives-rotation",
               "position": 3,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfragColor = vec4(diagonal, diagonal, 0.4, 1.0);",
-              "title": "A gradient that survives rotation"
+              "title": "A gradient that survives any width"
             },
             {
               "body": "Plenty of shader code you will read outside this app, including tutorials like The Book of Shaders, declares this uniform as u_resolution and gives it type vec2 rather than vec3. Their normalising line often reads gl_FragCoord.xy / u_resolution.xy, where the trailing .xy is a harmless no-op swizzle on an already-two-component value. Paste that convention into this sandbox unchanged and it fails: u_resolution does not exist here, and iResolution cannot stand in for it directly because iResolution is a vec3. Anywhere their code uses the bare uniform expecting two components, you must write iResolution.xy explicitly, the same swizzle Lesson 1 introduced, now doing double duty as a translation between naming conventions.",
@@ -83,13 +83,13 @@
               "title": "The same idea, other names"
             }
           ],
-          "takeaway": "iResolution is a vec3 whose .xy holds real pixel width and height; dividing fragCoord by it, not by a guessed number, is what lets a gradient survive resizing or rotation. Elsewhere the same uniform is often called u_resolution and declared as a vec2, so code written against it needs .xy appended wherever it appears here.",
+          "takeaway": "iResolution is a vec3 whose .xy holds real pixel width and height; dividing fragCoord by it, not by a guessed number, is what lets a gradient survive a change of screen size. Elsewhere the same uniform is often called u_resolution and declared as a vec2, so code written against it needs .xy appended wherever it appears here.",
           "title": "From pixels to UV",
           "tryThis": "Remove the .xy from the divisor in the last stage and read the compile error. What type mismatch is the driver complaining about?"
         },
         {
           "id": "centre-and-aspect",
-          "intro": "Every stage so far has measured position from a corner, which makes distance from the middle of the screen awkward to express and makes anything meant to look round secretly depend on the screen's proportions. This lesson remaps uv from a 0 to 1 range into a −1 to 1 range centred on the middle of the screen, then confronts the cost of treating a non-square screen as if it were square: a shape meant to be round comes out stretched. length() appears here strictly as a ruler, to measure that stretch, not to draw a shape.",
+          "intro": "Every stage so far has measured position from a corner, which makes distance from the middle of the screen awkward to express and makes anything meant to look round secretly depend on the screen's proportions. This lesson remaps uv from a 0 to 1 range into a −1 to 1 range centred on the middle of the screen, then confronts the cost of treating a non-square screen as if it were square: a shape meant to be round comes out stretched along the x axis. length() appears here strictly as a ruler, to measure that stretch, not to draw a shape.",
           "moduleId": "fragments-and-coordinates",
           "position": 3,
           "shortTitle": "Centre & aspect",
@@ -102,21 +102,21 @@
               "title": "Remap to centred coordinates"
             },
             {
-              "body": "length(p) here is used purely as a ruler — it measures how far a point is from the centre, it does not draw a shape, and Module 1 has no shape functions yet. On a square screen the resulting grey gradient's contours look like circles. On a real phone screen, which is taller than it is wide, they do not: p.x and p.y are each normalised against a different physical dimension, width for one axis and height for the other, so a fixed step in p covers more real pixels along the wider dimension than the narrower one. The contours you are looking at are ellipses, stretched along whichever screen dimension is larger, even though the code that produced them never mentions an ellipse.",
+              "body": "length(p) here is used purely as a ruler — it measures how far a point is from the centre, it does not draw a shape, and Module 1 has no shape functions yet. On a square preview the resulting grey gradient's contours would look like circles. This preview is a wide band rather than a square: p.x and p.y are each normalised against a different physical dimension, width for one axis and height for the other, so a fixed step in p covers more pixels horizontally than it does vertically. The contours you are looking at are ellipses, flattened — wider than they are tall — even though the code that produced them never mentions an ellipse.",
               "id": "radial-gradient-is-an-ellipse",
               "position": 2,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\nfloat distanceFromCentre = length(p);\nfragColor = vec4(distanceFromCentre, distanceFromCentre, distanceFromCentre, 1.0);",
               "title": "A circle-ish gradient, until you check"
             },
             {
-              "body": "One new line fixes the ellipse from the previous stage: multiplying p.x by iResolution.x / iResolution.y stretches the x axis by exactly the screen's width-to-height ratio before length() ever measures it. length() is still only a ruler here, not a shape — the correction changes what unit the ruler is marked in, not what it draws. On a screen taller than it is wide that ratio is less than one, so p.x is compressed rather than expanded, matching how much less physical width there is to work with per unit of p compared to height. The grey gradient's contours now read as genuine circles, the same on a phone in portrait or landscape.",
+              "body": "One new line fixes the ellipse from the previous stage: multiplying p.x by iResolution.x / iResolution.y stretches the x axis by exactly the preview's width-to-height ratio before length() ever measures it. length() is still only a ruler here, not a shape — the correction changes what unit the ruler is marked in, not what it draws. This preview is wider than it is tall, so that ratio is greater than one and p.x is expanded, which is what makes one unit of p cover the same number of pixels across the frame as it already did up it. The grey gradient's contours now read as genuine circles, on a narrow phone and a wide one alike.",
               "id": "fix-the-aspect-ratio",
               "position": 3,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\nfloat distanceFromCentre = length(p);\nfragColor = vec4(distanceFromCentre, distanceFromCentre, distanceFromCentre, 1.0);",
               "title": "Fix it: scale x by the aspect ratio"
             },
             {
-              "body": "This is stage one's colour-coded render again, with the same aspect correction from the previous stage applied. Compare the two: the aspect fix reshapes how quickly colour changes as you move away from the middle, but it does not move the middle itself. At the exact centre pixel, uv is (0.5, 0.5), so p starts as (0, 0) before the correction ever runs, and multiplying zero by any aspect ratio is still zero. That is the property worth confirming: aspect correction changes the surrounding falloff, never the origin. Anything you build on top of p — a ring, a stripe, a pattern radiating outward — can rely on the centre staying exactly where it was.",
+              "body": "This is stage one's colour-coded render again, with the same aspect correction from the previous stage applied. Compare the two: the aspect fix reshapes how quickly colour changes as you move away from the middle, but it does not move the middle itself. At the exact centre of the frame, uv is (0.5, 0.5), so p is (0, 0) there before the correction ever runs, and multiplying zero by any aspect ratio is still zero. Whether a pixel lands exactly on that point depends on the preview's pixel dimensions, which is beside the point: the origin is a place in the coordinate system, not a particular fragment. That is the property worth confirming: aspect correction changes the surrounding falloff, never the origin. Anything you build on top of p — a ring, a stripe, a pattern radiating outward — can rely on the centre staying exactly where it was.",
               "id": "confirm-the-centre",
               "position": 4,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\nfragColor = vec4(p.x, p.y, 0.5, 1.0);",
@@ -175,7 +175,7 @@
           "shortTitle": "Reading shaders",
           "stages": [
             {
-              "body": "This body is nothing new: it is Lesson 3's aspect-corrected centring, remapped back into 0-to-1 so it displays as colour instead of clamping away its negative half. What matters this lesson is not the maths but the shape of the file — four lines, no precision line, no uniform declarations, no function signature, no main(), and definitely no gl_FragColor. Every stage in every lesson you have read so far has been exactly this: the inside of one function, handed to a sandbox that supplies everything around it. The next stage names precisely what that surrounding scaffolding contains and why it exists.",
+              "body": "This body is nothing new: it is Lesson 3's aspect-corrected centring, remapped back into 0-to-1 so p.y displays as colour instead of clamping away its negative half. Red is not so lucky: the aspect line takes p.x past ±1 before the side edges are reached, so flat bands survive down the left and right, over a quarter of the width on the narrowest phone and more than half of it on the widest. What matters this lesson is not the maths but the shape of the file — four lines, no precision line, no uniform declarations, no function signature, no main(), and definitely no gl_FragColor. Every stage in every lesson you have read so far has been exactly this: the inside of one function, handed to a sandbox that supplies everything around it. The next stage names precisely what that surrounding scaffolding contains and why it exists.",
               "id": "the-body-you-write",
               "position": 1,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\nfragColor = vec4(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5, 0.5, 1.0);",
@@ -238,11 +238,11 @@
               "title": "Both axes at once"
             },
             {
-              "brief": "Centre the coordinate, correct for the aspect ratio, and paint the distance from the middle as a grey. The result should be black at the centre and brighten in perfect circles.",
-              "hint": "Without the aspect line the circles come out as ellipses.",
+              "brief": "Centre the coordinate, correct for the aspect ratio, and paint the distance from the middle as a grey — then cut everything past a distance of 0.75 to black with step, so the shape gets a hard edge instead of fading out. Check the silhouette you are left with: it should be a disc exactly as wide as it is tall, reaching three quarters of the way to the top and bottom.",
+              "hint": "step(0.75, d) is 1 past that distance and 0 inside it, so 1.0 - step(0.75, d) is the mask you want. Leave the aspect line out and the disc comes out stretched sideways on a wide preview — and unchanged on one that happens to be square, which is why the correction is written from iResolution rather than from a number.",
               "id": "paint-by-position-radial",
               "position": 3,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\n\nfragColor = vec4(vec3(d), 1.0);",
+              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\nfloat disc = 1.0 - step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);",
               "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(uv.x, uv.y, 0.25, 1.0);",
               "title": "Distance from the middle"
             }
@@ -285,7 +285,7 @@
               "title": "Move the threshold"
             },
             {
-              "body": "A vertical edge hides step's weakness, because a vertical line already agrees with the pixel grid. Averaging uv.x and uv.y produces a value that increases toward the top right, so the threshold now falls along a diagonal running from the bottom right corner to the top left. Look closely at that diagonal and you will see a staircase: each row of pixels switches from black to white one step further along than the row beneath it, because every pixel must be entirely one or entirely the other. The measurement crossing the threshold was smooth. The decision made from it was not, and that is what the next lesson fixes.",
+              "body": "A vertical edge hides step's weakness, because a vertical line already agrees with the pixel grid. Averaging uv.x and uv.y produces a value that increases toward the top right, so the threshold now falls along a diagonal running from the bottom right corner to the top left. Look closely and you will see a staircase: each row of pixels flips from black to white a little to the left of the row beneath it, because every pixel must be entirely one or entirely the other. Each tread is exactly one row tall, and the boundary crosses the whole frame width over that height: one or two pixels per row on the narrowest phone, two or three on the widest. The measurement crossing the threshold was smooth. The decision made from it was not, and that is what the next lesson fixes.",
               "id": "step-shows-its-cost",
               "position": 4,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = step(0.5, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);",
@@ -304,21 +304,21 @@
           "shortTitle": "Soft edges",
           "stages": [
             {
-              "body": "This is the closing stage of the previous lesson unchanged, so the comparison over the next few stages is exact rather than remembered. The diagonal boundary runs from the bottom right to the top left, black below it and white above, and each row of pixels flips one position further along than the row below. Put your eye close to the screen if you can. The staircase is small, but on a moving edge it does something worse than look rough: it crawls, because the exact pixel where the flip happens jumps by a whole step at a time rather than sliding.",
+              "body": "This is the closing stage of the previous lesson unchanged, so the comparison over the next few stages is exact rather than remembered. The diagonal boundary runs from the bottom right to the top left, black below it and white above, and each row of pixels flips a little to the left of the row below, in treads one row tall and one to three pixels long depending on how wide your preview is. Put your eye close to the screen if you can. The staircase is small, but on a moving edge it does something worse than look rough: it crawls, because the exact pixel where the flip happens jumps by a whole step at a time rather than sliding.",
               "id": "smoothstep-the-staircase-again",
               "position": 1,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = step(0.5, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);",
               "title": "The staircase, one more time"
             },
             {
-              "body": "Two thresholds either side of the old one, 0.48 and 0.52, give the transition somewhere to happen. Below 0.48 the result is still exactly zero and above 0.52 it is still exactly one, so the flat black and flat white regions are untouched; only the boundary between them changed. The staircase is gone, replaced by a narrow band of greys a few pixels wide. That band is doing the work the pixel grid could not: where a boundary falls partway across a pixel, the pixel can now take a value partway between the two sides instead of being forced to pick one.",
+              "body": "Two thresholds either side of the old one, 0.48 and 0.52, give the transition somewhere to happen. Below 0.48 the result is still exactly zero and above 0.52 it is still exactly one, so the flat black and flat white regions are untouched; only the boundary between them changed. The staircase is gone, replaced by a band of greys about seven percent of the frame's height thick, measured straight across the diagonal rather than along a row. That band is doing the work the pixel grid could not: where a boundary falls partway across a pixel, the pixel can now take a value partway between the two sides instead of being forced to pick one.",
               "id": "smoothstep-replaces-the-cliff",
               "position": 2,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = smoothstep(0.48, 0.52, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);",
               "title": "smoothstep replaces the cliff"
             },
             {
-              "body": "Moving the two thresholds far apart, to 0.3 and 0.7, shows what they actually control. The midpoint is unchanged, still at 0.5, so the boundary has not moved. What changed is how much of the image is spent crossing it: the flat black region now ends at 0.3, the flat white does not begin until 0.7, and the entire middle 40 percent of the screen is transition. At this width it no longer reads as a soft edge at all, it reads as a gradient with flat regions on either side. Edge and gradient are the same operation with different numbers.",
+              "body": "Moving the two thresholds far apart, to 0.3 and 0.7, shows what they actually control. The midpoint is unchanged, still at 0.5, so the boundary has not moved. What changed is how much of the image is spent crossing it: the flat black region now ends at 0.3, the flat white does not begin until 0.7, and because the value being tested is a diagonal, that 0.4 window of values covers 64 percent of the frame, leaving flat black only in the bottom left corner and flat white in the top right, 18 percent each. At this width it no longer reads as a soft edge at all, it reads as a gradient with flat regions on either side. Edge and gradient are the same operation with different numbers.",
               "id": "smoothstep-widen-the-band",
               "position": 3,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfloat lit = smoothstep(0.3, 0.7, diagonal);\nfragColor = vec4(lit, lit, lit, 1.0);",
@@ -398,7 +398,7 @@
               "title": "clamp makes the bound explicit"
             },
             {
-              "body": "Here the same kind of stretched value is used as a factor rather than as a colour, running from minus 0.6 at the left edge to 1.9 at the right. mix does not clip out-of-range factors, it keeps going along the line through both colours and out the other side. To the left the result overshoots past cool into an oversaturated cyan the palette never contained; to the right it overshoots past coral into a hard red. Both extremes are then clipped by the screen, so the edges of the image are flat, blown-out slabs rather than the two colours that were chosen.",
+              "body": "Here the same kind of stretched value is used as a factor rather than as a colour, running from minus 0.6 at the left edge to 1.9 at the right. mix does not clip out-of-range factors, it keeps going along the line through both colours and out the other side. To the left the result overshoots past cool into an oversaturated cyan the palette never contained; to the right it overshoots past coral into a hard red. Both extremes are then clipped by the screen, though only the left one goes truly flat: the leftmost six percent of the width is one blown-out cyan, while the right side never settles into a slab at all, darkening toward a hard red right up to the final column.",
               "id": "clamp-factor-extrapolates",
               "position": 3,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec3 cool = vec3(0.31, 0.84, 1.0);\nvec3 warm = vec3(1.0, 0.42, 0.42);\nfloat factor = uv.x * 2.5 - 0.6;\nvec3 colour = mix(cool, warm, factor);\nfragColor = vec4(colour, 1.0);",
@@ -513,14 +513,14 @@
           "shortTitle": "Distance as a field",
           "stages": [
             {
-              "body": "This paints the distance from the centre straight into all three colour channels, so brightness is distance. The centre reads zero and comes out black, and every direction brightens away from it. Pure white is reached exactly one unit out — and because the aspect line squeezes x, one unit is nearer on the vertical axis than the horizontal. On a tall screen that means the regions above and below the middle clip to flat white, while the left and right edges only reach around 0.56, a mid grey. The rings of equal brightness are perfect circles: that is what a field looks like when you look at it directly.",
+              "body": "This paints the distance from the centre straight into all three colour channels, so brightness is distance. The centre reads zero and comes out black, and every direction brightens away from it. Pure white is reached exactly one unit out, and after the aspect line one unit is the same distance on both axes. The preview is two units tall and wider still, so that boundary is a true circle inscribed between the top and bottom edges: it grazes them without clipping, while the outer region left and right of it clips to flat white. The rings of equal brightness are perfect circles: that is what a field looks like when you look at it directly.",
               "id": "distance-as-a-field-raw",
               "position": 1,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\n\nfragColor = vec4(vec3(d), 1.0);",
               "title": "Paint the measurement itself"
             },
             {
-              "body": "Subtracting 0.5 slides the whole field down by half a unit, so zero no longer sits at the centre — it now falls on a circle of radius 0.5. Inside that circle the value is negative. This is the single most useful move in the module, and the render undersells it badly: negative and zero both display as black, so you see a solid black disc with no visible boundary, fading up to roughly 0.65 grey at the corners and never reaching white at all. The sign is real and the code can read it. The screen simply has no way to show it.",
+              "body": "Subtracting 0.5 slides the whole field down by half a unit, so zero no longer sits at the centre — it now falls on a circle of radius 0.5. Inside that circle the value is negative. This is the single most useful move in the module, and the render undersells it badly: negative and zero both display as black, so you see a solid black disc with no visible boundary, fading up through grey and clipping to flat white before the frame runs out — corner wedges only on the narrowest phone, the whole outer band left and right on the widest. The sign is real and the code can read it. The screen simply has no way to show it.",
               "id": "distance-as-a-field-signed",
               "position": 2,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.5;\n\nfragColor = vec4(vec3(d), 1.0);",
@@ -534,7 +534,7 @@
               "title": "Make the sign visible"
             },
             {
-              "body": "Here the same d again, read a third way. One smoothstep rises just before the edge and another rises just after it, and subtracting the second from the first leaves a band that is 1 only between roughly -0.03 and 0.03. Everything outside that window cancels to 0. What you get is a thin yellow-green ring hanging at radius 0.5 on a near-black background — no fill anywhere, because the band never includes the middle of the disc. A mask could not have produced this. Only a field that still knows how far away it is at every pixel can.",
+              "body": "Here the same d again, read a third way. One smoothstep rises just before the edge and another rises just after it, and subtracting the second from the first leaves a band that holds at 1 between -0.02 and 0.02 and tapers back to 0 by -0.04 and 0.04. Everything beyond that window cancels to 0. What you get is a thin yellow-green ring hanging at radius 0.5 on a near-black background — no fill anywhere, because the band never includes the middle of the disc. A mask could not have produced this. Only a field that still knows how far away it is at every pixel can.",
               "id": "distance-as-a-field-ring",
               "position": 4,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.5;\n\nfloat ring = smoothstep(-0.04, -0.02, d) - smoothstep(0.02, 0.04, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), ring);\n\nfragColor = vec4(colour, 1.0);",
@@ -592,7 +592,7 @@
           "shortTitle": "Boxes and rounded boxes",
           "stages": [
             {
-              "body": "abs applied to a vec2 takes the absolute value of each component separately, which mirrors the left half onto the right and the bottom half onto the top. Painting the folded coordinate shows it plainly: the centre is dark blue where both components are zero, red grows toward the left and right edges, green grows toward the top and bottom, and all four corners land on the same pale yellow-green. Top-left, top-right, bottom-left and bottom-right are pixel-identical. Anything you build from the folded coordinate is symmetric about both axes without you arranging for it.",
+              "body": "abs applied to a vec2 takes the absolute value of each component separately, which mirrors the left half onto the right and the bottom half onto the top. Painting the folded coordinate shows it plainly: the centre is dark blue where both components are zero, red climbs to full at p.x of plus or minus 1 and flat-tops out to the side edges, green only at the very top and bottom, and all four corners land on the same saturated lemon yellow. Top-left, top-right, bottom-left and bottom-right are pixel-identical. Anything you build from the folded coordinate is symmetric about both axes without you arranging for it.",
               "id": "boxes-and-rounded-boxes-abs",
               "position": 1,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 q = abs(p);\n\nfragColor = vec4(q.x, q.y, 0.25, 1.0);",
@@ -613,7 +613,7 @@
               "title": "Measure the outside properly"
             },
             {
-              "body": "Subtracting a constant from a distance field moves its zero line outward by that amount in every direction at once, and around a corner every direction means a quarter circle. So rounding is free: shrink the half-size by the rounding first, then subtract the rounding from the field. The shrink is what keeps the outer size unchanged — this box still measures 0.68 by 0.44, exactly like the last two stages, but now with corners of radius 0.1. Push rounding up to the smaller half-size and the box becomes a capsule, then a circle.",
+              "body": "Subtracting a constant from a distance field moves its zero line outward by that amount in every direction at once, and around a corner every direction means a quarter circle. So rounding is free: shrink the half-size by the rounding first, then subtract the rounding from the field. The shrink is what keeps the outer size unchanged — this box still measures 0.68 by 0.44, exactly like the last two stages, but now with corners of radius 0.1. Push rounding up to the smaller half-size and the box becomes a capsule. Push further and it narrows into a lens, not a circle — only a square box rounds all the way to one.",
               "id": "boxes-and-rounded-boxes-rounded",
               "position": 4,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat rounding = 0.1;\nvec2 q = abs(p) - (vec2(0.34, 0.22) - rounding);\n\nfloat d = length(max(q, 0.0)) - rounding;\n\nfloat fill = 1.0 - smoothstep(0.0, 0.012, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
@@ -664,7 +664,7 @@
         },
         {
           "id": "edges-that-survive-scaling",
-          "intro": "Every stage so far has softened its edge with the same hand-picked 0.012, and every one of them looked fine, because nothing has changed scale yet. That number is measured in the field's units, not in pixels, so the moment a shape grows or shrinks it stops being right — too soft at one size, jagged at another. This lesson makes that failure visible and then removes the guesswork entirely, using a function that can tell you how large a pixel is.",
+          "intro": "Every filled shape so far has taken its soft edge from the same hand-picked 0.012, and every one of them looked fine, because nothing has changed scale yet. That number is measured in the field's units, not in pixels, so the moment a shape grows or shrinks it stops being right — too soft at one size, jagged at another. This lesson makes that failure visible and then removes the guesswork entirely, using a function that can tell you how large a pixel is.",
           "moduleId": "distance-fields",
           "position": 5,
           "shortTitle": "Edges that survive scaling",
@@ -691,7 +691,7 @@
               "title": "fwidth measures a pixel"
             },
             {
-              "body": "The whole module in nine lines. A rounded box built from abs and max, a circle placed to overlap its top edge, min uniting them into one shape, and fwidth keeping the outline honest while the zoom drives it. The join between the box and the circle is seamless because they were combined as fields rather than drawn in sequence. Nothing here is new — every line is from an earlier lesson — and that is the point: fields compose, and the edge treatment does not care how the field was assembled.",
+              "body": "The whole module in thirteen lines. A rounded box built from abs and max, a circle placed to overlap its top edge, min uniting them into one shape, and fwidth keeping the outline honest while the zoom drives it. The join between the box and the circle is seamless because they were combined as fields rather than drawn in sequence. Nothing here is new — every line is from an earlier lesson — and that is the point: fields compose, and the edge treatment does not care how the field was assembled.",
               "id": "edges-that-survive-scaling-together",
               "position": 4,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat zoom = 1.85 + sin(iTime * 0.6) * 1.15;\nvec2 p = (uv * 2.0 - 1.0) * zoom;\np.x *= iResolution.x / iResolution.y;\n\nfloat rounding = 0.08;\nvec2 q = abs(p) - (vec2(0.3, 0.2) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat ball = length(p - vec2(0.0, 0.3)) - 0.14;\n\nfloat d = min(box, ball);\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
@@ -758,7 +758,7 @@
           "shortTitle": "Colour as three numbers",
           "stages": [
             {
-              "body": "Red is driven by uv.x, green by uv.y, and blue is pinned at a constant quarter. Nothing couples them, which is the point: the corners land on four completely different colours from one expression. Bottom-left is near-black with a faint blue cast, bottom-right is red, top-left is green, and top-right is where both ramps arrive at once and the result goes pale yellow-white. Every colour on this screen is a coordinate in a cube, and the shader is simply reading off two of its axes from position.",
+              "body": "Red is driven by uv.x, green by uv.y, and blue is pinned at a constant quarter. Nothing couples them, which is the point: the corners land on four completely different colours from one expression. Bottom-left is near-black with a faint blue cast, bottom-right is red, top-left is green, and top-right is where both ramps arrive at once and the result is a vivid lemon yellow, held back from pure only by that constant quarter of blue. Every colour on this screen is a coordinate in a cube, and the shader is simply reading off two of its axes from position.",
               "id": "colour-as-three-numbers-channels",
               "position": 1,
               "source": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 colour = vec3(uv.x, uv.y, 0.25);\n\nfragColor = vec4(colour, 1.0);",
@@ -837,14 +837,14 @@
           "shortTitle": "Brightness that matches vision",
           "stages": [
             {
-              "body": "The test image, built entirely from Module 3. Three circles, each written into a single colour channel, each antialiased with its own fwidth. Because the channels are independent the overlaps do the arithmetic themselves: red and green together make yellow, red and blue make magenta, green and blue make cyan, and the small region where all three meet comes out white. Nothing here is new, and that is deliberate — the next three stages change only how this image is measured, never how it is made.",
+              "body": "The test image, built entirely from Module 3. Three circles, each written into a single colour channel, each antialiased with its own fwidth. Because the channels are independent the overlaps do the arithmetic themselves: red and green together make yellow, red and blue make magenta, green and blue make cyan. All three together would make white, but the circles only just reach one another, so that three-way meeting is a speck rather than a region you can see. Nothing here is new, and that is deliberate — the next three stages change only how this image is measured, never how it is made.",
               "id": "brightness-that-matches-vision-source",
               "position": 1,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p - vec2(-0.22, 0.13)) - 0.26;\nfloat g = length(p - vec2(0.22, 0.13)) - 0.26;\nfloat b = length(p - vec2(0.0, -0.24)) - 0.26;\n\nvec3 colour;\ncolour.r = 1.0 - smoothstep(-fwidth(r), fwidth(r), r);\ncolour.g = 1.0 - smoothstep(-fwidth(g), fwidth(g), g);\ncolour.b = 1.0 - smoothstep(-fwidth(b), fwidth(b), b);\n\nfragColor = vec4(colour, 1.0);",
               "title": "Three lights to measure"
             },
             {
-              "body": "Averaging the three channels and painting the result as grey. Look at what happened to the three circles: every one of them became the same mid grey, exactly a third, because each is a single channel at full strength and the average cannot tell them apart. The two-way overlaps all land on two thirds and the centre on white. This is a defensible measure of how much colour is present. It is not a measure of how bright anything looks, and holding it beside the previous stage makes that obvious.",
+              "body": "Averaging the three channels and painting the result as grey. Look at what happened to the three circles: every one of them became the same mid grey, exactly a third, because each is a single channel at full strength and the average cannot tell them apart. The two-way overlaps all land on two thirds, and the speck where all three meet climbs to white — though it is far too small to read anything off. This is a defensible measure of how much colour is present. It is not a measure of how bright anything looks, and holding it beside the previous stage makes that obvious.",
               "id": "brightness-that-matches-vision-average",
               "position": 2,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p - vec2(-0.22, 0.13)) - 0.26;\nfloat g = length(p - vec2(0.22, 0.13)) - 0.26;\nfloat b = length(p - vec2(0.0, -0.24)) - 0.26;\n\nvec3 colour;\ncolour.r = 1.0 - smoothstep(-fwidth(r), fwidth(r), r);\ncolour.g = 1.0 - smoothstep(-fwidth(g), fwidth(g), g);\ncolour.b = 1.0 - smoothstep(-fwidth(b), fwidth(b), b);\n\nfloat brightness = (colour.r + colour.g + colour.b) / 3.0;\n\nfragColor = vec4(vec3(brightness), 1.0);",
@@ -897,7 +897,7 @@
               "title": "What the four parameters do"
             },
             {
-              "body": "The palette never asked where its number came from, so this hands it a distance instead of a coordinate. With c at 2.0 a little over two full cycles fit between the centre and the far corner, drawing concentric rings of colour, and the drifting phase pulls those rings steadily inward. Swap length for any field from Module 3 — a box, a union, a subtraction — and the rings follow that shape's contours instead. This is the module's goal in five lines: colour driven by any scalar the shader can produce.",
+              "body": "The palette never asked where its number came from, so this hands it a distance instead of a coordinate. With c at 2.0 the palette runs exactly two full cycles between the centre and the top edge, drawing concentric rings of colour that the drifting phase pulls steadily inward. Only the rings within a unit of the centre close completely; further out they run off the top and bottom. Swap length for any field from Module 3 and the rings follow that shape's contours instead. This is the module's goal in five lines: colour driven by any scalar the shader can produce.",
               "id": "palettes-as-functions-any-scalar",
               "position": 4,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat t = length(p);\n\nvec3 a = vec3(0.5);\nvec3 b = vec3(0.5);\nvec3 c = vec3(2.0);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.15;\n\nvec3 colour = a + b * cos(6.28318 * (c * t + phase));\n\nfragColor = vec4(colour, 1.0);",
@@ -971,7 +971,7 @@
               "title": "Naming where a shape sits"
             },
             {
-              "body": "The same offset, the same disc, and the shape lands in the opposite corner — down and to the left. The difference is that the offset is now added to the coordinate itself and the disc is measured from zero, so nothing was placed anywhere. Every pixel was simply told it is a quarter further right and a little higher than it really is, and a pixel that believes it is at the origin is the one that draws the centre of the disc. Add to the coordinate, and the picture moves away.",
+              "body": "The same offset, the same disc, and the shape lands down and to the left of centre — the exact mirror of where it sat a moment ago. The difference is that the offset is now added to the coordinate itself and the disc is measured from zero, so nothing was placed anywhere. Every pixel was simply told it is a quarter further right and a little higher than it really is, and a pixel that believes it is at the origin is the one that draws the centre of the disc. Add to the coordinate, and the picture moves away.",
               "id": "moving-the-coordinate-system-inverse",
               "position": 2,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 offset = vec2(0.25, 0.15);\np = p + offset;\n\nfloat d = length(p) - 0.25;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
@@ -985,7 +985,7 @@
               "title": "One change, every shape"
             },
             {
-              "body": "Here the two ideas sit in the same shader. The camera vector moves the space and the placement vector names a spot inside it, so the disc orbits the position it was given rather than resting on it. Reading it as two steps keeps the sign straight: first decide where the observer is, then place the shape relative to that. The disc traces a small ellipse, opposite in direction to the camera, and never leaves the screen because the two vectors were sized to fit together.",
+              "body": "Here the two ideas sit in the same shader. The camera vector moves the space and the placement vector names a spot inside it, so the disc orbits the position it was given rather than resting on it. Reading it as two steps keeps the sign straight: first decide where the observer is, then place the shape relative to that. The disc traces a small ellipse, sitting opposite the camera on it but turning the same way round, because negating a vector is a half turn rather than a mirror.",
               "id": "moving-the-coordinate-system-both",
               "position": 4,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 camera = vec2(sin(iTime * 0.7) * 0.18, cos(iTime * 0.7) * 0.14);\nvec2 q = p + camera;\n\nfloat d = length(q - vec2(0.12, 0.1)) - 0.18;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
@@ -1025,7 +1025,7 @@
               "title": "Rotation happens about zero"
             },
             {
-              "body": "Three transforms in a row, each written as a reassignment so the order is plain: place, spin, breathe. The box slides side to side, turns steadily clockwise, and pulses between roughly six tenths and nine tenths of its written size. Read the chain downward and you are describing what happens to the coordinate; read it upward and you are describing what happens to the shape. Both readings are useful, and mixing them halfway through is the reliable way to get lost.",
+              "body": "Three transforms in a row, each written as a reassignment so the order is plain: place, spin, breathe. The box slides side to side, turns steadily clockwise, and pulses between four sevenths of its written size and very nearly all of it. Read the chain downward and you are describing what happens to the coordinate; read it upward and you are describing what happens to the shape. Both readings are useful, and mixing them halfway through is the reliable way to get lost.",
               "id": "rotation-and-scale-chain",
               "position": 4,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat angle = iTime * 0.5;\nfloat c = cos(angle);\nfloat s = sin(angle);\n\nvec2 q = p;\nq = q - vec2(sin(iTime * 0.9) * 0.16, 0.0);\nq = mat2(c, s, -s, c) * q;\nq = q * (1.4 + sin(iTime * 1.3) * 0.35);\n\nfloat rounding = 0.06;\nvec2 box = abs(q) - (vec2(0.3, 0.2) - rounding);\nfloat d = length(max(box, 0.0)) - rounding;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);",
@@ -1043,7 +1043,7 @@
           "shortTitle": "Polar coordinates",
           "stages": [
             {
-              "body": "Radius goes into red and angle into green, scaled from its natural minus pi to pi range into 0 to 1. Red therefore grows in circles outward from the centre, clipping to full before the corners. Green sweeps once around, and it is the seam that matters: along the negative x axis, running left from the centre, green jumps from full to nothing in one pixel. That discontinuity is not a bug in atan. It is what happens when a quantity that wraps is read as one that does not.",
+              "body": "Radius goes into red and angle into green, scaled from its natural minus pi to pi range into 0 to 1. Red therefore grows in circles from the centre and saturates on a circle that just touches the top and bottom edges, leaving everything beyond it flat. Green sweeps once around, and it is the seam that matters: along the negative x axis, running left from the centre, green jumps from full to nothing in one pixel. That discontinuity is not a bug in atan. It is what happens when a quantity that wraps is read as one that does not.",
               "id": "polar-coordinates-two-numbers",
               "position": 1,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p);\nfloat a = atan(p.y, p.x);\n\nfragColor = vec4(r, a / 6.28318 + 0.5, 0.3, 1.0);",
@@ -1082,14 +1082,14 @@
           "shortTitle": "Tiling with fract",
           "stages": [
             {
-              "body": "Scaling uv.x by four and keeping only the fractional part turns one ramp into four. Each runs black to almost-white and then drops back to black instantly, because 0.999 keeps its 0.999 while 1.0 becomes 0.0 exactly. Those four hard resets are the cell boundaries, and everything in this lesson happens between them. Note that no shape and no branch was involved: the repetition is a property of the coordinate now, not of anything drawn on it.",
+              "body": "Scaling uv.x by four and keeping only the fractional part turns one ramp into four. Each runs black to almost-white and then drops back to black instantly, because 0.999 keeps its 0.999 while 1.0 becomes 0.0 exactly. Three of those resets fall inside the frame and the fourth lands on the right-hand edge itself. They are the cell boundaries, and everything in this lesson happens between them. Note that no shape and no branch was involved: the repetition is a property of the coordinate now, not of anything drawn on it.",
               "id": "tiling-with-fract-sawtooth",
               "position": 1,
               "source": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat v = fract(uv.x * 4.0);\n\nfragColor = vec4(vec3(v), 1.0);",
               "title": "fract keeps what is after the point"
             },
             {
-              "body": "The same fold on both axes at once cuts the plane into squares a third of a unit across, and subtracting a half moves each square's origin to its middle. One circle written once therefore appears in every cell — a grid roughly three and a third wide by six tall on a portrait screen. The cells are square rather than stretched because the aspect line at the top made the units equal in both directions, which is the same reason circles have been round since Module 1.",
+              "body": "The same fold on both axes at once cuts the plane into squares a third of a unit across, and subtracting a half moves each square's origin to its middle. One circle written once therefore appears in every cell — exactly six rows tall, because the fold by three lands squarely on the top and bottom edges, and more columns than that across, since the frame is wider than it is tall. The cells are square rather than stretched because the aspect line at the top made the units equal in both directions, which is the same reason circles have been round since Module 1.",
               "id": "tiling-with-fract-cells",
               "position": 2,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nfloat d = length(cell) - 0.32;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
@@ -1121,7 +1121,7 @@
           "shortTitle": "Cell identity",
           "stages": [
             {
-              "body": "floor rounds down to the whole number below, so across an entire cell it returns one unchanging pair. Painting that pair straight into red and green gives flat blocks of colour rather than gradients — proof that the value really is constant within each cell and steps only at the boundaries. The identities run negative on the left and bottom, so the scale and offset are chosen to land all six rows evenly between 0 and 1, which is why no two rows share a shade.",
+              "body": "floor rounds down to the whole number below, so across an entire cell it returns one unchanging pair. Painting that pair into red and green gives flat blocks rather than gradients: nothing varies inside a cell, and colour changes only at a boundary. The identities run negative on the left and bottom, so the scale and offset land all six rows evenly between 0 and 1. Across, they span that range only within a unit of the centre; further out the identity keeps counting but the colour has run out, and those columns stop stepping.",
               "id": "cell-identity-floor",
               "position": 1,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 id = floor(p * 3.0);\n\nvec3 colour = vec3(id.x, id.y, 0.0) * 0.2 + 0.6;\n\nfragColor = vec4(colour, 1.0);",
@@ -1209,7 +1209,7 @@
           "shortTitle": "Deterministic randomness",
           "stages": [
             {
-              "body": "This is the first stage in the course to declare a function, which it can do because helpers sit above mainImage where GLSL allows definitions. hash takes a cell coordinate and returns a value between 0 and 1. Feeding it floored positions gives one value per cell, and the screen fills with roughly two thousand square specks of unrelated brightness — television static. There is no seed and no state anywhere in this shader. Every speck is simply a function of where it is.",
+              "body": "This is the first stage in the course to declare a function, which it can do because helpers sit above mainImage where GLSL allows definitions. hash takes a cell coordinate and returns a value between 0 and 1. Feeding it floored positions gives one value per cell, and the screen fills with thousands of square specks of unrelated brightness — sixty rows of television static from top to bottom. There is no seed and no state anywhere in this shader. Every speck is simply a function of where it is.",
               "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}",
               "id": "deterministic-randomness-hash",
               "position": 1,
@@ -1225,7 +1225,7 @@
               "title": "Attached to the coordinate, not the frame"
             },
             {
-              "body": "The same expression with the multiplier and fract removed, on a continuous coordinate. What comes back is not random at all: about twenty-five fine stripes, running almost horizontally and tilted around nine degrees, because the dot product collapses the plane onto one axis and the sine repeats along it. The randomness is not in the sine. It arrives when that smooth output is multiplied by a large number and only the fractional part kept, which throws neighbouring inputs to unrelated places.",
+              "body": "The same expression with the multiplier and fract removed, on a continuous coordinate. What comes back is not random at all: twenty-five fine stripes cross any vertical line you pick, running almost horizontally and tilted around nine degrees, because the dot product collapses the plane onto one axis and the sine repeats along it. The randomness is not in the sine. It arrives when that smooth output is multiplied by a large number and only the fractional part kept, which throws neighbouring inputs to unrelated places.",
               "helpers": "float wave(vec2 p) {\n  return 0.5 + 0.5 * sin(dot(p, vec2(12.9898, 78.233)));\n}",
               "id": "deterministic-randomness-inside",
               "position": 3,
@@ -1253,7 +1253,7 @@
           "shortTitle": "Value noise",
           "stages": [
             {
-              "body": "The starting point, at a much coarser scale than the static two stages ago so individual cells are large enough to study. Flooring throws away where inside the cell a pixel is, so every pixel in a cell gets the identical value and the result is a mosaic of flat squares about four and a half across by eight down. Everything from here is about recovering that discarded fraction and using it to travel smoothly between neighbouring squares.",
+              "body": "The starting point, at a much coarser scale than the static two stages ago so individual cells are large enough to study. Flooring throws away where inside the cell a pixel is, so every pixel in a cell gets the identical value and the result is a mosaic of flat squares, eight down on every device and from eleven across on the narrowest phone to nineteen on the widest. Everything from here is about recovering that discarded fraction and using it to travel smoothly between neighbouring squares.",
               "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}",
               "id": "value-noise-blocky",
               "position": 1,
@@ -1312,7 +1312,7 @@
               "title": "The two, side by side"
             },
             {
-              "body": "This marks in red everywhere the noise sits within a whisker of 0.5. What appears is a web of curves rather than isolated dots, because 0.5 is a contour that runs continuously across the field — but look where those curves cross. Every intersection lands exactly on a lattice point, because there the offset from the nearest corner is zero, so all four dot products vanish and the value is pinned to 0.5. Value noise puts its extremes on the lattice; gradient noise puts its midpoint there.",
+              "body": "This marks in red everywhere the noise sits within a whisker of 0.5. What appears is a web of curves rather than isolated dots, because 0.5 is a contour that runs continuously across the field — and it threads straight through every lattice point. Land exactly on a corner and that corner's own dot product is zero, while the interpolation weights, which are also zero when the fraction is, discard whatever the other three corners had to say. The value there is exactly 0.5. Value noise puts its extremes on the lattice; gradient noise puts its midpoint there.",
               "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}",
               "id": "gradient-noise-lattice",
               "position": 3,
@@ -1328,7 +1328,7 @@
               "title": "Put it to work"
             }
           ],
-          "takeaway": "Gradient noise hashes a random vector at each lattice point and takes its dot product with the offset from that point, so the result is always exactly zero at the lattice itself and gets all its variation from between the points. That is the opposite of value noise, whose extremes sit on the grid, and it is why gradient noise shows no square bias. The interpolation and the smoothing curve are unchanged.",
+          "takeaway": "Gradient noise hashes a random vector at each lattice point and takes its dot product with the offset from that point, so the blended contributions come to exactly zero at the lattice itself — the mid grey of the remapped range — and all the variation comes from between the points. That is the opposite of value noise, whose extremes sit on the grid, and it is why gradient noise shows no square bias. The interpolation and the smoothing curve are unchanged.",
           "title": "Gradient noise"
         },
         {
@@ -1355,7 +1355,7 @@
               "title": "Three octaves"
             },
             {
-              "body": "Six octaves, and the difference from three is far smaller than the difference three made over one. The sixth layer arrives at one thirty-second of the first's strength and thirty-two times its frequency, which on this preview is finer than a pixel and contributes little but cost — four hashed corners per octave, twenty-four of them a pixel by the sixth. Knowing when the next octave stops earning its keep is a judgement the last module of the course is entirely about.",
+              "body": "Six octaves, and the difference from three is far smaller than the difference three made over one. The sixth layer arrives at one thirty-second of the first's strength and thirty-two times its frequency, fine enough that the preview can barely resolve it, and it contributes little but cost — four hashed corners per octave, twenty-four of them a pixel by the sixth. Knowing when the next octave stops earning its keep is a judgement the last module of the course is entirely about.",
               "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 6; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
               "id": "fractal-noise-six",
               "position": 3,
@@ -1450,7 +1450,7 @@
               "title": "Make it continuous"
             },
             {
-              "brief": "Turn the noise into a surface. Threshold it into patches, use those as a mask between two colours, and warp the coordinate with noise first so the patches stretch rather than staying round.",
+              "brief": "Turn the noise into a surface. Threshold it into patches, use those as a mask between two colours, and warp the coordinate with noise first so a few of the patches pull out into long sinuous streaks.",
               "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
               "hint": "Sample the two warp components at different places, or everything drags one way.",
               "id": "a-weathered-surface-worn",
@@ -1526,7 +1526,7 @@
               "title": "One field, three questions"
             },
             {
-              "body": "A mask is a number, so the ordinary arithmetic already means something. Multiplying two masks keeps only where both are high, which is an intersection: the shape's fill times a stripe pattern gives roughly nineteen bands that stop exactly at the shape's edge, because outside it one factor is zero. Subtracting a mask from 1 inverts it, which is how the stripes are tinted rather than punched out. No new function was needed for either.",
+              "body": "A mask is a number, so the ordinary arithmetic already means something. Multiplying two masks keeps only where both are high, which is an intersection: the shape's fill times a stripe pattern gives six bands that stop exactly at the shape's edge, because outside it one factor is zero. Subtracting a mask from 1 inverts it, which is how the stripes are tinted rather than punched out. No new function was needed for either.",
               "helpers": "float scene(vec2 p) {\n  vec2 q = abs(p) - vec2(0.26, 0.16);\n  float box = length(max(q, 0.0)) - 0.08;\n  float ball = length(p - vec2(0.0, 0.26)) - 0.13;\n  return min(box, ball);\n}",
               "id": "masks-as-reusable-signals-arithmetic",
               "position": 2,
@@ -1561,7 +1561,7 @@
           "shortTitle": "Assembling a finished piece",
           "stages": [
             {
-              "body": "A vertical gradient from warm at the bottom to deep blue by around five sixths of the way up, then a vignette that dims the frame toward its corners. The vignette is the same radial field from Module 3 used as a multiplier rather than a shape, and it drops the corners to a little under six tenths of full brightness. Neither layer is interesting alone. Both exist so that everything added later has something to sit against.",
+              "body": "A vertical gradient from warm at the bottom to deep blue by around five sixths of the way up, then a vignette that dims the frame away from its centre. It is the same radial field from Module 3 used as a multiplier rather than a shape, and it bottoms out at 0.55 of full brightness. The corners sit on that floor and so does the whole left and right edge, while the middle of the top and bottom stays brighter, near 0.67: the dimming bites hardest at the sides. Both exist so everything added later has something to sit against.",
               "id": "assembling-a-finished-piece-sky",
               "position": 1,
               "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.85, 0.52, 0.38), vec3(0.09, 0.13, 0.32), smoothstep(0.0, 0.85, uv.y));\n\nfloat vignette = 1.0 - smoothstep(0.5, 1.25, length(p));\ncolour *= mix(0.55, 1.0, vignette);\n\nfragColor = vec4(colour, 1.0);",
@@ -1575,7 +1575,7 @@
               "title": "The subject"
             },
             {
-              "body": "A horizon, built by sampling fractal noise along one axis and treating the result as a height. Wherever a pixel sits below that height it belongs to the ground, which is the same sign test every field in Module 3 used, applied to a line that happens to wobble. Worth knowing: a single line through two-dimensional noise travels far less than the field does, so the amplitude here is deliberately larger than it looks like it should be. The ridge runs between roughly 0.15 and 0.44 below the centre line, clear of the sun at both ends.",
+              "body": "A horizon, built by sampling fractal noise along one axis and treating the result as a height. Wherever a pixel sits below that height it belongs to the ground, which is the same sign test every field in Module 3 used, applied to a line that happens to wobble. Worth knowing: a single line through two-dimensional noise travels far less than the field does, so the amplitude here is deliberately larger than it looks like it should be. Out to a unit either side of centre the ridge sits between roughly 0.15 and 0.44 below the centre line; wider previews show it climbing higher still, never as high as the sun.",
               "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
               "id": "assembling-a-finished-piece-terrain",
               "position": 3,
@@ -1607,7 +1607,7 @@
           "position": 1,
           "steps": [
             {
-              "brief": "Build the ground everything else sits on: a vertical gradient from warm at the bottom to deep blue at the top, then a vignette that dims the corners so the frame has a centre.",
+              "brief": "Build the ground everything else sits on: a vertical gradient from warm at the bottom to deep blue at the top, then a vignette that darkens the picture with distance from the centre, so the frame has a middle rather than reading flat.",
               "hint": "A vignette is the radial field from Module 3 used as a multiplier.",
               "id": "a-lit-horizon-sky",
               "position": 1,
@@ -1616,7 +1616,7 @@
               "title": "Background first"
             },
             {
-              "brief": "Add a sun: a disc low and left of centre, with a broad halo drawn underneath it so the glow sits behind the crisp edge rather than washing over it.",
+              "brief": "Add a sun: a disc centred a little above the middle of the frame and slightly to its left, with a broad halo drawn underneath it so the glow sits behind the crisp edge rather than washing over it.",
               "hint": "Layer order is what puts the halo behind the disc.",
               "id": "a-lit-horizon-sun",
               "position": 2,

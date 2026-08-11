@@ -28,7 +28,7 @@
           "id": "raw-pixel-coordinates",
           "position": 2,
           "title": "Where am I? Raw pixels",
-          "body": "fragCoord tells you which pixel this copy of the function is responsible for, measured in pixels from the bottom-left corner. Feeding it into red makes position visible as a gradient. But notice the divisor: four hundred is a guess. On a narrower screen the gradient finishes early, and on a wider one it never reaches full brightness. The coordinate is real, but the scale is arbitrary.",
+          "body": "fragCoord tells you which pixel this copy of the function is responsible for, measured in pixels from the bottom-left corner. Feeding it into red makes position visible as a gradient. But notice the divisor: four hundred is a guess, and fragCoord counts real device pixels, of which this preview has far more than four hundred across. Red therefore reaches full brightness partway along and sits flat from there to the right edge. How far along that happens depends on the phone's width and on how many device pixels it packs into each point, neither of which this shader can know. The coordinate is real, but the scale is arbitrary.",
           "source": "fragColor = vec4(fragCoord.x / 400.0, 0.28, 0.22, 1.0);"
         },
         {
@@ -53,8 +53,8 @@
       "position": 2,
       "title": "From pixels to UV",
       "shortTitle": "Pixels to UV",
-      "intro": "Lesson 1 divided fragCoord by iResolution.xy without asking what either side of that division actually contains. This lesson slows down on that one line: which corner of the screen is (0, 0), why iResolution is a vec3 instead of a vec2, and why uv survives a phone rotating from portrait to landscape when a raw pixel count does not. It also flags a naming mismatch you will meet immediately outside this app: plenty of shader code calls this uniform u_resolution and declares it as a vec2.",
-      "takeaway": "iResolution is a vec3 whose .xy holds real pixel width and height; dividing fragCoord by it, not by a guessed number, is what lets a gradient survive resizing or rotation. Elsewhere the same uniform is often called u_resolution and declared as a vec2, so code written against it needs .xy appended wherever it appears here.",
+      "intro": "Lesson 1 divided fragCoord by iResolution.xy without asking what either side of that division actually contains. This lesson slows down on that one line: which corner of the screen is (0, 0), why iResolution is a vec3 instead of a vec2, and why uv survives a change of screen width when a raw pixel count does not. It also flags a naming mismatch you will meet immediately outside this app: plenty of shader code calls this uniform u_resolution and declares it as a vec2.",
+      "takeaway": "iResolution is a vec3 whose .xy holds real pixel width and height; dividing fragCoord by it, not by a guessed number, is what lets a gradient survive a change of screen size. Elsewhere the same uniform is often called u_resolution and declared as a vec2, so code written against it needs .xy appended wherever it appears here.",
       "tryThis": "Remove the .xy from the divisor in the last stage and read the compile error. What type mismatch is the driver complaining about?",
       "stages": [
         {
@@ -74,8 +74,8 @@
         {
           "id": "gradient-survives-rotation",
           "position": 3,
-          "title": "A gradient that survives rotation",
-          "body": "This diagonal blend runs from a dark navy blue in the bottom-left corner to a bright, pale yellow in the top-right, because uv.x and uv.y are each already a fraction from 0 to 1 of their own axis before they are added and halved; the fixed 0.4 in blue is what keeps either corner from reading as pure black or pure white. Rotate the phone from portrait to landscape and iResolution.xy swaps its width and height, but the corners stay the corners: bottom-left is still 0, top-right is still 1, so the image reflows correctly without the shader being recompiled. Compare that with Lesson 1's raw fragCoord.x / 400.0: that divisor was a guess baked into the shader, so the same rotation would change how far across the screen the gradient reaches, sometimes clipping to solid colour before the edge.",
+          "title": "A gradient that survives any width",
+          "body": "This diagonal blend runs from a dark navy blue in the bottom-left corner to a bright, pale yellow in the top-right, because uv.x and uv.y are each already a fraction from 0 to 1 of their own axis before they are added and halved; the fixed 0.4 in blue is what keeps either corner from reading as pure black or pure white. This preview is 280 points across on the narrowest phone and 480 on the widest, and iResolution.x reports whichever it happens to be, but the corners stay the corners: bottom-left is still 0, top-right is still 1, so the image refills the width without the shader being recompiled. Lesson 1's raw fragCoord.x / 400.0 cannot do that: the divisor was a guess baked into the shader, so it clips to a flat colour before the right edge, and where it clips moves with the device.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nfloat diagonal = (uv.x + uv.y) * 0.5;\nfragColor = vec4(diagonal, diagonal, 0.4, 1.0);"
         },
         {
@@ -93,7 +93,7 @@
       "position": 3,
       "title": "Centre and aspect",
       "shortTitle": "Centre & aspect",
-      "intro": "Every stage so far has measured position from a corner, which makes distance from the middle of the screen awkward to express and makes anything meant to look round secretly depend on the screen's proportions. This lesson remaps uv from a 0 to 1 range into a −1 to 1 range centred on the middle of the screen, then confronts the cost of treating a non-square screen as if it were square: a shape meant to be round comes out stretched. length() appears here strictly as a ruler, to measure that stretch, not to draw a shape.",
+      "intro": "Every stage so far has measured position from a corner, which makes distance from the middle of the screen awkward to express and makes anything meant to look round secretly depend on the screen's proportions. This lesson remaps uv from a 0 to 1 range into a −1 to 1 range centred on the middle of the screen, then confronts the cost of treating a non-square screen as if it were square: a shape meant to be round comes out stretched along the x axis. length() appears here strictly as a ruler, to measure that stretch, not to draw a shape.",
       "takeaway": "Doubling uv and subtracting one centres the origin on the middle of the screen instead of a corner. On a non-square screen that origin is still correct, but a length()-based radial gradient is elliptical until x is scaled by iResolution.x / iResolution.y, after which the same measurement reads as a true circle centred at exactly (0, 0).",
       "tryThis": "Try dividing p.y by the aspect ratio instead of multiplying p.x. Does the circle still come out round, and where does it sit on screen?",
       "stages": [
@@ -108,21 +108,21 @@
           "id": "radial-gradient-is-an-ellipse",
           "position": 2,
           "title": "A circle-ish gradient, until you check",
-          "body": "length(p) here is used purely as a ruler — it measures how far a point is from the centre, it does not draw a shape, and Module 1 has no shape functions yet. On a square screen the resulting grey gradient's contours look like circles. On a real phone screen, which is taller than it is wide, they do not: p.x and p.y are each normalised against a different physical dimension, width for one axis and height for the other, so a fixed step in p covers more real pixels along the wider dimension than the narrower one. The contours you are looking at are ellipses, stretched along whichever screen dimension is larger, even though the code that produced them never mentions an ellipse.",
+          "body": "length(p) here is used purely as a ruler — it measures how far a point is from the centre, it does not draw a shape, and Module 1 has no shape functions yet. On a square preview the resulting grey gradient's contours would look like circles. This preview is a wide band rather than a square: p.x and p.y are each normalised against a different physical dimension, width for one axis and height for the other, so a fixed step in p covers more pixels horizontally than it does vertically. The contours you are looking at are ellipses, flattened — wider than they are tall — even though the code that produced them never mentions an ellipse.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\nfloat distanceFromCentre = length(p);\nfragColor = vec4(distanceFromCentre, distanceFromCentre, distanceFromCentre, 1.0);"
         },
         {
           "id": "fix-the-aspect-ratio",
           "position": 3,
           "title": "Fix it: scale x by the aspect ratio",
-          "body": "One new line fixes the ellipse from the previous stage: multiplying p.x by iResolution.x / iResolution.y stretches the x axis by exactly the screen's width-to-height ratio before length() ever measures it. length() is still only a ruler here, not a shape — the correction changes what unit the ruler is marked in, not what it draws. On a screen taller than it is wide that ratio is less than one, so p.x is compressed rather than expanded, matching how much less physical width there is to work with per unit of p compared to height. The grey gradient's contours now read as genuine circles, the same on a phone in portrait or landscape.",
+          "body": "One new line fixes the ellipse from the previous stage: multiplying p.x by iResolution.x / iResolution.y stretches the x axis by exactly the preview's width-to-height ratio before length() ever measures it. length() is still only a ruler here, not a shape — the correction changes what unit the ruler is marked in, not what it draws. This preview is wider than it is tall, so that ratio is greater than one and p.x is expanded, which is what makes one unit of p cover the same number of pixels across the frame as it already did up it. The grey gradient's contours now read as genuine circles, on a narrow phone and a wide one alike.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\nfloat distanceFromCentre = length(p);\nfragColor = vec4(distanceFromCentre, distanceFromCentre, distanceFromCentre, 1.0);"
         },
         {
           "id": "confirm-the-centre",
           "position": 4,
           "title": "Confirm the centre is (0, 0)",
-          "body": "This is stage one's colour-coded render again, with the same aspect correction from the previous stage applied. Compare the two: the aspect fix reshapes how quickly colour changes as you move away from the middle, but it does not move the middle itself. At the exact centre pixel, uv is (0.5, 0.5), so p starts as (0, 0) before the correction ever runs, and multiplying zero by any aspect ratio is still zero. That is the property worth confirming: aspect correction changes the surrounding falloff, never the origin. Anything you build on top of p — a ring, a stripe, a pattern radiating outward — can rely on the centre staying exactly where it was.",
+          "body": "This is stage one's colour-coded render again, with the same aspect correction from the previous stage applied. Compare the two: the aspect fix reshapes how quickly colour changes as you move away from the middle, but it does not move the middle itself. At the exact centre of the frame, uv is (0.5, 0.5), so p is (0, 0) there before the correction ever runs, and multiplying zero by any aspect ratio is still zero. Whether a pixel lands exactly on that point depends on the preview's pixel dimensions, which is beside the point: the origin is a place in the coordinate system, not a particular fragment. That is the property worth confirming: aspect correction changes the surrounding falloff, never the origin. Anything you build on top of p — a ring, a stripe, a pattern radiating outward — can rely on the centre staying exactly where it was.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\nfragColor = vec4(p.x, p.y, 0.5, 1.0);"
         }
       ]
@@ -181,7 +181,7 @@
           "id": "the-body-you-write",
           "position": 1,
           "title": "The body you write",
-          "body": "This body is nothing new: it is Lesson 3's aspect-corrected centring, remapped back into 0-to-1 so it displays as colour instead of clamping away its negative half. What matters this lesson is not the maths but the shape of the file — four lines, no precision line, no uniform declarations, no function signature, no main(), and definitely no gl_FragColor. Every stage in every lesson you have read so far has been exactly this: the inside of one function, handed to a sandbox that supplies everything around it. The next stage names precisely what that surrounding scaffolding contains and why it exists.",
+          "body": "This body is nothing new: it is Lesson 3's aspect-corrected centring, remapped back into 0-to-1 so p.y displays as colour instead of clamping away its negative half. Red is not so lucky: the aspect line takes p.x past ±1 before the side edges are reached, so flat bands survive down the left and right, over a quarter of the width on the narrowest phone and more than half of it on the widest. What matters this lesson is not the maths but the shape of the file — four lines, no precision line, no uniform declarations, no function signature, no main(), and definitely no gl_FragColor. Every stage in every lesson you have read so far has been exactly this: the inside of one function, handed to a sandbox that supplies everything around it. The next stage names precisely what that surrounding scaffolding contains and why it exists.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\nfragColor = vec4(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5, 0.5, 1.0);"
         },
         {
@@ -238,10 +238,10 @@
           "id": "paint-by-position-radial",
           "position": 3,
           "title": "Distance from the middle",
-          "brief": "Centre the coordinate, correct for the aspect ratio, and paint the distance from the middle as a grey. The result should be black at the centre and brighten in perfect circles.",
+          "brief": "Centre the coordinate, correct for the aspect ratio, and paint the distance from the middle as a grey — then cut everything past a distance of 0.75 to black with step, so the shape gets a hard edge instead of fading out. Check the silhouette you are left with: it should be a disc exactly as wide as it is tall, reaching three quarters of the way to the top and bottom.",
           "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(uv.x, uv.y, 0.25, 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\n\nfragColor = vec4(vec3(d), 1.0);",
-          "hint": "Without the aspect line the circles come out as ellipses."
+          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\nfloat disc = 1.0 - step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);",
+          "hint": "step(0.75, d) is 1 past that distance and 0 inside it, so 1.0 - step(0.75, d) is the mask you want. Leave the aspect line out and the disc comes out stretched sideways on a wide preview — and unchanged on one that happens to be square, which is why the correction is written from iResolution rather than from a number."
         }
       ]
     }

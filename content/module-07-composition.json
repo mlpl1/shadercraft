@@ -70,7 +70,7 @@
           "position": 2,
           "title": "Masks combine like numbers",
           "helpers": "float scene(vec2 p) {\n  vec2 q = abs(p) - vec2(0.26, 0.16);\n  float box = length(max(q, 0.0)) - 0.08;\n  float ball = length(p - vec2(0.0, 0.26)) - 0.13;\n  return min(box, ball);\n}",
-          "body": "A mask is a number, so the ordinary arithmetic already means something. Multiplying two masks keeps only where both are high, which is an intersection: the shape's fill times a stripe pattern gives roughly nineteen bands that stop exactly at the shape's edge, because outside it one factor is zero. Subtracting a mask from 1 inverts it, which is how the stripes are tinted rather than punched out. No new function was needed for either.",
+          "body": "A mask is a number, so the ordinary arithmetic already means something. Multiplying two masks keeps only where both are high, which is an intersection: the shape's fill times a stripe pattern gives six bands that stop exactly at the shape's edge, because outside it one factor is zero. Subtracting a mask from 1 inverts it, which is how the stripes are tinted rather than punched out. No new function was needed for either.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = scene(p);\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfloat stripes = smoothstep(0.35, 0.65, 0.5 + 0.5 * cos(p.y * 60.0));\n\nvec3 colour = vec3(0.05, 0.05, 0.09);\ncolour = mix(colour, vec3(0.12, 0.18, 0.3), fill);\ncolour = mix(colour, vec3(0.99, 0.86, 0.52), fill * stripes);\ncolour = mix(colour, vec3(0.3, 0.44, 0.62), fill * (1.0 - stripes) * 0.5);\n\nfragColor = vec4(colour, 1.0);"
         },
         {
@@ -104,7 +104,7 @@
           "id": "assembling-a-finished-piece-sky",
           "position": 1,
           "title": "Background first",
-          "body": "A vertical gradient from warm at the bottom to deep blue by around five sixths of the way up, then a vignette that dims the frame toward its corners. The vignette is the same radial field from Module 3 used as a multiplier rather than a shape, and it drops the corners to a little under six tenths of full brightness. Neither layer is interesting alone. Both exist so that everything added later has something to sit against.",
+          "body": "A vertical gradient from warm at the bottom to deep blue by around five sixths of the way up, then a vignette that dims the frame away from its centre. It is the same radial field from Module 3 used as a multiplier rather than a shape, and it bottoms out at 0.55 of full brightness. The corners sit on that floor and so does the whole left and right edge, while the middle of the top and bottom stays brighter, near 0.67: the dimming bites hardest at the sides. Both exist so everything added later has something to sit against.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.85, 0.52, 0.38), vec3(0.09, 0.13, 0.32), smoothstep(0.0, 0.85, uv.y));\n\nfloat vignette = 1.0 - smoothstep(0.5, 1.25, length(p));\ncolour *= mix(0.55, 1.0, vignette);\n\nfragColor = vec4(colour, 1.0);"
         },
         {
@@ -119,7 +119,7 @@
           "position": 3,
           "title": "Ground the picture",
           "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
-          "body": "A horizon, built by sampling fractal noise along one axis and treating the result as a height. Wherever a pixel sits below that height it belongs to the ground, which is the same sign test every field in Module 3 used, applied to a line that happens to wobble. Worth knowing: a single line through two-dimensional noise travels far less than the field does, so the amplitude here is deliberately larger than it looks like it should be. The ridge runs between roughly 0.15 and 0.44 below the centre line, clear of the sun at both ends.",
+          "body": "A horizon, built by sampling fractal noise along one axis and treating the result as a height. Wherever a pixel sits below that height it belongs to the ground, which is the same sign test every field in Module 3 used, applied to a line that happens to wobble. Worth knowing: a single line through two-dimensional noise travels far less than the field does, so the amplitude here is deliberately larger than it looks like it should be. Out to a unit either side of centre the ridge sits between roughly 0.15 and 0.44 below the centre line; wider previews show it climbing higher still, never as high as the sun.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.85, 0.52, 0.38), vec3(0.09, 0.13, 0.32), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sunD = length(p - vec2(-0.18, 0.12)) - 0.16;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.75, sunD)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sunD), fwidth(sunD), sunD));\n\nfloat height = -0.28 + (fbm(vec2(p.x * 3.0 + 4.0, 1.7)) - 0.5) * 1.4;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), 1.0 - smoothstep(-fwidth(ground), fwidth(ground), ground));\n\nfragColor = vec4(colour, 1.0);"
         },
         {
@@ -145,7 +145,7 @@
           "id": "a-lit-horizon-sky",
           "position": 1,
           "title": "Background first",
-          "brief": "Build the ground everything else sits on: a vertical gradient from warm at the bottom to deep blue at the top, then a vignette that dims the corners so the frame has a centre.",
+          "brief": "Build the ground everything else sits on: a vertical gradient from warm at the bottom to deep blue at the top, then a vignette that darkens the picture with distance from the centre, so the frame has a middle rather than reading flat.",
           "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(0.1, 0.12, 0.2, 1.0);",
           "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfragColor = vec4(colour, 1.0);",
           "hint": "A vignette is the radial field from Module 3 used as a multiplier."
@@ -154,7 +154,7 @@
           "id": "a-lit-horizon-sun",
           "position": 2,
           "title": "The subject",
-          "brief": "Add a sun: a disc low and left of centre, with a broad halo drawn underneath it so the glow sits behind the crisp edge rather than washing over it.",
+          "brief": "Add a sun: a disc centred a little above the middle of the frame and slightly to its left, with a broad halo drawn underneath it so the glow sits behind the crisp edge rather than washing over it.",
           "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfragColor = vec4(colour, 1.0);",
           "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));\n\nfragColor = vec4(colour, 1.0);",
           "hint": "Layer order is what puts the halo behind the disc."

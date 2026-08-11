@@ -257,7 +257,22 @@ export default function TutorialScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
-  content: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: Spacing.xxxl },
+  /**
+   * The 520 cap every other content screen already applies — `lesson-workspace`, `course`,
+   * `index`, `account` and the completion sheet. This screen was the only one without it, and
+   * because it lays two previews side by side that omission set the preview aspect loose: each
+   * preview is `(container - 40) / 2` wide against a fixed 150 tall, so an uncapped container
+   * reached 3.28 on a 1024dp window. Capped, the range is 0.93 (320dp) to 1.60, which is
+   * narrow enough for a tutorial brief to describe honestly.
+   */
+  content: {
+    padding: Spacing.lg,
+    gap: Spacing.md,
+    paddingBottom: Spacing.xxxl,
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+  },
   missing: { color: Colors.textMuted, fontSize: 15, padding: Spacing.lg },
   back: { color: Colors.textMuted, fontSize: 14, fontWeight: "600" },
   stepCount: {

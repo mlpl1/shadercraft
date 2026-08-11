@@ -28,7 +28,7 @@
           "id": "moving-the-coordinate-system-inverse",
           "position": 2,
           "title": "Moving the space instead",
-          "body": "The same offset, the same disc, and the shape lands in the opposite corner — down and to the left. The difference is that the offset is now added to the coordinate itself and the disc is measured from zero, so nothing was placed anywhere. Every pixel was simply told it is a quarter further right and a little higher than it really is, and a pixel that believes it is at the origin is the one that draws the centre of the disc. Add to the coordinate, and the picture moves away.",
+          "body": "The same offset, the same disc, and the shape lands down and to the left of centre — the exact mirror of where it sat a moment ago. The difference is that the offset is now added to the coordinate itself and the disc is measured from zero, so nothing was placed anywhere. Every pixel was simply told it is a quarter further right and a little higher than it really is, and a pixel that believes it is at the origin is the one that draws the centre of the disc. Add to the coordinate, and the picture moves away.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 offset = vec2(0.25, 0.15);\np = p + offset;\n\nfloat d = length(p) - 0.25;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);"
         },
         {
@@ -42,7 +42,7 @@
           "id": "moving-the-coordinate-system-both",
           "position": 4,
           "title": "Both at once",
-          "body": "Here the two ideas sit in the same shader. The camera vector moves the space and the placement vector names a spot inside it, so the disc orbits the position it was given rather than resting on it. Reading it as two steps keeps the sign straight: first decide where the observer is, then place the shape relative to that. The disc traces a small ellipse, opposite in direction to the camera, and never leaves the screen because the two vectors were sized to fit together.",
+          "body": "Here the two ideas sit in the same shader. The camera vector moves the space and the placement vector names a spot inside it, so the disc orbits the position it was given rather than resting on it. Reading it as two steps keeps the sign straight: first decide where the observer is, then place the shape relative to that. The disc traces a small ellipse, sitting opposite the camera on it but turning the same way round, because negating a vector is a half turn rather than a mirror.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 camera = vec2(sin(iTime * 0.7) * 0.18, cos(iTime * 0.7) * 0.14);\nvec2 q = p + camera;\n\nfloat d = length(q - vec2(0.12, 0.1)) - 0.18;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);"
         }
       ]
@@ -81,7 +81,7 @@
           "id": "rotation-and-scale-chain",
           "position": 4,
           "title": "Chaining transforms",
-          "body": "Three transforms in a row, each written as a reassignment so the order is plain: place, spin, breathe. The box slides side to side, turns steadily clockwise, and pulses between roughly six tenths and nine tenths of its written size. Read the chain downward and you are describing what happens to the coordinate; read it upward and you are describing what happens to the shape. Both readings are useful, and mixing them halfway through is the reliable way to get lost.",
+          "body": "Three transforms in a row, each written as a reassignment so the order is plain: place, spin, breathe. The box slides side to side, turns steadily clockwise, and pulses between four sevenths of its written size and very nearly all of it. Read the chain downward and you are describing what happens to the coordinate; read it upward and you are describing what happens to the shape. Both readings are useful, and mixing them halfway through is the reliable way to get lost.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat angle = iTime * 0.5;\nfloat c = cos(angle);\nfloat s = sin(angle);\n\nvec2 q = p;\nq = q - vec2(sin(iTime * 0.9) * 0.16, 0.0);\nq = mat2(c, s, -s, c) * q;\nq = q * (1.4 + sin(iTime * 1.3) * 0.35);\n\nfloat rounding = 0.06;\nvec2 box = abs(q) - (vec2(0.3, 0.2) - rounding);\nfloat d = length(max(box, 0.0)) - rounding;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.78, 0.96, 0.39), fill);\n\nfragColor = vec4(colour, 1.0);"
         }
       ]
@@ -99,7 +99,7 @@
           "id": "polar-coordinates-two-numbers",
           "position": 1,
           "title": "Radius and angle, painted",
-          "body": "Radius goes into red and angle into green, scaled from its natural minus pi to pi range into 0 to 1. Red therefore grows in circles outward from the centre, clipping to full before the corners. Green sweeps once around, and it is the seam that matters: along the negative x axis, running left from the centre, green jumps from full to nothing in one pixel. That discontinuity is not a bug in atan. It is what happens when a quantity that wraps is read as one that does not.",
+          "body": "Radius goes into red and angle into green, scaled from its natural minus pi to pi range into 0 to 1. Red therefore grows in circles from the centre and saturates on a circle that just touches the top and bottom edges, leaving everything beyond it flat. Green sweeps once around, and it is the seam that matters: along the negative x axis, running left from the centre, green jumps from full to nothing in one pixel. That discontinuity is not a bug in atan. It is what happens when a quantity that wraps is read as one that does not.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p);\nfloat a = atan(p.y, p.x);\n\nfragColor = vec4(r, a / 6.28318 + 0.5, 0.3, 1.0);"
         },
         {
@@ -138,14 +138,14 @@
           "id": "tiling-with-fract-sawtooth",
           "position": 1,
           "title": "fract keeps what is after the point",
-          "body": "Scaling uv.x by four and keeping only the fractional part turns one ramp into four. Each runs black to almost-white and then drops back to black instantly, because 0.999 keeps its 0.999 while 1.0 becomes 0.0 exactly. Those four hard resets are the cell boundaries, and everything in this lesson happens between them. Note that no shape and no branch was involved: the repetition is a property of the coordinate now, not of anything drawn on it.",
+          "body": "Scaling uv.x by four and keeping only the fractional part turns one ramp into four. Each runs black to almost-white and then drops back to black instantly, because 0.999 keeps its 0.999 while 1.0 becomes 0.0 exactly. Three of those resets fall inside the frame and the fourth lands on the right-hand edge itself. They are the cell boundaries, and everything in this lesson happens between them. Note that no shape and no branch was involved: the repetition is a property of the coordinate now, not of anything drawn on it.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat v = fract(uv.x * 4.0);\n\nfragColor = vec4(vec3(v), 1.0);"
         },
         {
           "id": "tiling-with-fract-cells",
           "position": 2,
           "title": "Fold both axes into cells",
-          "body": "The same fold on both axes at once cuts the plane into squares a third of a unit across, and subtracting a half moves each square's origin to its middle. One circle written once therefore appears in every cell — a grid roughly three and a third wide by six tall on a portrait screen. The cells are square rather than stretched because the aspect line at the top made the units equal in both directions, which is the same reason circles have been round since Module 1.",
+          "body": "The same fold on both axes at once cuts the plane into squares a third of a unit across, and subtracting a half moves each square's origin to its middle. One circle written once therefore appears in every cell — exactly six rows tall, because the fold by three lands squarely on the top and bottom edges, and more columns than that across, since the frame is wider than it is tall. The cells are square rather than stretched because the aspect line at the top made the units equal in both directions, which is the same reason circles have been round since Module 1.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nfloat d = length(cell) - 0.32;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);"
         },
         {
@@ -177,7 +177,7 @@
           "id": "cell-identity-floor",
           "position": 1,
           "title": "floor names the cell",
-          "body": "floor rounds down to the whole number below, so across an entire cell it returns one unchanging pair. Painting that pair straight into red and green gives flat blocks of colour rather than gradients — proof that the value really is constant within each cell and steps only at the boundaries. The identities run negative on the left and bottom, so the scale and offset are chosen to land all six rows evenly between 0 and 1, which is why no two rows share a shade.",
+          "body": "floor rounds down to the whole number below, so across an entire cell it returns one unchanging pair. Painting that pair into red and green gives flat blocks rather than gradients: nothing varies inside a cell, and colour changes only at a boundary. The identities run negative on the left and bottom, so the scale and offset land all six rows evenly between 0 and 1. Across, they span that range only within a unit of the centre; further out the identity keeps counting but the colour has run out, and those columns stop stepping.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 id = floor(p * 3.0);\n\nvec3 colour = vec3(id.x, id.y, 0.0) * 0.2 + 0.6;\n\nfragColor = vec4(colour, 1.0);"
         },
         {

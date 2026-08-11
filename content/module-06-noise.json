@@ -22,7 +22,7 @@
           "position": 1,
           "title": "A number from a position",
           "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}",
-          "body": "This is the first stage in the course to declare a function, which it can do because helpers sit above mainImage where GLSL allows definitions. hash takes a cell coordinate and returns a value between 0 and 1. Feeding it floored positions gives one value per cell, and the screen fills with roughly two thousand square specks of unrelated brightness — television static. There is no seed and no state anywhere in this shader. Every speck is simply a function of where it is.",
+          "body": "This is the first stage in the course to declare a function, which it can do because helpers sit above mainImage where GLSL allows definitions. hash takes a cell coordinate and returns a value between 0 and 1. Feeding it floored positions gives one value per cell, and the screen fills with thousands of square specks of unrelated brightness — sixty rows of television static from top to bottom. There is no seed and no state anywhere in this shader. Every speck is simply a function of where it is.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = hash(floor(p * 30.0));\n\nfragColor = vec4(vec3(n), 1.0);"
         },
         {
@@ -38,7 +38,7 @@
           "position": 3,
           "title": "What is inside the trick",
           "helpers": "float wave(vec2 p) {\n  return 0.5 + 0.5 * sin(dot(p, vec2(12.9898, 78.233)));\n}",
-          "body": "The same expression with the multiplier and fract removed, on a continuous coordinate. What comes back is not random at all: about twenty-five fine stripes, running almost horizontally and tilted around nine degrees, because the dot product collapses the plane onto one axis and the sine repeats along it. The randomness is not in the sine. It arrives when that smooth output is multiplied by a large number and only the fractional part kept, which throws neighbouring inputs to unrelated places.",
+          "body": "The same expression with the multiplier and fract removed, on a continuous coordinate. What comes back is not random at all: twenty-five fine stripes cross any vertical line you pick, running almost horizontally and tilted around nine degrees, because the dot product collapses the plane onto one axis and the sine repeats along it. The randomness is not in the sine. It arrives when that smooth output is multiplied by a large number and only the fractional part kept, which throws neighbouring inputs to unrelated places.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(vec3(wave(p)), 1.0);"
         },
         {
@@ -65,7 +65,7 @@
           "position": 1,
           "title": "One value per cell",
           "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}",
-          "body": "The starting point, at a much coarser scale than the static two stages ago so individual cells are large enough to study. Flooring throws away where inside the cell a pixel is, so every pixel in a cell gets the identical value and the result is a mosaic of flat squares about four and a half across by eight down. Everything from here is about recovering that discarded fraction and using it to travel smoothly between neighbouring squares.",
+          "body": "The starting point, at a much coarser scale than the static two stages ago so individual cells are large enough to study. Flooring throws away where inside the cell a pixel is, so every pixel in a cell gets the identical value and the result is a mosaic of flat squares, eight down on every device and from eleven across on the narrowest phone to nineteen on the widest. Everything from here is about recovering that discarded fraction and using it to travel smoothly between neighbouring squares.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = hash(floor(p * 4.0));\n\nfragColor = vec4(vec3(n), 1.0);"
         },
         {
@@ -101,7 +101,7 @@
       "title": "Gradient noise",
       "shortTitle": "Gradient noise",
       "intro": "Value noise works, and at a glance it looks fine. Look at it for a while, though, and a grid starts to show through: light and dark patches keep landing on the same square lattice, because that is precisely where the hashed values live. Gradient noise fixes this by storing something different at each lattice point — not a value, but a direction — and reading the result off the slope instead. The change costs one dot product per corner.",
-      "takeaway": "Gradient noise hashes a random vector at each lattice point and takes its dot product with the offset from that point, so the result is always exactly zero at the lattice itself and gets all its variation from between the points. That is the opposite of value noise, whose extremes sit on the grid, and it is why gradient noise shows no square bias. The interpolation and the smoothing curve are unchanged.",
+      "takeaway": "Gradient noise hashes a random vector at each lattice point and takes its dot product with the offset from that point, so the blended contributions come to exactly zero at the lattice itself — the mid grey of the remapped range — and all the variation comes from between the points. That is the opposite of value noise, whose extremes sit on the grid, and it is why gradient noise shows no square bias. The interpolation and the smoothing curve are unchanged.",
       "stages": [
         {
           "id": "gradient-noise-first",
@@ -124,7 +124,7 @@
           "position": 3,
           "title": "Zero at every lattice point",
           "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}",
-          "body": "This marks in red everywhere the noise sits within a whisker of 0.5. What appears is a web of curves rather than isolated dots, because 0.5 is a contour that runs continuously across the field — but look where those curves cross. Every intersection lands exactly on a lattice point, because there the offset from the nearest corner is zero, so all four dot products vanish and the value is pinned to 0.5. Value noise puts its extremes on the lattice; gradient noise puts its midpoint there.",
+          "body": "This marks in red everywhere the noise sits within a whisker of 0.5. What appears is a web of curves rather than isolated dots, because 0.5 is a contour that runs continuously across the field — and it threads straight through every lattice point. Land exactly on a corner and that corner's own dot product is zero, while the interpolation weights, which are also zero when the fraction is, discard whatever the other three corners had to say. The value there is exactly 0.5. Value noise puts its extremes on the lattice; gradient noise puts its midpoint there.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = gradientNoise(p * 4.0);\n\nfloat atMid = 1.0 - smoothstep(0.004, 0.012, abs(n - 0.5));\n\nvec3 colour = mix(vec3(n), vec3(0.95, 0.2, 0.25), atMid);\n\nfragColor = vec4(colour, 1.0);"
         },
         {
@@ -167,7 +167,7 @@
           "position": 3,
           "title": "Six octaves, and where it stops paying",
           "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 6; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
-          "body": "Six octaves, and the difference from three is far smaller than the difference three made over one. The sixth layer arrives at one thirty-second of the first's strength and thirty-two times its frequency, which on this preview is finer than a pixel and contributes little but cost — four hashed corners per octave, twenty-four of them a pixel by the sixth. Knowing when the next octave stops earning its keep is a judgement the last module of the course is entirely about.",
+          "body": "Six octaves, and the difference from three is far smaller than the difference three made over one. The sixth layer arrives at one thirty-second of the first's strength and thirty-two times its frequency, fine enough that the preview can barely resolve it, and it contributes little but cost — four hashed corners per octave, twenty-four of them a pixel by the sixth. Knowing when the next octave stops earning its keep is a judgement the last module of the course is entirely about.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(vec3(fbm(p * 3.0)), 1.0);"
         },
         {
@@ -256,7 +256,7 @@
           "id": "a-weathered-surface-worn",
           "position": 3,
           "title": "Wear the paint away",
-          "brief": "Turn the noise into a surface. Threshold it into patches, use those as a mask between two colours, and warp the coordinate with noise first so the patches stretch rather than staying round.",
+          "brief": "Turn the noise into a surface. Threshold it into patches, use those as a mask between two colours, and warp the coordinate with noise first so a few of the patches pull out into long sinuous streaks.",
           "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
           "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = fbm(p * 3.0);\n\nfragColor = vec4(vec3(n), 1.0);",
           "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 base = p * 3.0;\nvec2 warp = vec2(fbm(base), fbm(base + vec2(5.2, 1.3)));\n\nfloat n = fbm(base + warp * 1.2);\nfloat wear = smoothstep(0.45, 0.58, n);\n\nvec3 metal = vec3(0.22, 0.24, 0.28);\nvec3 paint = vec3(0.82, 0.66, 0.36);\nvec3 colour = mix(metal, paint, wear);\n\nfragColor = vec4(colour, 1.0);",

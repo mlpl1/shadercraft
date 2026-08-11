@@ -21,7 +21,7 @@
           "id": "colour-as-three-numbers-channels",
           "position": 1,
           "title": "Three numbers that ignore each other",
-          "body": "Red is driven by uv.x, green by uv.y, and blue is pinned at a constant quarter. Nothing couples them, which is the point: the corners land on four completely different colours from one expression. Bottom-left is near-black with a faint blue cast, bottom-right is red, top-left is green, and top-right is where both ramps arrive at once and the result goes pale yellow-white. Every colour on this screen is a coordinate in a cube, and the shader is simply reading off two of its axes from position.",
+          "body": "Red is driven by uv.x, green by uv.y, and blue is pinned at a constant quarter. Nothing couples them, which is the point: the corners land on four completely different colours from one expression. Bottom-left is near-black with a faint blue cast, bottom-right is red, top-left is green, and top-right is where both ramps arrive at once and the result is a vivid lemon yellow, held back from pure only by that constant quarter of blue. Every colour on this screen is a coordinate in a cube, and the shader is simply reading off two of its axes from position.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 colour = vec3(uv.x, uv.y, 0.25);\n\nfragColor = vec4(colour, 1.0);"
         },
         {
@@ -99,14 +99,14 @@
           "id": "brightness-that-matches-vision-source",
           "position": 1,
           "title": "Three lights to measure",
-          "body": "The test image, built entirely from Module 3. Three circles, each written into a single colour channel, each antialiased with its own fwidth. Because the channels are independent the overlaps do the arithmetic themselves: red and green together make yellow, red and blue make magenta, green and blue make cyan, and the small region where all three meet comes out white. Nothing here is new, and that is deliberate — the next three stages change only how this image is measured, never how it is made.",
+          "body": "The test image, built entirely from Module 3. Three circles, each written into a single colour channel, each antialiased with its own fwidth. Because the channels are independent the overlaps do the arithmetic themselves: red and green together make yellow, red and blue make magenta, green and blue make cyan. All three together would make white, but the circles only just reach one another, so that three-way meeting is a speck rather than a region you can see. Nothing here is new, and that is deliberate — the next three stages change only how this image is measured, never how it is made.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p - vec2(-0.22, 0.13)) - 0.26;\nfloat g = length(p - vec2(0.22, 0.13)) - 0.26;\nfloat b = length(p - vec2(0.0, -0.24)) - 0.26;\n\nvec3 colour;\ncolour.r = 1.0 - smoothstep(-fwidth(r), fwidth(r), r);\ncolour.g = 1.0 - smoothstep(-fwidth(g), fwidth(g), g);\ncolour.b = 1.0 - smoothstep(-fwidth(b), fwidth(b), b);\n\nfragColor = vec4(colour, 1.0);"
         },
         {
           "id": "brightness-that-matches-vision-average",
           "position": 2,
           "title": "The obvious answer",
-          "body": "Averaging the three channels and painting the result as grey. Look at what happened to the three circles: every one of them became the same mid grey, exactly a third, because each is a single channel at full strength and the average cannot tell them apart. The two-way overlaps all land on two thirds and the centre on white. This is a defensible measure of how much colour is present. It is not a measure of how bright anything looks, and holding it beside the previous stage makes that obvious.",
+          "body": "Averaging the three channels and painting the result as grey. Look at what happened to the three circles: every one of them became the same mid grey, exactly a third, because each is a single channel at full strength and the average cannot tell them apart. The two-way overlaps all land on two thirds, and the speck where all three meet climbs to white — though it is far too small to read anything off. This is a defensible measure of how much colour is present. It is not a measure of how bright anything looks, and holding it beside the previous stage makes that obvious.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat r = length(p - vec2(-0.22, 0.13)) - 0.26;\nfloat g = length(p - vec2(0.22, 0.13)) - 0.26;\nfloat b = length(p - vec2(0.0, -0.24)) - 0.26;\n\nvec3 colour;\ncolour.r = 1.0 - smoothstep(-fwidth(r), fwidth(r), r);\ncolour.g = 1.0 - smoothstep(-fwidth(g), fwidth(g), g);\ncolour.b = 1.0 - smoothstep(-fwidth(b), fwidth(b), b);\n\nfloat brightness = (colour.r + colour.g + colour.b) / 3.0;\n\nfragColor = vec4(vec3(brightness), 1.0);"
         },
         {
@@ -159,7 +159,7 @@
           "id": "palettes-as-functions-any-scalar",
           "position": 4,
           "title": "Feed it any scalar",
-          "body": "The palette never asked where its number came from, so this hands it a distance instead of a coordinate. With c at 2.0 a little over two full cycles fit between the centre and the far corner, drawing concentric rings of colour, and the drifting phase pulls those rings steadily inward. Swap length for any field from Module 3 — a box, a union, a subtraction — and the rings follow that shape's contours instead. This is the module's goal in five lines: colour driven by any scalar the shader can produce.",
+          "body": "The palette never asked where its number came from, so this hands it a distance instead of a coordinate. With c at 2.0 the palette runs exactly two full cycles between the centre and the top edge, drawing concentric rings of colour that the drifting phase pulls steadily inward. Only the rings within a unit of the centre close completely; further out they run off the top and bottom. Swap length for any field from Module 3 and the rings follow that shape's contours instead. This is the module's goal in five lines: colour driven by any scalar the shader can produce.",
           "source": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat t = length(p);\n\nvec3 a = vec3(0.5);\nvec3 b = vec3(0.5);\nvec3 c = vec3(2.0);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.15;\n\nvec3 colour = a + b * cos(6.28318 * (c * t + phase));\n\nfragColor = vec4(colour, 1.0);"
         }
       ]
