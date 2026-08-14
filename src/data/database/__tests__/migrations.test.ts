@@ -108,6 +108,7 @@ describe("database migrations", () => {
     expect(columns.map(({ name }) => name).sort()).toEqual([
       "created_at",
       "id",
+      "metadata_json",
       "profile_id",
       "source",
       "title",
@@ -129,6 +130,32 @@ describe("database migrations", () => {
       "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'sketches'",
     );
     expect(indexes.map(({ name }) => name)).toContain("idx_sketches_profile_updated_at");
+  });
+
+  test("adds default metadata to sketches in an existing version-3 database", async () => {
+    // This is intentionally a minimal v3-shaped database rather than one produced by the current
+    // migration chain: once v4 exists, running the chain first would already add the column.
+    await driver.exec(`
+      CREATE TABLE sketches (
+        id TEXT PRIMARY KEY NOT NULL,
+        profile_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        source TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO sketches (id, profile_id, title, source, created_at, updated_at)
+      VALUES ('sketch-1', 'profile-1', 'First', 'a', '2026-08-06T00:00:00.000Z', '2026-08-06T00:00:00.000Z');
+      PRAGMA user_version = 3;
+    `);
+
+    await migrateDatabase(driver);
+
+    const columns = await driver.all<TableInfoRow>("PRAGMA table_info(sketches)");
+    expect(columns.find(({ name }) => name === "metadata_json")).toMatchObject({ notnull: 1 });
+    expect(await driver.first<{ metadata_json: string }>("SELECT metadata_json FROM sketches")).toEqual({
+      metadata_json: '{"version":1,"category":"Drafts","parameters":[]}',
+    });
   });
 
   test("re-running the migration chain is a no-op", async () => {

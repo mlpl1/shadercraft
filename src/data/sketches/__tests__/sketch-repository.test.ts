@@ -1,5 +1,6 @@
 import { migrateDatabase } from "../../database/migrations";
 import { NodeSqliteDriver } from "../../database/testing/node-sqlite-driver";
+import { DEFAULT_SKETCH_METADATA } from "../sketch-metadata";
 import { SqliteSketchRepository } from "../sqlite-sketch-repository";
 
 const PROFILE_A = "profile-a";
@@ -44,7 +45,19 @@ describe("SqliteSketchRepository", () => {
 
     expect(created.id).toBe("sketch-1");
     expect(created.title).toBe("First");
+    expect(created.metadata).toEqual(DEFAULT_SKETCH_METADATA);
+    expect(created.metadataWarning).toBeNull();
     expect(await context.repository.get(PROFILE_A, created.id)).toEqual(created);
+  });
+
+  it("falls back to default metadata when stored JSON is malformed", async () => {
+    const created = await context.repository.create(PROFILE_A, "First", "a");
+    await context.driver.run("UPDATE sketches SET metadata_json = ? WHERE id = ?", ["not json", created.id]);
+
+    const loaded = await context.repository.get(PROFILE_A, created.id);
+
+    expect(loaded?.metadata).toEqual(DEFAULT_SKETCH_METADATA);
+    expect(loaded?.metadataWarning).toBe("Saved shader parameters were invalid and have been reset.");
   });
 
   it("returns null for a sketch that does not exist", async () => {
@@ -108,6 +121,52 @@ describe("SqliteSketchRepository", () => {
     expect(await context.repository.get(PROFILE_A, created.id)).toEqual(afterFirst);
   });
 
+  it("persists metadata across repository reconstruction", async () => {
+    const created = await context.repository.create(PROFILE_A, "First", "a");
+    await context.repository.updateMetadata(PROFILE_A, created.id, {
+      version: 1,
+      category: "Experiments",
+      parameters: [
+        { key: "u_gain", label: "Gain", min: 0, max: 2, step: 0.1, defaultValue: 1, value: 1.4 },
+      ],
+    });
+
+    const reopened = new SqliteSketchRepository(context.driver);
+
+    expect((await reopened.get(PROFILE_A, created.id))?.metadata.category).toBe("Experiments");
+  });
+
+  it("refuses to update another profile's metadata", async () => {
+    const created = await context.repository.create(PROFILE_A, "First", "a");
+
+    await context.repository.updateMetadata(PROFILE_B, created.id, {
+      version: 1,
+      category: "Experiments",
+      parameters: [],
+    });
+
+    expect((await context.repository.get(PROFILE_A, created.id))?.metadata).toEqual(
+      DEFAULT_SKETCH_METADATA,
+    );
+  });
+
+  it("advances updatedAt only when serialized metadata changes", async () => {
+    const created = await context.repository.create(PROFILE_A, "First", "a");
+    const metadata = {
+      version: 1 as const,
+      category: "Experiments",
+      parameters: [],
+    };
+
+    await context.repository.updateMetadata(PROFILE_A, created.id, metadata);
+    const afterFirst = await context.repository.get(PROFILE_A, created.id);
+    await context.repository.updateMetadata(PROFILE_A, created.id, { ...metadata, parameters: [] });
+
+    const afterSecond = await context.repository.get(PROFILE_A, created.id);
+    expect(afterFirst?.updatedAt).not.toBe(created.updatedAt);
+    expect(afterSecond?.updatedAt).toBe(afterFirst?.updatedAt);
+  });
+
   it("renames without touching the source", async () => {
     const created = await context.repository.create(PROFILE_A, "First", "a");
     await context.repository.rename(PROFILE_A, created.id, "Renamed");
@@ -135,6 +194,11 @@ describe("SqliteSketchRepository", () => {
   it("writes no outbox rows, because sketches are local-only", async () => {
     const created = await context.repository.create(PROFILE_A, "First", "a");
     await context.repository.updateSource(PROFILE_A, created.id, "b");
+    await context.repository.updateMetadata(PROFILE_A, created.id, {
+      version: 1,
+      category: "Experiments",
+      parameters: [],
+    });
 
     expect(await context.driver.all("SELECT * FROM sync_outbox")).toEqual([]);
   });

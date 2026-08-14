@@ -1,23 +1,42 @@
 import * as Crypto from "expo-crypto";
 
 import type { DatabaseDriver } from "../database/driver";
+import {
+  type SketchMetadata,
+  DEFAULT_SKETCH_METADATA,
+  parseSketchMetadataResult,
+  serializeSketchMetadata,
+} from "./sketch-metadata";
 import type { Sketch, SketchRepository } from "./sketch-repository";
 
-const COLUMNS = "id, title, source, created_at, updated_at";
+const COLUMNS = "id, title, source, metadata_json, created_at, updated_at";
 
 type SketchRow = {
   id: string;
   title: string;
   source: string;
+  metadata_json: string;
   created_at: string;
   updated_at: string;
 };
 
+function parseStoredMetadata(metadataJson: string) {
+  try {
+    return parseSketchMetadataResult(JSON.parse(metadataJson));
+  } catch {
+    return parseSketchMetadataResult(null);
+  }
+}
+
 function toSketch(row: SketchRow): Sketch {
+  const { metadata, warning } = parseStoredMetadata(row.metadata_json);
+
   return {
     id: row.id,
     title: row.title,
     source: row.source,
+    metadata,
+    metadataWarning: warning,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -61,18 +80,29 @@ export class SqliteSketchRepository implements SketchRepository {
 
   async create(profileId: string, title: string, source: string): Promise<Sketch> {
     const timestamp = this.now();
+    const metadata = parseSketchMetadataResult(DEFAULT_SKETCH_METADATA).metadata;
     const sketch: Sketch = {
       id: this.generateId(),
       title,
       source,
+      metadata,
+      metadataWarning: null,
       createdAt: timestamp,
       updatedAt: timestamp,
     };
 
     await this.driver.run(
-      `INSERT INTO sketches (id, profile_id, title, source, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [sketch.id, profileId, sketch.title, sketch.source, sketch.createdAt, sketch.updatedAt],
+      `INSERT INTO sketches (id, profile_id, title, source, metadata_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        sketch.id,
+        profileId,
+        sketch.title,
+        sketch.source,
+        serializeSketchMetadata(sketch.metadata),
+        sketch.createdAt,
+        sketch.updatedAt,
+      ],
     );
 
     return sketch;
@@ -92,6 +122,14 @@ export class SqliteSketchRepository implements SketchRepository {
     await this.driver.run(
       "UPDATE sketches SET source = ?, updated_at = ? WHERE profile_id = ? AND id = ? AND source <> ?",
       [source, this.now(), profileId, id, source],
+    );
+  }
+
+  async updateMetadata(profileId: string, id: string, metadata: SketchMetadata): Promise<void> {
+    const json = serializeSketchMetadata(metadata);
+    await this.driver.run(
+      "UPDATE sketches SET metadata_json = ?, updated_at = ? WHERE profile_id = ? AND id = ? AND metadata_json <> ?",
+      [json, this.now(), profileId, id, json],
     );
   }
 

@@ -221,6 +221,15 @@ const migrations: readonly DatabaseMigration[] = [
       `);
     },
   },
+  {
+    version: 4,
+    async migrate(driver) {
+      await driver.exec(
+        `ALTER TABLE sketches ADD COLUMN metadata_json TEXT NOT NULL
+         DEFAULT '{"version":1,"category":"Drafts","parameters":[]}'`,
+      );
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;

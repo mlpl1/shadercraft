@@ -27,6 +27,7 @@ jest.mock("expo-router", () => ({
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import EditorScreen from "../editor";
+import { DEFAULT_SKETCH_METADATA } from "../../data/sketches/sketch-metadata";
 import type { Sketch, SketchRepository } from "../../data/sketches/sketch-repository";
 import { STARTER_SKETCH_SOURCE } from "../../data/sketches/starter-sketch";
 
@@ -44,6 +45,8 @@ const repository: jest.Mocked<SketchRepository> = {
       id: `sketch-${sketches.length + 1}`,
       title,
       source,
+      metadata: DEFAULT_SKETCH_METADATA,
+      metadataWarning: null,
       createdAt: "2026-08-06T00:00:00.000Z",
       updatedAt: "2026-08-06T00:00:00.000Z",
     };
@@ -51,6 +54,9 @@ const repository: jest.Mocked<SketchRepository> = {
     return sketch;
   }),
   updateSource: jest.fn(async (_profileId: string, _id: string, _source: string): Promise<void> => {}),
+  updateMetadata: jest.fn(
+    async (_profileId: string, _id: string, _metadata: Sketch["metadata"]): Promise<void> => {},
+  ),
   rename: jest.fn(async (_profileId: string, _id: string, _title: string): Promise<void> => {}),
   delete: jest.fn(async (_profileId: string, _id: string): Promise<void> => {}),
 };
@@ -103,6 +109,8 @@ describe("EditorScreen", () => {
         id: "sketch-9",
         title: "Recent",
         source: "fragColor = vec4(0.5);",
+        metadata: DEFAULT_SKETCH_METADATA,
+        metadataWarning: null,
         createdAt: "2026-08-06T00:00:00.000Z",
         updatedAt: "2026-08-06T00:10:00.000Z",
       },
@@ -171,6 +179,8 @@ describe("EditorScreen", () => {
         id: "sketch-1",
         title: "One",
         source: "fragColor = vec4(0.1);",
+        metadata: DEFAULT_SKETCH_METADATA,
+        metadataWarning: null,
         createdAt: "2026-08-06T00:00:00.000Z",
         updatedAt: "2026-08-06T00:02:00.000Z",
       },
@@ -178,6 +188,8 @@ describe("EditorScreen", () => {
         id: "sketch-2",
         title: "Two",
         source: "fragColor = vec4(0.2);",
+        metadata: DEFAULT_SKETCH_METADATA,
+        metadataWarning: null,
         createdAt: "2026-08-06T00:00:00.000Z",
         updatedAt: "2026-08-06T00:01:00.000Z",
       },
@@ -200,6 +212,8 @@ describe("EditorScreen", () => {
         id: "sketch-1",
         title: "One",
         source: "fragColor = vec4(0.1);",
+        metadata: DEFAULT_SKETCH_METADATA,
+        metadataWarning: null,
         createdAt: "2026-08-06T00:00:00.000Z",
         updatedAt: "2026-08-06T00:02:00.000Z",
       },
@@ -207,6 +221,8 @@ describe("EditorScreen", () => {
         id: "sketch-2",
         title: "Two",
         source: "fragColor = vec4(0.2);",
+        metadata: DEFAULT_SKETCH_METADATA,
+        metadataWarning: null,
         createdAt: "2026-08-06T00:00:00.000Z",
         updatedAt: "2026-08-06T00:01:00.000Z",
       },

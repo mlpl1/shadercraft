@@ -1,12 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 import { SketchListSheet } from "../sketch-list-sheet";
+import { DEFAULT_SKETCH_METADATA } from "../../data/sketches/sketch-metadata";
 import type { Sketch } from "../../data/sketches/sketch-repository";
 
 const sketch = (id: string, title: string): Sketch => ({
   id,
   title,
   source: "fragColor = vec4(1.0);",
+  metadata: DEFAULT_SKETCH_METADATA,
+  metadataWarning: null,
   createdAt: "2026-08-06T00:00:00.000Z",
   updatedAt: "2026-08-06T00:00:00.000Z",
 });

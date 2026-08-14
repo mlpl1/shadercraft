@@ -1,3 +1,8 @@
+import {
+  DEFAULT_SKETCH_METADATA,
+  parseSketchMetadataResult,
+  serializeSketchMetadata,
+} from "../sketch-metadata";
 import type { Sketch, SketchRepository } from "../sketch-repository";
 
 type Row = { profileId: string; sketch: Sketch };
@@ -34,6 +39,8 @@ export function createFakeSketchRepository(initial: Row[] = []): SketchRepositor
         id: `fake-sketch-${nextId}`,
         title,
         source,
+        metadata: parseSketchMetadataResult(DEFAULT_SKETCH_METADATA).metadata,
+        metadataWarning: null,
         createdAt: "2026-08-06T00:00:00.000Z",
         updatedAt: "2026-08-06T00:00:00.000Z",
       };
@@ -44,6 +51,19 @@ export function createFakeSketchRepository(initial: Row[] = []): SketchRepositor
     async updateSource(profileId, id, source) {
       const row = find(profileId, id);
       if (row) row.sketch = { ...row.sketch, source };
+    },
+
+    async updateMetadata(profileId, id, metadata) {
+      const row = find(profileId, id);
+      const metadataJson = serializeSketchMetadata(metadata);
+      if (row && serializeSketchMetadata(row.sketch.metadata) !== metadataJson) {
+        row.sketch = {
+          ...row.sketch,
+          metadata: parseSketchMetadataResult(metadata).metadata,
+          metadataWarning: null,
+          updatedAt: new Date().toISOString(),
+        };
+      }
     },
 
     async rename(profileId, id, title) {
