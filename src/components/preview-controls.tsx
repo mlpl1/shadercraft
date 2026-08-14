@@ -1,6 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import type { SymbolViewProps } from "expo-symbols";
 
-import { Colors, Radius, Spacing } from "../constants/theme";
+import { AppIcon } from "./app-icon";
+import { Colors, Radius } from "../constants/theme";
 
 type PreviewControlsProps = {
   paused: boolean;
@@ -10,13 +12,6 @@ type PreviewControlsProps = {
   onToggleCollapse: () => void;
 };
 
-/**
- * Pause, restart and collapse for the live preview.
- *
- * Pause exists because a heavy shader can tank the frame rate with no other way out, and collapse
- * because a raised keyboard leaves a phone almost no room for code. Both labels name the action they
- * perform, not the current state, so a screen reader announces "Resume preview" while paused.
- */
 export function PreviewControls({
   paused,
   collapsed,
@@ -25,69 +20,75 @@ export function PreviewControls({
   onToggleCollapse,
 }: PreviewControlsProps) {
   return (
-    <View style={styles.bar}>
+    <View style={styles.actions} testID="preview-controls">
       <Control
+        fallback={paused ? "▶" : "Ⅱ"}
         label={paused ? "Resume preview" : "Pause preview"}
+        name={
+          paused
+            ? { android: "play_arrow", ios: "play.fill", web: "play_arrow" }
+            : { android: "pause", ios: "pause.fill", web: "pause" }
+        }
         onPress={onTogglePause}
-        text={paused ? "Resume" : "Pause"}
       />
-      <Control label="Restart preview" onPress={onRestart} text="Restart" />
-      <View style={styles.spacer} />
       <Control
+        fallback="↻"
+        label="Restart preview"
+        name={{ android: "refresh", ios: "arrow.clockwise", web: "refresh" }}
+        onPress={onRestart}
+      />
+      <Control
+        fallback={collapsed ? "⌄" : "⌃"}
         label={collapsed ? "Show preview" : "Hide preview"}
+        name={
+          collapsed
+            ? { android: "expand_more", ios: "chevron.down", web: "expand_more" }
+            : { android: "expand_less", ios: "chevron.up", web: "expand_less" }
+        }
         onPress={onToggleCollapse}
-        text={collapsed ? "Show" : "Hide"}
       />
     </View>
   );
 }
 
 function Control({
+  fallback,
   label,
+  name,
   onPress,
-  text,
 }: {
+  fallback: string;
   label: string;
+  name: SymbolViewProps["name"];
   onPress: () => void;
-  text: string;
 }) {
   return (
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
-      hitSlop={6}
+      hitSlop={7}
       onPress={onPress}
       style={({ pressed }) => [styles.control, pressed && styles.controlPressed]}
     >
-      <Text style={styles.controlText}>{text}</Text>
+      <AppIcon color={Colors.textMuted} fallback={fallback} name={name} size={20} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: {
+  actions: {
     alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderBottomColor: Colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-  },
-  spacer: {
-    flex: 1,
+    gap: 2,
   },
   control: {
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
+    alignItems: "center",
+    borderRadius: Radius.round,
+    height: 38,
+    justifyContent: "center",
+    width: 38,
   },
   controlPressed: {
-    backgroundColor: Colors.surfaceRaised,
-  },
-  controlText: {
-    color: Colors.textMuted,
-    fontSize: 12,
+    backgroundColor: Colors.surfaceHigh,
   },
 });

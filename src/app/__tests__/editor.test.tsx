@@ -1,64 +1,103 @@
-// The real `SafeAreaProvider` only renders children after a native `onInsetsChange` event, which
-// never fires under Jest. Swap in the package's own documented test mock.
+// The real SafeAreaProvider waits for a native inset event that Jest never sends.
 jest.mock("react-native-safe-area-context", () =>
   require("react-native-safe-area-context/jest/mock").default,
 );
 
-// The sandbox compiles GLSL through an `expo-gl` context, which no Jest environment provides. Stand
-// in a view reporting the source it was handed, so the screen's contract stays observable — the same
-// approach `lesson-workspace.test.tsx` takes with the preview.
+jest.mock("@react-native-community/slider", () => "Slider");
+
+// Route tests keep the GL boundary mocked, but expose every editor-to-sandbox input and the compile
+// callback so the screen's integration contract remains observable.
 jest.mock("../../components/shader-sandbox", () => {
   const React = require("react") as typeof import("react");
   const { Text, View } = require("react-native") as typeof import("react-native");
+  const SandboxView = View as unknown as React.ComponentType<Record<string, unknown>>;
 
   return {
-    ShaderSandbox: ({ source }: { source: string }) =>
-      React.createElement(View, { testID: "sandbox" }, React.createElement(Text, null, source)),
+    ShaderSandbox: ({
+      source,
+      parameters = [],
+      paused,
+      restartToken,
+      onCompileResult,
+    }: {
+      source: string;
+      parameters?: unknown[];
+      paused?: boolean;
+      restartToken?: number;
+      onCompileResult?: (result: unknown) => void;
+    }) =>
+      React.createElement(
+        SandboxView,
+        { onCompileResult, testID: "sandbox" },
+        React.createElement(Text, { testID: "sandbox-source" }, source),
+        React.createElement(Text, { testID: "sandbox-parameters" }, JSON.stringify(parameters)),
+        React.createElement(Text, { testID: "sandbox-paused" }, String(Boolean(paused))),
+        React.createElement(Text, { testID: "sandbox-restart" }, String(restartToken ?? 0)),
+      ),
   };
 });
 
+const mockRouteParams = { current: {} as { sketchId?: string | string[] } };
+const mockRouter = {
+  back: jest.fn(),
+  push: jest.fn(),
+  replace: jest.fn(),
+};
+
 jest.mock("expo-router", () => ({
-  // Behaves like an ordinary mount effect rather than a no-op, so the focus-driven reloads these
-  // screens use are actually exercised instead of silently skipped.
-  useFocusEffect: (callback: () => void) => require("react").useEffect(callback, [callback]),
-  useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+  useLocalSearchParams: () => mockRouteParams.current,
+  useRouter: () => mockRouter,
 }));
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { Alert, BackHandler } from "react-native";
 
 import EditorScreen from "../editor";
-import { DEFAULT_SKETCH_METADATA } from "../../data/sketches/sketch-metadata";
+import {
+  DEFAULT_SKETCH_METADATA,
+  type ShaderParameterDefinition,
+} from "../../data/sketches/sketch-metadata";
 import type { Sketch, SketchRepository } from "../../data/sketches/sketch-repository";
 import { STARTER_SKETCH_SOURCE } from "../../data/sketches/starter-sketch";
 
+const GAIN: ShaderParameterDefinition = {
+  key: "u_gain",
+  label: "Gain",
+  min: 0,
+  max: 2,
+  step: 0.1,
+  defaultValue: 1,
+  value: 1.2,
+};
+
+function makeSketch(
+  id: string,
+  title: string,
+  source: string,
+  overrides: Partial<Sketch> = {},
+): Sketch {
+  return {
+    id,
+    title,
+    source,
+    metadata: { ...DEFAULT_SKETCH_METADATA, parameters: [] },
+    metadataWarning: null,
+    createdAt: "2026-08-06T00:00:00.000Z",
+    updatedAt: "2026-08-06T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 let sketches: Sketch[] = [];
 
-// Parameter lists are spelled out even where unused: `jest.Mocked<SketchRepository>` is invariant in
-// them, so a zero-argument factory does not satisfy a three-argument method.
 const repository: jest.Mocked<SketchRepository> = {
-  list: jest.fn(async (_profileId: string) => sketches),
-  get: jest.fn(
-    async (_profileId: string, id: string) => sketches.find((sketch) => sketch.id === id) ?? null,
-  ),
-  create: jest.fn(async (_profileId: string, title: string, source: string) => {
-    const sketch: Sketch = {
-      id: `sketch-${sketches.length + 1}`,
-      title,
-      source,
-      metadata: DEFAULT_SKETCH_METADATA,
-      metadataWarning: null,
-      createdAt: "2026-08-06T00:00:00.000Z",
-      updatedAt: "2026-08-06T00:00:00.000Z",
-    };
-    sketches = [sketch, ...sketches];
-    return sketch;
-  }),
-  updateSource: jest.fn(async (_profileId: string, _id: string, _source: string): Promise<void> => {}),
-  updateMetadata: jest.fn(
-    async (_profileId: string, _id: string, _metadata: Sketch["metadata"]): Promise<void> => {},
-  ),
-  rename: jest.fn(async (_profileId: string, _id: string, _title: string): Promise<void> => {}),
-  delete: jest.fn(async (_profileId: string, _id: string): Promise<void> => {}),
+  list: jest.fn(),
+  get: jest.fn(),
+  create: jest.fn(),
+  updateSource: jest.fn(),
+  updateMetadata: jest.fn(),
+  rename: jest.fn(),
+  delete: jest.fn(),
 };
 
 jest.mock("../../context/data-context", () => ({
@@ -73,199 +112,435 @@ jest.mock("../../context/auth-context", () => ({
   useAuth: () => ({ profileId: "profile-a" }),
 }));
 
-// `jest.mock` factories may only close over `mock`-prefixed bindings, so the repository reaches the
-// mocked context through this indirection rather than directly.
 const mockRepositoryRef = { current: repository };
 
+function configureRepository() {
+  repository.list.mockImplementation(async () => sketches);
+  repository.get.mockImplementation(
+    async (_profileId, id) => sketches.find((sketch) => sketch.id === id) ?? null,
+  );
+  repository.create.mockImplementation(async (_profileId, title, source) => {
+    const created = makeSketch("sketch-" + (sketches.length + 1), title, source);
+    sketches = [created, ...sketches];
+    return created;
+  });
+  repository.updateSource.mockImplementation(async (_profileId, id, source) => {
+    sketches = sketches.map((sketch) => (sketch.id === id ? { ...sketch, source } : sketch));
+  });
+  repository.updateMetadata.mockImplementation(async (_profileId, id, metadata) => {
+    sketches = sketches.map((sketch) => (sketch.id === id ? { ...sketch, metadata } : sketch));
+  });
+  repository.rename.mockImplementation(async (_profileId, id, title) => {
+    sketches = sketches.map((sketch) => (sketch.id === id ? { ...sketch, title } : sketch));
+  });
+  repository.delete.mockImplementation(async (_profileId, id) => {
+    sketches = sketches.filter((sketch) => sketch.id !== id);
+  });
+}
+
+async function openEditor() {
+  await render(<EditorScreen />);
+  await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
+}
+
+async function openParameters() {
+  await fireEvent.press(screen.getByLabelText("Open shader parameters"));
+  expect(screen.getByText("Parameters")).toBeTruthy();
+}
+
+async function confirmDelete(title: string) {
+  await fireEvent.press(screen.getByLabelText("Delete " + title));
+  const calls = jest.mocked(Alert.alert).mock.calls;
+  const actions = calls[calls.length - 1]?.[2] ?? [];
+  await act(async () => {
+    actions.find((action) => action.text === "Delete")?.onPress?.();
+  });
+}
+
 describe("EditorScreen", () => {
+  let hardwareBackHandler: Parameters<typeof BackHandler.addEventListener>[1] | null;
+  const removeBackHandler = jest.fn();
+
   beforeEach(() => {
     sketches = [];
+    mockRouteParams.current = {};
     jest.clearAllMocks();
+    configureRepository();
     jest.useFakeTimers();
+    hardwareBackHandler = null;
+    jest.spyOn(Alert, "alert").mockImplementation(jest.fn());
+    jest.spyOn(BackHandler, "addEventListener").mockImplementation((_event, handler) => {
+      hardwareBackHandler = handler;
+      return { remove: removeBackHandler };
+    });
   });
 
   afterEach(() => {
     jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
-  it("creates and opens a starter sketch on first run", async () => {
-    await render(<EditorScreen />);
-
-    await waitFor(() => {
-      expect(repository.create).toHaveBeenCalledWith(
-        "profile-a",
-        expect.any(String),
-        STARTER_SKETCH_SOURCE,
-      );
-    });
-    // A regex, not a string: `toHaveTextContent` matches strings exactly, and the starter shader is
-    // many lines long.
-    expect(screen.getByTestId("sandbox")).toHaveTextContent(/smoothstep/);
-  });
-
-  it("opens the most recently updated existing sketch", async () => {
+  it("opens the sketch requested by the route instead of the most recent sketch", async () => {
     sketches = [
-      {
-        id: "sketch-9",
-        title: "Recent",
-        source: "fragColor = vec4(0.5);",
-        metadata: DEFAULT_SKETCH_METADATA,
-        metadataWarning: null,
-        createdAt: "2026-08-06T00:00:00.000Z",
-        updatedAt: "2026-08-06T00:10:00.000Z",
-      },
+      makeSketch("recent", "Recent", "fragColor = vec4(0.9);"),
+      makeSketch("requested", "Requested", "fragColor = vec4(0.2);"),
+    ];
+    mockRouteParams.current = { sketchId: "requested" };
+
+    await openEditor();
+
+    expect(repository.get).toHaveBeenCalledWith("profile-a", "requested");
+    expect(screen.getByTestId("sandbox-source")).toHaveTextContent("fragColor = vec4(0.2);");
+    expect(screen.getByText("Requested")).toBeTruthy();
+  });
+
+  it("falls back to the most recent sketch when no route ID is present", async () => {
+    sketches = [
+      makeSketch("recent", "Recent", "fragColor = vec4(0.9);"),
+      makeSketch("older", "Older", "fragColor = vec4(0.2);"),
     ];
 
-    await render(<EditorScreen />);
+    await openEditor();
 
-    await waitFor(() => {
-      expect(screen.getByTestId("sandbox")).toHaveTextContent("fragColor = vec4(0.5);");
-    });
+    expect(screen.getByTestId("sandbox-source")).toHaveTextContent("fragColor = vec4(0.9);");
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it("shows the open sketch's title", async () => {
-    await render(<EditorScreen />);
+  it("creates and opens a starter sketch with default metadata on first run", async () => {
+    await openEditor();
 
-    await waitFor(() => expect(screen.getByText("First shader")).toBeTruthy());
+    expect(repository.create).toHaveBeenCalledWith(
+      "profile-a",
+      expect.any(String),
+      STARTER_SKETCH_SOURCE,
+    );
+    expect(screen.getByTestId("sandbox-source")).toHaveTextContent(/smoothstep/);
+    expect(screen.getByTestId("sandbox-parameters")).toHaveTextContent("[]");
   });
 
-  it("autosaves an edit after the debounce elapses", async () => {
-    await render(<EditorScreen />);
-    await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
+  it("renders the compact Stitch workspace hierarchy", async () => {
+    sketches = [makeSketch("one", "plasma_core.frag", "fragColor = vec4(1.0);")];
 
-    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.25);");
-    expect(repository.updateSource).not.toHaveBeenCalled();
+    await openEditor();
 
-    await act(async () => {
-      jest.advanceTimersByTime(1000);
-    });
+    expect(screen.getByTestId("editor-header")).toBeTruthy();
+    expect(screen.getByTestId("preview-workspace")).toBeTruthy();
+    expect(screen.getByTestId("workspace-divider")).toBeTruthy();
+    expect(screen.getByLabelText("Open shader files")).toBeTruthy();
+    expect(screen.getByLabelText("Open shader parameters")).toBeTruthy();
+  });
+
+  it("opens the file drawer from the header menu", async () => {
+    sketches = [makeSketch("one", "One", "fragColor = vec4(1.0);")];
+    await openEditor();
+
+    await fireEvent.press(screen.getByLabelText("Open shader files"));
+
+    expect(screen.getByText("Shadercraft Files")).toBeTruthy();
+  });
+
+  it("flushes pending source and metadata in order before selecting another sketch", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(0.1);", {
+        metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
+      }),
+      makeSketch("two", "Two", "fragColor = vec4(0.2);"),
+    ];
+    await openEditor();
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.7);");
+    await openParameters();
+    await fireEvent(screen.getByTestId("parameter-slider-u_gain"), "valueChange", 1.8);
+    await fireEvent.press(screen.getByLabelText("Open shader files"));
+
+    await fireEvent.press(screen.getByTestId("sketch-row-two"));
+    await waitFor(() =>
+      expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.2);"),
+    );
 
     expect(repository.updateSource).toHaveBeenCalledWith(
       "profile-a",
-      "sketch-1",
-      "fragColor = vec4(0.25);",
+      "one",
+      "fragColor = vec4(0.7);",
+    );
+    expect(repository.updateMetadata).toHaveBeenCalledWith(
+      "profile-a",
+      "one",
+      expect.objectContaining({
+        parameters: [expect.objectContaining({ key: "u_gain", value: 1.8 })],
+      }),
+    );
+    expect(repository.updateSource.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.updateMetadata.mock.invocationCallOrder[0],
+    );
+    expect(repository.updateMetadata.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.get.mock.invocationCallOrder[0],
     );
   });
 
-  it("does not autosave before the debounce elapses", async () => {
-    await render(<EditorScreen />);
-    await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
+  it("replaces the parameter panel with the file drawer instead of stacking native overlays", async () => {
+    sketches = [makeSketch("one", "One", "fragColor = vec4(1.0);")];
+    await openEditor();
+    await openParameters();
 
-    await fireEvent.changeText(screen.getByTestId("glsl-input"), "a");
+    await fireEvent.press(screen.getByLabelText("Open shader files"));
+
+    expect(screen.queryByText("Parameters")).toBeNull();
+    expect(screen.getByText("Shadercraft Files")).toBeTruthy();
+  });
+  it("handles parameter and drawer back before leaving normal route back to Expo Router", async () => {
+    sketches = [makeSketch("one", "One", "fragColor = vec4(1.0);")];
+    await openEditor();
+    await openParameters();
+
+    expect(hardwareBackHandler).not.toBeNull();
     await act(async () => {
-      jest.advanceTimersByTime(200);
+      expect(hardwareBackHandler?.({} as never)).toBe(true);
+    });
+    expect(screen.queryByText("Parameters")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText("Open shader files"));
+    expect(screen.getByText("Shadercraft Files")).toBeTruthy();
+    await act(async () => {
+      expect(hardwareBackHandler?.({} as never)).toBe(true);
     });
 
-    expect(repository.updateSource).not.toHaveBeenCalled();
+    expect(screen.queryByText("Shadercraft Files")).toBeNull();
+    expect(mockRouter.back).not.toHaveBeenCalled();
+    expect(removeBackHandler).toHaveBeenCalled();
   });
 
-  it("recompiles on its own shorter debounce, before autosave fires", async () => {
-    await render(<EditorScreen />);
-    await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
+  it("opens the next recent sketch after deleting the active sketch", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(0.1);"),
+      makeSketch("two", "Two", "fragColor = vec4(0.2);"),
+    ];
+    await openEditor();
+    await fireEvent.press(screen.getByLabelText("Open shader files"));
+
+    await confirmDelete("One");
+    await waitFor(() =>
+      expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.2);"),
+    );
+
+    expect(repository.list).toHaveBeenCalled();
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+  });
+
+  it("returns to the library when deleting the active sketch leaves no replacement", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(0.1);"),
+      makeSketch("two", "Two", "fragColor = vec4(0.2);"),
+    ];
+    repository.delete.mockImplementationOnce(async () => {
+      sketches = [];
+    });
+    await openEditor();
+    await fireEvent.press(screen.getByLabelText("Open shader files"));
+
+    await confirmDelete("One");
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith("/library"));
+  });
+
+  it("passes saved parameter definitions to the sandbox", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(u_gain);", {
+        metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
+      }),
+    ];
+
+    await openEditor();
+
+    expect(screen.getByTestId("sandbox-parameters").props.children).toContain('"key":"u_gain"');
+    expect(screen.getByTestId("sandbox-parameters").props.children).toContain('"value":1.2');
+  });
+
+  it("updates parameter values live and autosaves metadata on its own debounce", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(u_gain);", {
+        metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
+      }),
+    ];
+    await openEditor();
+    await openParameters();
+
+    await fireEvent(screen.getByTestId("parameter-slider-u_gain"), "valueChange", 1.8);
+
+    expect(screen.getByTestId("sandbox-parameters").props.children).toContain('"value":1.8');
+    expect(repository.updateMetadata).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(500);
+    });
+
+    expect(repository.updateMetadata).toHaveBeenCalledWith(
+      "profile-a",
+      "one",
+      expect.objectContaining({
+        parameters: [expect.objectContaining({ key: "u_gain", value: 1.8 })],
+      }),
+    );
+  });
+
+  it("forwards a newly managed definition to the sandbox immediately", async () => {
+    sketches = [makeSketch("one", "One", "fragColor = vec4(u_speed);")];
+    await openEditor();
+    await openParameters();
+    await fireEvent.press(screen.getByLabelText("Manage shader parameters"));
+    await fireEvent.press(screen.getByLabelText("Add shader parameter"));
+    await fireEvent.changeText(screen.getByLabelText("Parameter key"), "u_speed");
+    await fireEvent.changeText(screen.getByLabelText("Parameter label"), "Speed");
+    await fireEvent.changeText(screen.getByLabelText("Minimum value"), "0");
+    await fireEvent.changeText(screen.getByLabelText("Maximum value"), "3");
+    await fireEvent.changeText(screen.getByLabelText("Step value"), "0.1");
+    await fireEvent.changeText(screen.getByLabelText("Default value"), "1");
+
+    await fireEvent.press(screen.getByRole("button", { name: "Add parameter" }));
+
+    expect(screen.getByTestId("sandbox-parameters").props.children).toContain('"key":"u_speed"');
+  });
+
+  it("keeps changed parameters in memory and warns when metadata autosave fails", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(u_gain);", {
+        metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
+      }),
+    ];
+    repository.updateMetadata.mockRejectedValueOnce(new Error("disk full"));
+    await openEditor();
+    await openParameters();
+
+    await fireEvent(screen.getByTestId("parameter-slider-u_gain"), "valueChange", 1.7);
+    await act(async () => {
+      jest.advanceTimersByTime(500);
+    });
+
+    expect(screen.getByText("Could not save parameters. Your values are still here.")).toBeTruthy();
+    expect(screen.getByTestId("sandbox-parameters").props.children).toContain('"value":1.7');
+  });
+
+  it("renders a stored metadata warning without blocking source editing", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(0.1);", {
+        metadataWarning: "Saved shader parameters were invalid and have been reset.",
+      }),
+    ];
+    await openEditor();
+
+    expect(
+      screen.getByText("Saved shader parameters were invalid and have been reset."),
+    ).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.6);");
+    expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.6);");
+  });
+
+  it("recompiles before source autosave and saves only after the longer debounce", async () => {
+    sketches = [makeSketch("one", "One", "fragColor = vec4(0.1);")];
+    await openEditor();
 
     await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.75);");
     await act(async () => {
       jest.advanceTimersByTime(350);
     });
 
-    expect(screen.getByTestId("sandbox")).toHaveTextContent("fragColor = vec4(0.75);");
+    expect(screen.getByTestId("sandbox-source")).toHaveTextContent("fragColor = vec4(0.75);");
     expect(repository.updateSource).not.toHaveBeenCalled();
-  });
 
-  it("switches to another sketch and shows its source", async () => {
-    sketches = [
-      {
-        id: "sketch-1",
-        title: "One",
-        source: "fragColor = vec4(0.1);",
-        metadata: DEFAULT_SKETCH_METADATA,
-        metadataWarning: null,
-        createdAt: "2026-08-06T00:00:00.000Z",
-        updatedAt: "2026-08-06T00:02:00.000Z",
-      },
-      {
-        id: "sketch-2",
-        title: "Two",
-        source: "fragColor = vec4(0.2);",
-        metadata: DEFAULT_SKETCH_METADATA,
-        metadataWarning: null,
-        createdAt: "2026-08-06T00:00:00.000Z",
-        updatedAt: "2026-08-06T00:01:00.000Z",
-      },
-    ];
-
-    await render(<EditorScreen />);
-    await waitFor(() => expect(screen.getByTestId("open-sketch-list")).toBeTruthy());
-
-    await fireEvent.press(screen.getByTestId("open-sketch-list"));
     await act(async () => {
-      await fireEvent.press(screen.getByText("Two"));
+      jest.advanceTimersByTime(650);
     });
-
-    expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.2);");
+    expect(repository.updateSource).toHaveBeenCalledWith(
+      "profile-a",
+      "one",
+      "fragColor = vec4(0.75);",
+    );
   });
 
-  it("opens a replacement after the open sketch is deleted", async () => {
-    sketches = [
-      {
-        id: "sketch-1",
-        title: "One",
-        source: "fragColor = vec4(0.1);",
-        metadata: DEFAULT_SKETCH_METADATA,
-        metadataWarning: null,
-        createdAt: "2026-08-06T00:00:00.000Z",
-        updatedAt: "2026-08-06T00:02:00.000Z",
-      },
-      {
-        id: "sketch-2",
-        title: "Two",
-        source: "fragColor = vec4(0.2);",
-        metadata: DEFAULT_SKETCH_METADATA,
-        metadataWarning: null,
-        createdAt: "2026-08-06T00:00:00.000Z",
-        updatedAt: "2026-08-06T00:01:00.000Z",
-      },
-    ];
-    repository.delete.mockImplementation(async (_profileId: string, id: string) => {
-      sketches = sketches.filter((sketch) => sketch.id !== id);
+  it("shows the last-working badge and mapped compile errors after a failed compile", async () => {
+    sketches = [makeSketch("one", "One", "fragColor = vec4(0.1);")];
+    await openEditor();
+
+    await fireEvent(screen.getByTestId("sandbox"), "compileResult", {
+      ok: false,
+      errors: [{ line: 3, message: "syntax error", raw: "ERROR: 0:3: syntax error" }],
+      showingLastWorking: true,
     });
 
-    await render(<EditorScreen />);
-    await waitFor(() => expect(screen.getByTestId("open-sketch-list")).toBeTruthy());
-
-    await fireEvent.press(screen.getByTestId("open-sketch-list"));
-    await act(async () => {
-      await fireEvent.press(screen.getByLabelText("Delete One"));
-    });
-
-    expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.2);");
+    expect(screen.getByText("Showing the last version that compiled")).toBeTruthy();
+    expect(screen.getByText("syntax error")).toBeTruthy();
   });
 
-  it("unmounts the preview when collapsed and restores it on demand", async () => {
-    await render(<EditorScreen />);
-    await waitFor(() => expect(screen.getByTestId("sandbox")).toBeTruthy());
+  it("preserves pause, restart, and collapse/unmount controls", async () => {
+    sketches = [makeSketch("one", "One", "fragColor = vec4(0.1);")];
+    await openEditor();
+
+    await fireEvent.press(screen.getByLabelText("Pause preview"));
+    expect(screen.getByTestId("sandbox-paused")).toHaveTextContent("true");
+    expect(screen.getByLabelText("Resume preview")).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText("Restart preview"));
+    expect(screen.getByTestId("sandbox-restart")).toHaveTextContent("1");
 
     await fireEvent.press(screen.getByLabelText("Hide preview"));
     expect(screen.queryByTestId("sandbox")).toBeNull();
+    expect(screen.getByTestId("glsl-input")).toBeTruthy();
 
     await fireEvent.press(screen.getByLabelText("Show preview"));
     expect(screen.getByTestId("sandbox")).toBeTruthy();
   });
 
-  it("keeps the editor usable while the preview is collapsed", async () => {
-    await render(<EditorScreen />);
-    await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
+  it("remounts the controlled input with the selected sketch source", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(0.1);"),
+      makeSketch("two", "Two", "fragColor = vec4(0.2);"),
+    ];
+    await openEditor();
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "unsaved local source");
+    await fireEvent.press(screen.getByLabelText("Open shader files"));
 
-    await fireEvent.press(screen.getByLabelText("Hide preview"));
-
-    expect(screen.getByTestId("glsl-input")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("sketch-row-two"));
+    await waitFor(() =>
+      expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.2);"),
+    );
   });
 
-  it("surfaces a save failure without discarding the buffer", async () => {
-    repository.updateSource.mockRejectedValueOnce(new Error("disk full"));
-    await render(<EditorScreen />);
+  it("flushes pending source then the latest metadata when the editor unmounts", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(u_gain);", {
+        metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
+      }),
+    ];
+    const mounted = await render(<EditorScreen />);
     await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(u_gain * 0.5);");
+    await openParameters();
+    await fireEvent(screen.getByTestId("parameter-slider-u_gain"), "valueChange", 1.9);
+
+    await act(async () => {
+      mounted.unmount();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(repository.updateSource).toHaveBeenCalledWith(
+      "profile-a",
+      "one",
+      "fragColor = vec4(u_gain * 0.5);",
+    );
+    expect(repository.updateMetadata).toHaveBeenCalledWith(
+      "profile-a",
+      "one",
+      expect.objectContaining({
+        parameters: [expect.objectContaining({ key: "u_gain", value: 1.9 })],
+      }),
+    );
+    expect(repository.updateSource.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.updateMetadata.mock.invocationCallOrder[0],
+    );
+  });
+  it("surfaces a source-save failure without discarding the controlled buffer", async () => {
+    sketches = [makeSketch("one", "One", "fragColor = vec4(0.1);")];
+    repository.updateSource.mockRejectedValueOnce(new Error("disk full"));
+    await openEditor();
 
     await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.75);");
     await act(async () => {

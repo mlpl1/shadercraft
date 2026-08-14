@@ -16,6 +16,7 @@ describe("PreviewControls", () => {
     await render(<PreviewControls {...props()} />);
 
     expect(screen.getByLabelText("Pause preview")).toBeTruthy();
+    expect(screen.queryByText("Pause")).toBeNull();
   });
 
   it("offers to resume while paused", async () => {
