@@ -12,6 +12,7 @@ import {
 
 import { Colors, Radius, Spacing } from "../constants/theme";
 import type { CompileError } from "../shaders/shader-source";
+import { tokenizeGlsl } from "./glsl-highlight";
 
 /**
  * The characters and identifiers phone keyboards bury behind two taps, ordered by how often GLSL
@@ -82,6 +83,7 @@ export function GlslInput({
   );
 
   const lineCount = useMemo(() => value.split("\n").length, [value]);
+  const highlightedTokens = useMemo(() => tokenizeGlsl(value), [value]);
 
   const handleChangeText = useCallback(
     (next: string) => {
@@ -133,25 +135,32 @@ export function GlslInput({
             </Text>
           ))}
         </View>
-        <TextInput
-          autoCapitalize="none"
-          autoComplete="off"
-          autoCorrect={false}
-          editable={editable}
-          keyboardAppearance="dark"
-          multiline
-          onChangeText={handleChangeText}
-          onSelectionChange={handleSelectionChange}
-          // Horizontal scrolling instead of wrapping: a wrapped line would desynchronize the gutter
-          // from the line numbers every error message refers to.
-          scrollEnabled
-          selection={caretOverride ?? undefined}
-          spellCheck={false}
-          style={styles.input}
-          testID="glsl-input"
-          textAlignVertical="top"
-          value={value}
-        />
+        <View style={styles.inputLayer}>
+          <Text pointerEvents="none" style={styles.highlight} testID="glsl-highlight">
+            {highlightedTokens.map((token, index) => (
+              <Text key={`${token.text}-${index}`} style={tokenStyles[token.kind]} testID={`glsl-highlight-${token.kind}`}>
+                {token.text}
+              </Text>
+            ))}
+          </Text>
+          <TextInput
+            autoCapitalize="none"
+            autoComplete="off"
+            autoCorrect={false}
+            editable={editable}
+            keyboardAppearance="dark"
+            multiline
+            onChangeText={handleChangeText}
+            onSelectionChange={handleSelectionChange}
+            scrollEnabled
+            selection={caretOverride ?? undefined}
+            spellCheck={false}
+            style={styles.input}
+            testID="glsl-input"
+            textAlignVertical="top"
+            value={value}
+          />
+        </View>
       </View>
 
       <ScrollView
@@ -169,6 +178,7 @@ export function GlslInput({
             key={symbol}
             onPress={() => insert(symbol)}
             style={({ pressed }) => [styles.symbol, pressed && styles.symbolPressed]}
+            testID={`glsl-symbol-${symbol}`}
           >
             <Text style={styles.symbolText}>{symbol}</Text>
           </Pressable>
@@ -190,6 +200,16 @@ export function GlslInput({
 }
 
 const MONOSPACE_LINE_HEIGHT = 20;
+
+const tokenStyles = StyleSheet.create({
+  comment: { color: Colors.textSubtle },
+  directive: { color: Colors.electricBlue },
+  keyword: { color: Colors.coral },
+  number: { color: Colors.accent },
+  plain: { color: Colors.text },
+  string: { color: Colors.accent },
+  type: { color: Colors.acidGreen },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -218,8 +238,20 @@ const styles = StyleSheet.create({
     color: Colors.coral,
     fontWeight: "700",
   },
-  input: {
+  inputLayer: {
+    flex: 1,
+  },
+  highlight: {
+    ...StyleSheet.absoluteFill,
     color: Colors.text,
+    fontFamily: "monospace",
+    fontSize: 13,
+    lineHeight: MONOSPACE_LINE_HEIGHT,
+    paddingHorizontal: Spacing.sm,
+    paddingTop: Spacing.sm,
+  },
+  input: {
+    color: "transparent",
     flex: 1,
     fontFamily: "monospace",
     fontSize: 13,

@@ -52,7 +52,7 @@ describe("GlslInput", () => {
     await render(<GlslInput errors={[]} initialValue="vec2 p = ;" onChange={onChange} />);
 
     await setSelection(9, 9);
-    await fireEvent.press(screen.getByText("vec2"));
+    await fireEvent.press(screen.getByTestId("glsl-symbol-vec2"));
 
     expect(onChange).toHaveBeenCalledWith("vec2 p = vec2;");
   });
@@ -61,7 +61,7 @@ describe("GlslInput", () => {
     await render(<GlslInput errors={[]} initialValue="vec2 p = ;" onChange={noop} />);
 
     await setSelection(9, 9);
-    await fireEvent.press(screen.getByText("vec2"));
+    await fireEvent.press(screen.getByTestId("glsl-symbol-vec2"));
 
     expect(screen.getByTestId("glsl-input").props.selection).toEqual({ start: 13, end: 13 });
   });
@@ -70,7 +70,7 @@ describe("GlslInput", () => {
     await render(<GlslInput errors={[]} initialValue="vec2 p = ;" onChange={noop} />);
 
     await setSelection(9, 9);
-    await fireEvent.press(screen.getByText("vec2"));
+    await fireEvent.press(screen.getByTestId("glsl-symbol-vec2"));
     await setSelection(2, 2);
 
     expect(screen.getByTestId("glsl-input").props.selection).toBeUndefined();
@@ -90,7 +90,7 @@ describe("GlslInput", () => {
     await render(<GlslInput errors={[]} initialValue="vec2 p = bad;" onChange={onChange} />);
 
     await setSelection(9, 12);
-    await fireEvent.press(screen.getByText("vec3"));
+    await fireEvent.press(screen.getByTestId("glsl-symbol-vec3"));
 
     expect(onChange).toHaveBeenCalledWith("vec2 p = vec3;");
   });
