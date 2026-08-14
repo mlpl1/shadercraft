@@ -3,6 +3,10 @@ jest.mock("react-native-safe-area-context", () =>
 );
 
 const mockViewabilityRef: { current: null | ((info: unknown) => void) } = { current: null };
+type MockFocusCallback = () => void | (() => void);
+const mockFocusRef: {
+  current: { callback: MockFocusCallback | null; cleanup: (() => void) | null };
+} = { current: { callback: null, cleanup: null } };
 
 jest.mock("react-native/Libraries/Lists/FlatList", () => {
   const React = require("react") as typeof import("react");
@@ -31,7 +35,19 @@ jest.mock("react-native/Libraries/Lists/FlatList", () => {
 const mockPush = jest.fn();
 
 jest.mock("expo-router", () => ({
-  useFocusEffect: (callback: () => void) => require("react").useEffect(callback, [callback]),
+  useFocusEffect: (callback: MockFocusCallback) => {
+    const React = require("react") as typeof import("react");
+    React.useEffect(() => {
+      mockFocusRef.current.callback = callback;
+      const cleanup = callback();
+      mockFocusRef.current.cleanup = cleanup ?? null;
+      return () => {
+        const currentCleanup = mockFocusRef.current.cleanup;
+        mockFocusRef.current.cleanup = null;
+        currentCleanup?.();
+      };
+    }, [callback]);
+  },
   useRouter: () => ({ push: mockPush, replace: jest.fn() }),
 }));
 
@@ -113,6 +129,7 @@ describe("LibraryScreen", () => {
     nextId = 10;
     mockProfileRef.current = "profile-a";
     jest.clearAllMocks();
+    mockFocusRef.current = { callback: null, cleanup: null };
     repository.list.mockImplementation(async (_profileId: string) => sketches);
     repository.create.mockImplementation(async (_profileId: string, title: string, source: string) => {
       nextId += 1;
@@ -329,6 +346,43 @@ describe("LibraryScreen", () => {
     await screen.findByText("Sentinel");
 
     expect(screen.getAllByRole("button", { name: "All" })).toHaveLength(1);
+  });
+
+  it("deactivates visible previews on blur and restores only visible previews on focus", async () => {
+    sketches = [makeSketch("visible", "Visible"), makeSketch("hidden", "Hidden")];
+    await render(<LibraryScreen />);
+    await screen.findByText("Visible");
+
+    await act(async () => {
+      mockViewabilityRef.current?.({
+        changed: [],
+        viewableItems: [{ item: sketches[0], key: "visible", index: 0, isViewable: true }],
+      });
+    });
+    expect(mockSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ active: true, source: "source-visible" }),
+    );
+
+    mockSandbox.mockClear();
+    await act(async () => {
+      mockFocusRef.current.cleanup?.();
+      mockFocusRef.current.cleanup = null;
+    });
+    expect(mockSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ active: false, source: "source-visible" }),
+    );
+
+    mockSandbox.mockClear();
+    await act(async () => {
+      const cleanup = mockFocusRef.current.callback?.();
+      mockFocusRef.current.cleanup = cleanup ?? null;
+    });
+    expect(mockSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ active: true, source: "source-visible" }),
+    );
+    expect(mockSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ active: false, source: "source-hidden" }),
+    );
   });
 
   it("keeps off-screen previews inactive and activates visible cards", async () => {

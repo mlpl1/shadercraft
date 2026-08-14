@@ -50,6 +50,7 @@ export default function LibraryScreen() {
   const loadRequestRef = useRef(0);
   const createRequestRef = useRef(0);
   const isFocusedRef = useRef(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   const [loadedSketches, setLoadedSketches] = useState<LoadedSketches | null>(null);
   const sketches = loadedSketches?.scope === scope ? loadedSketches.items : [];
@@ -105,10 +106,12 @@ export default function LibraryScreen() {
 
   const handleFocus = useCallback(() => {
     isFocusedRef.current = true;
+    setIsFocused(true);
     const cleanupReload = reload();
 
     return () => {
       isFocusedRef.current = false;
+      setIsFocused(false);
       loadRequestRef.current += 1;
       createRequestRef.current += 1;
       cleanupReload?.();
@@ -279,7 +282,7 @@ export default function LibraryScreen() {
             filteredSketches.length === 0 && styles.emptyListContent,
           ]}
           data={filteredSketches}
-          extraData={visibleSketchIds}
+          extraData={isFocused ? visibleSketchIds : null}
           keyExtractor={(sketch) => sketch.id}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
@@ -310,7 +313,7 @@ export default function LibraryScreen() {
           overScrollMode="never"
           renderItem={({ item }) => (
             <ShaderLibraryCard
-              active={visibleSketchIds.has(item.id)}
+              active={isFocused && visibleSketchIds.has(item.id)}
               onPress={() => openSketch(item.id)}
               sketch={item}
             />
