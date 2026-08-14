@@ -403,6 +403,139 @@ describe("EditorScreen", () => {
     );
   });
 
+  it("restores failed inactive profile payloads and clears their errors after retrying on return", async () => {
+    let fromA = makeSketch("from-a", "Profile A shader", "profile A original", {
+      metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
+    });
+    const fromB = makeSketch("from-b", "Profile B shader", "profile B original", {
+      metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
+    });
+    const sourceRetry = deferredWrite();
+    const metadataRetry = deferredWrite();
+    repository.list.mockImplementation((profileId) =>
+      Promise.resolve(profileId === "profile-a" ? [fromA] : [fromB]),
+    );
+    repository.updateSource
+      .mockRejectedValueOnce(new Error("profile A source unavailable"))
+      .mockImplementationOnce(async (profileId, id, source) => {
+        await sourceRetry.promise;
+        if (profileId === "profile-a" && id === "from-a") {
+          fromA = { ...fromA, source };
+        }
+      });
+    repository.updateMetadata
+      .mockRejectedValueOnce(new Error("profile A metadata unavailable"))
+      .mockImplementationOnce(async (profileId, id, metadata) => {
+        await metadataRetry.promise;
+        if (profileId === "profile-a" && id === "from-a") {
+          fromA = { ...fromA, metadata };
+        }
+      });
+    const rendered = await openEditor();
+    await openParameters();
+    await fireEvent(screen.getByTestId("parameter-slider-u_gain"), "valueChange", 1.7);
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "profile A latest source");
+
+    mockProfileRef.current = "profile-b";
+    await rendered.rerender(<EditorScreen />);
+    expect(await screen.findByText("Profile B shader")).toBeTruthy();
+    await waitFor(() => expect(repository.updateMetadata).toHaveBeenCalledTimes(1));
+
+    mockProfileRef.current = "profile-a";
+    await rendered.rerender(<EditorScreen />);
+    expect(await screen.findByText("Profile A shader")).toBeTruthy();
+    expect(screen.getByTestId("glsl-input")).toHaveProp(
+      "value",
+      "profile A latest source",
+    );
+    expect(screen.getByText("Could not save. Your code is still here.")).toBeTruthy();
+    expect(
+      screen.getByText("Could not save parameters. Your values are still here."),
+    ).toBeTruthy();
+    expect(repository.updateSource).toHaveBeenCalledTimes(2);
+    expect(repository.updateMetadata).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      sourceRetry.resolve();
+      await sourceRetry.promise;
+    });
+    await waitFor(() => expect(repository.updateMetadata).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("Could not save. Your code is still here.")).toBeNull();
+    expect(
+      screen.getByText("Could not save parameters. Your values are still here."),
+    ).toBeTruthy();
+
+    await act(async () => {
+      metadataRetry.resolve();
+      await metadataRetry.promise;
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Could not save parameters. Your values are still here."),
+      ).toBeNull(),
+    );
+    expect(fromA.source).toBe("profile A latest source");
+    expect(fromA.metadata.parameters).toEqual([
+      expect.objectContaining({ key: "u_gain", value: 1.7 }),
+    ]);
+  });
+
+  it("serializes a later same-profile write behind its earlier write across A to B to A", async () => {
+    const fromA = makeSketch("from-a", "Profile A shader", "profile A original");
+    const fromB = makeSketch("from-b", "Profile B shader", "profile B original");
+    const firstAWrite = deferredWrite();
+    const writeOrder: string[] = [];
+    repository.list.mockImplementation((profileId) =>
+      Promise.resolve(profileId === "profile-a" ? [fromA] : [fromB]),
+    );
+    repository.updateSource.mockImplementation((profileId, _id, source) => {
+      writeOrder.push(`${profileId}:${source}:started`);
+      if (profileId === "profile-a" && source === "profile A first edit") {
+        return firstAWrite.promise.then(() => {
+          writeOrder.push("profile-a:profile A first edit:finished");
+        });
+      }
+      writeOrder.push(`${profileId}:${source}:finished`);
+      return Promise.resolve();
+    });
+    const rendered = await openEditor();
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "profile A first edit");
+
+    mockProfileRef.current = "profile-b";
+    await rendered.rerender(<EditorScreen />);
+    await waitFor(() =>
+      expect(writeOrder).toContain("profile-a:profile A first edit:started"),
+    );
+    expect(await screen.findByText("Profile B shader")).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "profile B independent edit");
+    await act(async () => {
+      jest.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+    expect(writeOrder).toContain("profile-b:profile B independent edit:finished");
+
+    mockProfileRef.current = "profile-a";
+    await rendered.rerender(<EditorScreen />);
+    expect(await screen.findByText("Profile A shader")).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "profile A later edit");
+    await act(async () => {
+      jest.advanceTimersByTime(800);
+      await Promise.resolve();
+    });
+    expect(writeOrder).not.toContain("profile-a:profile A later edit:started");
+
+    await act(async () => {
+      firstAWrite.resolve();
+      await firstAWrite.promise;
+    });
+    await waitFor(() =>
+      expect(writeOrder).toContain("profile-a:profile A later edit:finished"),
+    );
+    expect(writeOrder.indexOf("profile-a:profile A first edit:finished")).toBeLessThan(
+      writeOrder.indexOf("profile-a:profile A later edit:started"),
+    );
+  });
+
   it("never renders profile A content when profile B loading fails", async () => {
     const fromA = makeSketch("from-a", "Profile A shader", "fragColor = vec4(0.1);");
     repository.list.mockImplementation((profileId) =>

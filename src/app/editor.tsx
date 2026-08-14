@@ -76,13 +76,25 @@ export default function EditorScreen() {
   const data = useData();
   const { profileId } = useAuth();
   const sketchRepository = data.status === "ready" ? data.sketchRepository : null;
-  const scope = useMemo<EditorScope | null>(
-    () =>
-      sketchRepository && profileId
-        ? { profileId, repository: sketchRepository }
-        : null,
-    [profileId, sketchRepository],
+  const scopeRegistryRef = useRef(
+    new WeakMap<SketchRepository, Map<string, EditorScope>>(),
   );
+  const scope = useMemo<EditorScope | null>(() => {
+    if (!sketchRepository || !profileId) return null;
+
+    let repositoryScopes = scopeRegistryRef.current.get(sketchRepository);
+    if (!repositoryScopes) {
+      repositoryScopes = new Map();
+      scopeRegistryRef.current.set(sketchRepository, repositoryScopes);
+    }
+
+    let stableScope = repositoryScopes.get(profileId);
+    if (!stableScope) {
+      stableScope = { profileId, repository: sketchRepository };
+      repositoryScopes.set(profileId, stableScope);
+    }
+    return stableScope;
+  }, [profileId, sketchRepository]);
 
   const [loadedEditor, setLoadedEditor] = useState<LoadedEditor | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -90,9 +102,12 @@ export default function EditorScreen() {
   const [compiledSource, setCompiledSource] = useState("");
   const [errors, setErrors] = useState<CompileError[]>([]);
   const [showingLastWorking, setShowingLastWorking] = useState(false);
-  const [sourceSaveErrorState, setSourceSaveErrorState] = useState<ScopedMessage | null>(null);
-  const [metadataSaveErrorState, setMetadataSaveErrorState] =
-    useState<ScopedMessage | null>(null);
+  const [sourceSaveErrorState, setSourceSaveErrorState] = useState(
+    () => new Map<EditorScope, string>(),
+  );
+  const [metadataSaveErrorState, setMetadataSaveErrorState] = useState(
+    () => new Map<EditorScope, string>(),
+  );
   const [loadErrorState, setLoadErrorState] = useState<ScopedMessage | null>(null);
   const [mutationErrorState, setMutationErrorState] = useState<ScopedMessage | null>(null);
   const [orderingRefreshErrorScope, setOrderingRefreshErrorScope] =
@@ -113,10 +128,8 @@ export default function EditorScreen() {
   const activeEditor = loadedEditor?.scope === scope ? loadedEditor : null;
   const sketch = activeEditor?.sketch ?? null;
   const sketches = activeEditor?.sketches ?? [];
-  const sourceSaveError =
-    sourceSaveErrorState?.scope === scope ? sourceSaveErrorState.message : null;
-  const metadataSaveError =
-    metadataSaveErrorState?.scope === scope ? metadataSaveErrorState.message : null;
+  const sourceSaveError = scope ? (sourceSaveErrorState.get(scope) ?? null) : null;
+  const metadataSaveError = scope ? (metadataSaveErrorState.get(scope) ?? null) : null;
   const loadError = loadErrorState?.scope === scope ? loadErrorState.message : null;
   const mutationError =
     mutationErrorState?.scope === scope ? mutationErrorState.message : null;
@@ -259,19 +272,24 @@ export default function EditorScreen() {
                 pending.sketchId,
                 pending.source,
               );
-              if (isScopeCurrent(pending.scope)) setSourceSaveErrorState(null);
+              if (mountedRef.current) {
+                setSourceSaveErrorState((current) => {
+                  if (!current.has(pending.scope)) return current;
+                  const next = new Map(current);
+                  next.delete(pending.scope);
+                  return next;
+                });
+              }
             } catch {
-              if (
-                isScopeCurrent(pending.scope) &&
-                pending.revision === sourceRevisionRef.current &&
-                !pendingSourceRef.current.has(pending.scope)
-              ) {
+              const latest = pendingSourceRef.current.get(pending.scope);
+              if (!latest || latest.revision <= pending.revision) {
                 pendingSourceRef.current.set(pending.scope, pending);
               }
-              if (isScopeCurrent(pending.scope)) {
-                setSourceSaveErrorState({
-                  message: "Could not save. Your code is still here.",
-                  scope: pending.scope,
+              if (mountedRef.current) {
+                setSourceSaveErrorState((current) => {
+                  const next = new Map(current);
+                  next.set(pending.scope, "Could not save. Your code is still here.");
+                  return next;
                 });
               }
               return false;
@@ -353,19 +371,27 @@ export default function EditorScreen() {
                 pending.sketchId,
                 pending.metadata,
               );
-              if (isScopeCurrent(pending.scope)) setMetadataSaveErrorState(null);
+              if (mountedRef.current) {
+                setMetadataSaveErrorState((current) => {
+                  if (!current.has(pending.scope)) return current;
+                  const next = new Map(current);
+                  next.delete(pending.scope);
+                  return next;
+                });
+              }
             } catch {
-              if (
-                isScopeCurrent(pending.scope) &&
-                pending.revision === metadataRevisionRef.current &&
-                !pendingMetadataRef.current.has(pending.scope)
-              ) {
+              const latest = pendingMetadataRef.current.get(pending.scope);
+              if (!latest || latest.revision <= pending.revision) {
                 pendingMetadataRef.current.set(pending.scope, pending);
               }
-              if (isScopeCurrent(pending.scope)) {
-                setMetadataSaveErrorState({
-                  message: "Could not save parameters. Your values are still here.",
-                  scope: pending.scope,
+              if (mountedRef.current) {
+                setMetadataSaveErrorState((current) => {
+                  const next = new Map(current);
+                  next.set(
+                    pending.scope,
+                    "Could not save parameters. Your values are still here.",
+                  );
+                  return next;
                 });
               }
               return false;
@@ -463,19 +489,47 @@ export default function EditorScreen() {
         clearTimeout(compileTimer.current);
         compileTimer.current = null;
       }
-      pendingSourceRef.current.delete(targetScope);
-      pendingMetadataRef.current.delete(targetScope);
-      setRemovalGuardActive(false);
+      const pendingSource = pendingSourceRef.current.get(targetScope);
+      const pendingMetadata = pendingMetadataRef.current.get(targetScope);
+      let activatedSketch = next;
+      if (pendingSource?.sketchId === next.id) {
+        activatedSketch = { ...activatedSketch, source: pendingSource.source };
+      }
+      if (pendingMetadata?.sketchId === next.id) {
+        activatedSketch = { ...activatedSketch, metadata: pendingMetadata.metadata };
+      }
+      const activatedSketches = nextSketches.map((candidate) =>
+        candidate.id === activatedSketch.id ? activatedSketch : candidate,
+      );
+      setRemovalGuardActive(Boolean(pendingSource || pendingMetadata));
 
-      const snapshot = { scope: targetScope, sketch: next, sketches: nextSketches };
+      const snapshot = {
+        scope: targetScope,
+        sketch: activatedSketch,
+        sketches: activatedSketches,
+      };
       editorRef.current = snapshot;
-      sketchRef.current = next;
+      sketchRef.current = activatedSketch;
       setLoadedEditor(snapshot);
-      setCompiledSource(next.source);
+      setCompiledSource(activatedSketch.source);
       setErrors([]);
       setShowingLastWorking(false);
-      setSourceSaveErrorState(null);
-      setMetadataSaveErrorState(null);
+      if (!pendingSource) {
+        setSourceSaveErrorState((current) => {
+          if (!current.has(targetScope)) return current;
+          const cleared = new Map(current);
+          cleared.delete(targetScope);
+          return cleared;
+        });
+      }
+      if (!pendingMetadata) {
+        setMetadataSaveErrorState((current) => {
+          if (!current.has(targetScope)) return current;
+          const cleared = new Map(current);
+          cleared.delete(targetScope);
+          return cleared;
+        });
+      }
       setLoadErrorState(null);
       setMutationErrorState(null);
       setParametersOpen(false);
@@ -545,7 +599,14 @@ export default function EditorScreen() {
             return;
           }
         }
-        activateSketch(scope, requestId, opened, all);
+        const activated = activateSketch(scope, requestId, opened, all);
+        if (
+          activated &&
+          (pendingSourceRef.current.has(scope) ||
+            pendingMetadataRef.current.has(scope))
+        ) {
+          void flushAllSaves(scope);
+        }
       } catch {
         if (currentRequest()) {
           setLoadErrorState({ message: "Could not load the editor. Try again.", scope });
