@@ -54,6 +54,8 @@ describe("sketch metadata", () => {
     expect(isValidShaderParameterKey("_detail2")).toBe(true);
     expect(isValidShaderParameterKey("iTime")).toBe(false);
     expect(isValidShaderParameterKey("mainImage")).toBe(false);
+    expect(isValidShaderParameterKey("float")).toBe(false);
+    expect(isValidShaderParameterKey("gl_Custom")).toBe(false);
     expect(isValidShaderParameterKey("9speed")).toBe(false);
     expect(isValidShaderParameterKey("u-speed")).toBe(false);
   });
@@ -107,5 +109,11 @@ describe("sketch metadata", () => {
     expect(serializeSketchMetadata(metadata)).toBe(
       '{"version":1,"category":"Drafts","parameters":[{"key":"u_x","label":"X","min":0,"max":1,"step":0.1,"defaultValue":1,"value":0.5}]}',
     );
+  });
+
+  it("resets metadata with a sparse parameter list", () => {
+    const metadata = parseSketchMetadata({ version: 1, category: "Drafts", parameters: new Array(1) });
+    expect(metadata).toEqual(DEFAULT_SKETCH_METADATA);
+    expect(metadata.parameters).toHaveLength(0);
   });
 });

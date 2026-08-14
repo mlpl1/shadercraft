@@ -34,6 +34,13 @@ const RESERVED_SHADER_PARAMETER_KEYS = new Set([
   "main",
   "mainImage",
 ]);
+const GLSL_RESERVED_KEYWORDS = new Set([
+  "attribute", "const", "uniform", "varying", "break", "continue", "do", "for", "while",
+  "if", "else", "in", "out", "inout", "float", "int", "void", "bool", "true", "false",
+  "invariant", "discard", "return", "mat2", "mat3", "mat4", "vec2", "vec3", "vec4",
+  "ivec2", "ivec3", "ivec4", "bvec2", "bvec3", "bvec4", "sampler2D", "samplerCube",
+  "struct", "precision", "highp", "mediump", "lowp",
+]);
 const GLSL_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function freshDefaultSketchMetadata(): SketchMetadata {
@@ -105,14 +112,19 @@ function normalizeSketchMetadata(value: unknown): SketchMetadata {
   }
 
   const keys = new Set<string>();
-  const parameters = value.parameters.map((parameter) => {
+  const parameters: ShaderParameterDefinition[] = [];
+  for (let index = 0; index < value.parameters.length; index += 1) {
+    if (!(index in value.parameters)) {
+      throw new Error("parameter list contains a missing entry");
+    }
+    const parameter = value.parameters[index];
     const normalized = normalizeParameter(parameter);
     if (keys.has(normalized.key)) {
       throw new Error(`duplicate parameter key: ${normalized.key}`);
     }
     keys.add(normalized.key);
-    return normalized;
-  });
+    parameters.push(normalized);
+  }
 
   return {
     version: 1,
@@ -125,7 +137,9 @@ export function isValidShaderParameterKey(key: string): boolean {
   return (
     typeof key === "string" &&
     GLSL_IDENTIFIER_PATTERN.test(key) &&
-    !RESERVED_SHADER_PARAMETER_KEYS.has(key)
+    !RESERVED_SHADER_PARAMETER_KEYS.has(key) &&
+    !GLSL_RESERVED_KEYWORDS.has(key) &&
+    !key.startsWith("gl_")
   );
 }
 
