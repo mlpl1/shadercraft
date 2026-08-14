@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 
 import { Colors, Spacing } from "../constants/theme";
+import type { ShaderParameterDefinition } from "../data/sketches/sketch-metadata";
 import { ShaderProgramHost, type HostCompileResult } from "../shaders/shader-program-host";
 
 const DEFAULT_HEIGHT = 220;
+const EMPTY_PARAMETERS: readonly ShaderParameterDefinition[] = [];
 
 type ShaderSandboxProps = {
   /** A `mainImage` body. The wrapper is added by `wrapMainImageBody`. */
   source: string;
   /** Optional GLSL declared above `mainImage`, for a stage whose shader defines its own functions. */
   helpers?: string;
+  parameters?: readonly ShaderParameterDefinition[];
   paused?: boolean;
   /**
    * `false` stops the render loop entirely — no animation frame, no draw, no `endFrameEXP`. Used for
@@ -30,12 +33,31 @@ type ShaderSandboxProps = {
 export function ShaderSandbox({
   source,
   helpers,
+  parameters = EMPTY_PARAMETERS,
   paused = false,
   active = true,
   restartToken = 0,
   height = DEFAULT_HEIGHT,
   onCompileResult,
 }: ShaderSandboxProps) {
+  const parameterValues = useMemo(
+    () => Object.fromEntries(parameters.map(({ key, value }) => [key, value])),
+    [parameters],
+  );
+  const parameterDefinitionSignature = useMemo(
+    () =>
+      JSON.stringify(
+        parameters.map(({ key, label, min, max, step, defaultValue }) => [
+          key,
+          label,
+          min,
+          max,
+          step,
+          defaultValue,
+        ]),
+      ),
+    [parameters],
+  );
   const hostRef = useRef<ShaderProgramHost | null>(null);
   const frameRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
@@ -46,8 +68,16 @@ export function ShaderSandbox({
   const renderRef = useRef<(() => void) | null>(null);
   const sourceRef = useRef(source);
   const helpersRef = useRef(helpers);
+  const parametersRef = useRef(parameters);
+  const parameterValuesRef = useRef(parameterValues);
+  const parameterDefinitionSignatureRef = useRef(parameterDefinitionSignature);
+  const compiledParameterDefinitionSignatureRef = useRef(parameterDefinitionSignature);
   const onCompileResultRef = useRef(onCompileResult);
   const [hasRendered, setHasRendered] = useState(false);
+
+  parametersRef.current = parameters;
+  parameterValuesRef.current = parameterValues;
+  parameterDefinitionSignatureRef.current = parameterDefinitionSignature;
 
   // Kept in refs so a new source or a pause toggle never restarts the animation frame loop.
   useEffect(() => {
@@ -79,10 +109,25 @@ export function ShaderSandbox({
     const host = hostRef.current;
     if (!host) return;
 
-    const result = host.setBody(source, helpers);
+    const result = host.setBody(source, helpers, parametersRef.current);
+    compiledParameterDefinitionSignatureRef.current = parameterDefinitionSignatureRef.current;
     onCompileResultRef.current?.(result);
     if (host.hasProgram()) setHasRendered(true);
   }, [source, helpers]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || parameterDefinitionSignature === compiledParameterDefinitionSignatureRef.current) return;
+
+    const result = host.setBody(sourceRef.current, helpersRef.current, parametersRef.current);
+    compiledParameterDefinitionSignatureRef.current = parameterDefinitionSignature;
+    onCompileResultRef.current?.(result);
+    if (host.hasProgram()) setHasRendered(true);
+  }, [parameterDefinitionSignature]);
+
+  useEffect(() => {
+    hostRef.current?.setParameterValues(parameterValues);
+  }, [parameterValues]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -104,7 +149,9 @@ export function ShaderSandbox({
     hostRef.current = host;
     startedAtRef.current = globalThis.performance.now();
 
-    const result = host.setBody(sourceRef.current, helpersRef.current);
+    const result = host.setBody(sourceRef.current, helpersRef.current, parametersRef.current);
+    compiledParameterDefinitionSignatureRef.current = parameterDefinitionSignatureRef.current;
+    host.setParameterValues(parameterValuesRef.current);
     onCompileResultRef.current?.(result);
     if (host.hasProgram()) setHasRendered(true);
 
