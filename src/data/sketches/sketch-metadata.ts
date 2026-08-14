@@ -35,11 +35,19 @@ const RESERVED_SHADER_PARAMETER_KEYS = new Set([
   "mainImage",
 ]);
 const GLSL_RESERVED_KEYWORDS = new Set([
+  // GLSL ES 1.00 keywords (Khronos spec section 3.7).
   "attribute", "const", "uniform", "varying", "break", "continue", "do", "for", "while",
   "if", "else", "in", "out", "inout", "float", "int", "void", "bool", "true", "false",
-  "invariant", "discard", "return", "mat2", "mat3", "mat4", "vec2", "vec3", "vec4",
-  "ivec2", "ivec3", "ivec4", "bvec2", "bvec3", "bvec4", "sampler2D", "samplerCube",
-  "struct", "precision", "highp", "mediump", "lowp",
+  "lowp", "mediump", "highp", "precision", "invariant", "discard", "return",
+  "mat2", "mat3", "mat4", "vec2", "vec3", "vec4", "ivec2", "ivec3", "ivec4",
+  "bvec2", "bvec3", "bvec4", "sampler2D", "samplerCube", "struct",
+  // Reserved for future use by GLSL ES 1.00.
+  "asm", "class", "union", "enum", "typedef", "template", "this", "packed",
+  "goto", "switch", "default", "inline", "noinline", "volatile", "public", "static",
+  "extern", "external", "interface", "flat", "long", "short", "double", "half", "fixed",
+  "unsigned", "superp", "input", "output", "hvec2", "hvec3", "hvec4", "dvec2", "dvec3", "dvec4",
+  "fvec2", "fvec3", "fvec4", "sampler1D", "sampler3D", "sampler1DShadow", "sampler2DShadow",
+  "sampler2DRect", "sampler3DRect", "sampler2DRectShadow", "sizeof", "cast", "namespace", "using",
 ]);
 const GLSL_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -139,7 +147,8 @@ export function isValidShaderParameterKey(key: string): boolean {
     GLSL_IDENTIFIER_PATTERN.test(key) &&
     !RESERVED_SHADER_PARAMETER_KEYS.has(key) &&
     !GLSL_RESERVED_KEYWORDS.has(key) &&
-    !key.startsWith("gl_")
+    !key.startsWith("gl_") &&
+    !key.includes("__")
   );
 }
 
