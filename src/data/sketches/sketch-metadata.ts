@@ -74,7 +74,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function normalizeParameter(value: unknown): ShaderParameterDefinition {
+export function normalizeShaderParameterDefinition(value: unknown): ShaderParameterDefinition {
   if (!isRecord(value)) {
     throw new Error("parameter must be an object");
   }
@@ -126,7 +126,7 @@ function normalizeSketchMetadata(value: unknown): SketchMetadata {
       throw new Error("parameter list contains a missing entry");
     }
     const parameter = value.parameters[index];
-    const normalized = normalizeParameter(parameter);
+    const normalized = normalizeShaderParameterDefinition(parameter);
     if (keys.has(normalized.key)) {
       throw new Error(`duplicate parameter key: ${normalized.key}`);
     }

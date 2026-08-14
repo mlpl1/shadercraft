@@ -28,6 +28,7 @@ export function createFakeGl(script: FakeGlScript = {}) {
   let draws = 0;
   const uniformNames = new Map<number, string>();
   const uniformCalls: UniformCall[] = [];
+  const uniformLocationRequests: string[] = [];
   const extensionRequests: string[] = [];
 
   const make = (kind: Handle["kind"]): Handle => {
@@ -98,6 +99,7 @@ export function createFakeGl(script: FakeGlScript = {}) {
     ) => undefined,
 
     getUniformLocation: (_program: Handle, name: string) => {
+      uniformLocationRequests.push(name);
       const id = nextId++;
       uniformNames.set(id, name);
       return { id };
@@ -118,6 +120,7 @@ export function createFakeGl(script: FakeGlScript = {}) {
     drawingBufferHeight: 300,
 
     uniformCalls,
+    uniformLocationRequests,
     extensionRequests,
     liveObjectCount: () => live.size,
     createdCount: () => created,

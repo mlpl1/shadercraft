@@ -1,5 +1,5 @@
 import {
-  isValidShaderParameterKey,
+  normalizeShaderParameterDefinition,
   type ShaderParameterDefinition,
 } from "../data/sketches/sketch-metadata";
 
@@ -86,9 +86,14 @@ export function getDeclaredShaderParameters(
   const declared: ShaderParameterDefinition[] = [];
 
   for (const parameter of parameters ?? []) {
-    if (!isValidShaderParameterKey(parameter.key) || keys.has(parameter.key)) continue;
-    keys.add(parameter.key);
-    declared.push(parameter);
+    try {
+      const normalized = normalizeShaderParameterDefinition(parameter);
+      if (keys.has(normalized.key)) continue;
+      keys.add(normalized.key);
+      declared.push(normalized);
+    } catch {
+      // Rendering is a defensive boundary: malformed in-memory metadata must not reach GLSL.
+    }
   }
 
   return declared;

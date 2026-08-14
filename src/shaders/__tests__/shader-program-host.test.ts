@@ -192,6 +192,32 @@ describe("ShaderProgramHost", () => {
       { name: "iTime", values: [2.5] },
     ]);
   });
+  it("omits malformed parameter definitions from locations and the compile cache", () => {
+    const gl = createFakeGl();
+    const subject = host(gl);
+    const malformed: unknown[] = [
+      { ...GAIN_PARAMETER, key: "u_bad_min", min: Number.NaN },
+      { ...GAIN_PARAMETER, key: "u_bad_max", max: Number.POSITIVE_INFINITY },
+      { ...GAIN_PARAMETER, key: "u_bad_step", step: Number.NEGATIVE_INFINITY },
+      { ...GAIN_PARAMETER, key: "u_bad_default", defaultValue: Number.NaN },
+      { ...GAIN_PARAMETER, key: "u_bad_value", value: Number.POSITIVE_INFINITY },
+      { ...GAIN_PARAMETER, key: "u_bad_range", max: 0 },
+      { ...GAIN_PARAMETER, key: "u_zero_step", step: 0 },
+      { ...GAIN_PARAMETER, key: "u_blank_label", label: " " },
+    ];
+
+    subject.setBody(BODY, undefined, malformed as never);
+    const afterFirstCompile = gl.createdCount();
+    subject.setBody(BODY, undefined, [{ ...GAIN_PARAMETER, key: "u_other_bad", min: Number.NaN }] as never);
+    subject.render(2.5, 400, 300);
+
+    expect(gl.createdCount()).toBe(afterFirstCompile);
+    expect(gl.uniformLocationRequests).toEqual(["iResolution", "iTime"]);
+    expect(gl.uniformCalls).toEqual([
+      { name: "iResolution", values: [400, 300, 1] },
+      { name: "iTime", values: [2.5] },
+    ]);
+  });
   it("does not draw when nothing has compiled", () => {
     const gl = createFakeGl();
 

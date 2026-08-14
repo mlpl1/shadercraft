@@ -2,6 +2,7 @@ import {
   DEFAULT_SKETCH_METADATA,
   isValidShaderParameterKey,
   parseSketchMetadata,
+  normalizeShaderParameterDefinition,
   parseSketchMetadataResult,
   serializeSketchMetadata,
 } from "../sketch-metadata";
@@ -49,6 +50,40 @@ describe("sketch metadata", () => {
     });
   });
 
+  it("normalizes a standalone shader parameter definition", () => {
+    expect(
+      normalizeShaderParameterDefinition({
+        key: "  u_gain ",
+        label: " Gain ",
+        min: 0,
+        max: 2,
+        step: 0.1,
+        defaultValue: 3,
+        value: -1,
+      }),
+    ).toEqual({
+      key: "u_gain",
+      label: "Gain",
+      min: 0,
+      max: 2,
+      step: 0.1,
+      defaultValue: 2,
+      value: 0,
+    });
+  });
+
+  it.each([
+    ["a non-finite minimum", { key: "u_gain", label: "Gain", min: Number.NaN, max: 2, step: 0.1, defaultValue: 1, value: 1 }],
+    ["a non-finite maximum", { key: "u_gain", label: "Gain", min: 0, max: Number.POSITIVE_INFINITY, step: 0.1, defaultValue: 1, value: 1 }],
+    ["a non-finite step", { key: "u_gain", label: "Gain", min: 0, max: 2, step: Number.NEGATIVE_INFINITY, defaultValue: 1, value: 1 }],
+    ["a non-finite default", { key: "u_gain", label: "Gain", min: 0, max: 2, step: 0.1, defaultValue: Number.NaN, value: 1 }],
+    ["a non-finite value", { key: "u_gain", label: "Gain", min: 0, max: 2, step: 0.1, defaultValue: 1, value: Number.POSITIVE_INFINITY }],
+    ["an inverted range", { key: "u_gain", label: "Gain", min: 2, max: 2, step: 0.1, defaultValue: 1, value: 1 }],
+    ["a non-positive step", { key: "u_gain", label: "Gain", min: 0, max: 2, step: 0, defaultValue: 1, value: 1 }],
+    ["an empty label", { key: "u_gain", label: " ", min: 0, max: 2, step: 0.1, defaultValue: 1, value: 1 }],
+  ])("rejects %s in a standalone definition", (_description, definition) => {
+    expect(() => normalizeShaderParameterDefinition(definition)).toThrow();
+  });
   it("accepts GLSL identifiers except reserved shader names", () => {
     expect(isValidShaderParameterKey("u_speed")).toBe(true);
     expect(isValidShaderParameterKey("_detail2")).toBe(true);

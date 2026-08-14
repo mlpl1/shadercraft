@@ -116,6 +116,28 @@ describe("wrapMainImageBody", () => {
     expect(lines[lineOffset]).toBe("fragColor = vec4(u_gain);");
   });
 
+  it("omits malformed custom uniform definitions", () => {
+    const malformed: unknown[] = [
+      { ...GAIN_PARAMETER, key: "u_bad_min", min: Number.NaN },
+      { ...GAIN_PARAMETER, key: "u_bad_max", max: Number.POSITIVE_INFINITY },
+      { ...GAIN_PARAMETER, key: "u_bad_step", step: Number.NEGATIVE_INFINITY },
+      { ...GAIN_PARAMETER, key: "u_bad_default", defaultValue: Number.NaN },
+      { ...GAIN_PARAMETER, key: "u_bad_value", value: Number.POSITIVE_INFINITY },
+      { ...GAIN_PARAMETER, key: "u_bad_range", max: 0 },
+      { ...GAIN_PARAMETER, key: "u_zero_step", step: 0 },
+      { ...GAIN_PARAMETER, key: "u_blank_label", label: " " },
+    ];
+
+    const { source, lineOffset } = wrapMainImageBody(
+      "fragColor = vec4(u_gain);",
+      undefined,
+      [...malformed, GAIN_PARAMETER] as never,
+    );
+
+    expect(source.match(/uniform float u_gain;/g)).toHaveLength(1);
+    expect(source).not.toMatch(/uniform float u_bad_|uniform float u_zero_step|uniform float u_blank_label/);
+    expect(lineOffset).toBe(SHADER_BODY_LINE_OFFSET + 1);
+  });
   it("does not emit duplicate or invalid custom uniform declarations", () => {
     const { source, lineOffset } = wrapMainImageBody("fragColor = vec4(u_gain);", undefined, [
       GAIN_PARAMETER,

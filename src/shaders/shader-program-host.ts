@@ -39,10 +39,10 @@ type ActiveProgram = {
 };
 
 function parameterDefinitionSignature(
-  parameters: readonly ShaderParameterDefinition[] | undefined,
+  parameters: readonly ShaderParameterDefinition[],
 ): string {
   return JSON.stringify(
-    (parameters ?? []).map(({ key, label, min, max, step, defaultValue }) => [
+    parameters.map(({ key, label, min, max, step, defaultValue }) => [
       key,
       label,
       min,
@@ -113,8 +113,8 @@ export class ShaderProgramHost {
 
     // Helpers and parameter definitions are part of the compiled program. Parameter values are
     // excluded from the signature so slider changes reuse the active program.
-    const definitionSignature = parameterDefinitionSignature(parameters);
     const declaredParameters = getDeclaredShaderParameters(parameters);
+    const definitionSignature = parameterDefinitionSignature(declaredParameters);
     const parameterValues = parameterValuesFromDefinitions(declaredParameters);
     if (
       body === this.lastCompiledBody &&
