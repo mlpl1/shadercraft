@@ -1,7 +1,18 @@
 import { ShaderProgramHost } from "../shader-program-host";
 import { createFakeGl, type FakeGl } from "../testing/fake-gl";
 
+import type { ShaderParameterDefinition } from "../../data/sketches/sketch-metadata";
+
 const BODY = "fragColor = vec4(1.0);";
+const GAIN_PARAMETER: ShaderParameterDefinition = {
+  key: "u_gain",
+  label: "Gain",
+  min: 0,
+  max: 2,
+  step: 0.1,
+  defaultValue: 1,
+  value: 1.2,
+};
 
 // The host only uses the subset of the GL surface the fake implements; the cast keeps the production
 // signature honest without importing an expo-gl type Jest cannot construct.
@@ -134,6 +145,53 @@ describe("ShaderProgramHost", () => {
     expect(gl.drawCount()).toBe(1);
   });
 
+  it("uploads the current custom float value without linking a new program", () => {
+    const gl = createFakeGl();
+    const subject = host(gl);
+    subject.setBody(BODY, undefined, [GAIN_PARAMETER]);
+    const afterCompile = gl.createdCount();
+
+    subject.setBody(BODY, undefined, [{ ...GAIN_PARAMETER, value: 1.4 }]);
+    expect(gl.createdCount()).toBe(afterCompile);
+
+    subject.setParameterValues({ u_gain: 1.8 });
+    subject.render(2.5, 400, 300);
+
+    expect(gl.createdCount()).toBe(afterCompile);
+    expect(gl.uniformCalls).toEqual([
+      { name: "iResolution", values: [400, 300, 1] },
+      { name: "iTime", values: [2.5] },
+      { name: "u_gain", values: [1.8] },
+    ]);
+  });
+
+  it("links a new program when a custom parameter definition changes", () => {
+    const gl = createFakeGl();
+    const subject = host(gl);
+    subject.setBody(BODY, undefined, [GAIN_PARAMETER]);
+    const afterFirstCompile = gl.createdCount();
+
+    subject.setBody(BODY, undefined, [{ ...GAIN_PARAMETER, max: 3 }]);
+
+    expect(gl.createdCount()).toBeGreaterThan(afterFirstCompile);
+  });
+
+  it("skips non-finite custom parameter values", () => {
+    const gl = createFakeGl();
+    const subject = host(gl);
+    subject.setBody(BODY, undefined, [
+      GAIN_PARAMETER,
+      { ...GAIN_PARAMETER, key: "u_bias", label: "Bias" },
+    ]);
+    subject.setParameterValues({ u_gain: Number.NaN, u_bias: Number.POSITIVE_INFINITY });
+
+    subject.render(2.5, 400, 300);
+
+    expect(gl.uniformCalls).toEqual([
+      { name: "iResolution", values: [400, 300, 1] },
+      { name: "iTime", values: [2.5] },
+    ]);
+  });
   it("does not draw when nothing has compiled", () => {
     const gl = createFakeGl();
 

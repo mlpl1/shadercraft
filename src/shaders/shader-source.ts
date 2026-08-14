@@ -1,3 +1,8 @@
+import {
+  isValidShaderParameterKey,
+  type ShaderParameterDefinition,
+} from "../data/sketches/sketch-metadata";
+
 /**
  * The lines the app prepends to a learner's `mainImage` body. Their count is the offset every
  * reported error line is corrected by, so adding a line here shifts every error message: keep
@@ -70,6 +75,25 @@ export type CompileError = {
 };
 
 /**
+ * Filters the metadata boundary a second time before it reaches GLSL. Persisted sketches are
+ * validated on load, but this wrapper is also called by audit and test tooling, so malformed or
+ * duplicate declarations must not make the whole program invalid.
+ */
+export function getDeclaredShaderParameters(
+  parameters: readonly ShaderParameterDefinition[] | undefined,
+): ShaderParameterDefinition[] {
+  const keys = new Set<string>();
+  const declared: ShaderParameterDefinition[] = [];
+
+  for (const parameter of parameters ?? []) {
+    if (!isValidShaderParameterKey(parameter.key) || keys.has(parameter.key)) continue;
+    keys.add(parameter.key);
+    declared.push(parameter);
+  }
+
+  return declared;
+}
+/**
  * Wraps `body` into a complete shader, optionally declaring `helpers` above `mainImage`.
  *
  * `helpers` is trimmed before its lines are counted, so a stray leading or trailing newline in
@@ -83,10 +107,13 @@ export type CompileError = {
 export function wrapMainImageBody(
   body: string,
   helpers?: string,
+  parameters?: readonly ShaderParameterDefinition[],
 ): { source: string; lineOffset: number } {
   const trimmedHelpers = helpers?.trim() ?? "";
+  const declaredParameters = getDeclaredShaderParameters(parameters);
   const aboveBody = [
     ...HEADER_LINES,
+    ...declaredParameters.map((parameter) => `uniform float ${parameter.key};`),
     ...(trimmedHelpers.length > 0 ? trimmedHelpers.split("\n") : []),
     MAIN_IMAGE_OPEN,
   ];

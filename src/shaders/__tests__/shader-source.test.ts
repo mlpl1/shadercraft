@@ -4,6 +4,17 @@ import {
   wrapMainImageBody,
 } from "../shader-source";
 
+import type { ShaderParameterDefinition } from "../../data/sketches/sketch-metadata";
+
+const GAIN_PARAMETER: ShaderParameterDefinition = {
+  key: "u_gain",
+  label: "Gain",
+  min: 0,
+  max: 2,
+  step: 0.1,
+  defaultValue: 1,
+  value: 1.2,
+};
 describe("wrapMainImageBody", () => {
   it("reports an offset matching the prologue it emitted", () => {
     const { source, lineOffset } = wrapMainImageBody("  fragColor = vec4(1.0);");
@@ -85,6 +96,38 @@ describe("wrapMainImageBody", () => {
 
     expect(source).not.toContain("#version");
     expect(source).not.toMatch(/^\s*out\s+vec4/m);
+  });
+
+  it("declares custom float uniforms after the built-ins and offsets the body by each declaration", () => {
+    const { source, lineOffset } = wrapMainImageBody("fragColor = vec4(u_gain);", undefined, [
+      GAIN_PARAMETER,
+    ]);
+    const lines = source.split("\n");
+
+    expect(lines.slice(0, lineOffset)).toEqual([
+      "#extension GL_OES_standard_derivatives : enable",
+      "precision highp float;",
+      "uniform vec3 iResolution;",
+      "uniform float iTime;",
+      "uniform float u_gain;",
+      "void mainImage(out vec4 fragColor, in vec2 fragCoord) {",
+    ]);
+    expect(lineOffset).toBe(SHADER_BODY_LINE_OFFSET + 1);
+    expect(lines[lineOffset]).toBe("fragColor = vec4(u_gain);");
+  });
+
+  it("does not emit duplicate or invalid custom uniform declarations", () => {
+    const { source, lineOffset } = wrapMainImageBody("fragColor = vec4(u_gain);", undefined, [
+      GAIN_PARAMETER,
+      { ...GAIN_PARAMETER, label: "Duplicate" },
+      { ...GAIN_PARAMETER, key: "iTime" },
+      { ...GAIN_PARAMETER, key: "not-valid" },
+    ]);
+
+    expect(source.match(/uniform float u_gain;/g)).toHaveLength(1);
+    expect(source.match(/uniform float iTime;/g)).toHaveLength(1);
+    expect(source).not.toContain("uniform float not-valid;");
+    expect(lineOffset).toBe(SHADER_BODY_LINE_OFFSET + 1);
   });
 });
 

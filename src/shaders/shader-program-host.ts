@@ -1,6 +1,12 @@
 import type { ExpoWebGLRenderingContext } from "expo-gl";
 
-import { type CompileError, parseCompileLog, wrapMainImageBody } from "./shader-source";
+import type { ShaderParameterDefinition } from "../data/sketches/sketch-metadata";
+import {
+  type CompileError,
+  getDeclaredShaderParameters,
+  parseCompileLog,
+  wrapMainImageBody,
+} from "./shader-source";
 
 /**
  * A full-viewport triangle pair. `fragCoord` comes from `gl_FragCoord.xy`, so the vertex stage needs
@@ -12,6 +18,8 @@ void main() {
 }`;
 
 const QUAD_VERTICES = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]);
+
+export type ShaderParameterValues = Readonly<Record<string, number>>;
 
 export type HostCompileResult =
   | { ok: true }
@@ -27,7 +35,31 @@ type ActiveProgram = {
   program: WebGLProgram;
   resolution: WebGLUniformLocation | null;
   time: WebGLUniformLocation | null;
+  parameters: Map<string, WebGLUniformLocation | null>;
 };
+
+function parameterDefinitionSignature(
+  parameters: readonly ShaderParameterDefinition[] | undefined,
+): string {
+  return JSON.stringify(
+    (parameters ?? []).map(({ key, label, min, max, step, defaultValue }) => [
+      key,
+      label,
+      min,
+      max,
+      step,
+      defaultValue,
+    ]),
+  );
+}
+
+function parameterValuesFromDefinitions(
+  parameters: readonly ShaderParameterDefinition[],
+): ShaderParameterValues {
+  const values: Record<string, number> = {};
+  for (const parameter of parameters) values[parameter.key] = parameter.value;
+  return values;
+}
 
 /**
  * Owns one GL program's whole life: compile a learner's `mainImage` body, swap it in only if it
@@ -43,6 +75,8 @@ export class ShaderProgramHost {
   private buffer: WebGLBuffer | null = null;
   private lastCompiledBody: string | null = null;
   private lastCompiledHelpers: string | undefined = undefined;
+  private lastCompiledParameterSignature: string | null = null;
+  private parameterValues: ShaderParameterValues = {};
 
   constructor(gl: ExpoWebGLRenderingContext) {
     this.gl = gl;
@@ -63,7 +97,11 @@ export class ShaderProgramHost {
    * Returns the outcome rather than throwing: half-typed source is the normal state of an editor, not
    * an exceptional one.
    */
-  setBody(body: string, helpers?: string): HostCompileResult {
+  setBody(
+    body: string,
+    helpers?: string,
+    parameters?: readonly ShaderParameterDefinition[],
+  ): HostCompileResult {
     if (body.trim().length === 0) {
       return {
         ok: false,
@@ -73,11 +111,21 @@ export class ShaderProgramHost {
       };
     }
 
-    // Helpers are part of the compiled program, so a stage whose body is unchanged but whose helper
-    // block differs must still recompile.
-    if (body === this.lastCompiledBody && helpers === this.lastCompiledHelpers) return { ok: true };
+    // Helpers and parameter definitions are part of the compiled program. Parameter values are
+    // excluded from the signature so slider changes reuse the active program.
+    const definitionSignature = parameterDefinitionSignature(parameters);
+    const declaredParameters = getDeclaredShaderParameters(parameters);
+    const parameterValues = parameterValuesFromDefinitions(declaredParameters);
+    if (
+      body === this.lastCompiledBody &&
+      helpers === this.lastCompiledHelpers &&
+      definitionSignature === this.lastCompiledParameterSignature
+    ) {
+      this.parameterValues = parameterValues;
+      return { ok: true };
+    }
 
-    const { source, lineOffset } = wrapMainImageBody(body, helpers);
+    const { source, lineOffset } = wrapMainImageBody(body, helpers, declaredParameters);
     const gl = this.gl;
 
     const vertexShader = this.compileShader(gl.VERTEX_SHADER, VERTEX_SHADER_SOURCE);
@@ -117,12 +165,24 @@ export class ShaderProgramHost {
       program,
       resolution: gl.getUniformLocation(program, "iResolution"),
       time: gl.getUniformLocation(program, "iTime"),
+      parameters: new Map(
+        declaredParameters.map((parameter) => [
+          parameter.key,
+          gl.getUniformLocation(program, parameter.key),
+        ]),
+      ),
     };
     this.lastCompiledBody = body;
     this.lastCompiledHelpers = helpers;
+    this.lastCompiledParameterSignature = definitionSignature;
+    this.parameterValues = parameterValues;
     this.ensureBuffer(program);
 
     return { ok: true };
+  }
+
+  setParameterValues(values: ShaderParameterValues): void {
+    this.parameterValues = { ...values };
   }
 
   render(timeSeconds: number, width: number, height: number): void {
@@ -134,6 +194,10 @@ export class ShaderProgramHost {
     gl.viewport(0, 0, width, height);
     gl.uniform3f(active.resolution, width, height, 1);
     gl.uniform1f(active.time, timeSeconds);
+    for (const [key, location] of active.parameters) {
+      const value = this.parameterValues[key];
+      if (Number.isFinite(value)) gl.uniform1f(location, value);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
@@ -145,6 +209,8 @@ export class ShaderProgramHost {
     this.buffer = null;
     this.lastCompiledBody = null;
     this.lastCompiledHelpers = undefined;
+    this.lastCompiledParameterSignature = null;
+    this.parameterValues = {};
   }
 
   private compileShader(
