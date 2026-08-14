@@ -161,20 +161,30 @@ export function ShaderParametersPanel({
     ]);
   };
 
+  const doneManaging = () => {
+    closeForm();
+    setManaging(false);
+  };
+
   if (managing) {
     const editing = editingIndex !== null;
     return (
       <View style={styles.panel}>
         <View style={styles.header}>
           <Text style={styles.heading}>Manage parameters</Text>
-          <Pressable
-            accessibilityLabel="Close shader parameters"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={onClose}
-          >
-            <Text style={styles.close}>Close</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable accessibilityLabel="Done managing parameters" accessibilityRole="button" onPress={doneManaging}>
+              <Text style={styles.action}>Done</Text>
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Close shader parameters"
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={onClose}
+            >
+              <Text style={styles.close}>Close</Text>
+            </Pressable>
+          </View>
         </View>
 
         {formOpen ? (

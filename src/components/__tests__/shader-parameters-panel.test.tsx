@@ -67,6 +67,17 @@ describe("ShaderParametersPanel", () => {
     ]);
   });
 
+  it("returns from management to the compact sliders without closing the panel", async () => {
+    const current = props();
+    await render(<ShaderParametersPanel {...current} />);
+
+    await fireEvent.press(screen.getByLabelText("Manage shader parameters"));
+    await fireEvent.press(screen.getByRole("button", { name: "Done managing parameters" }));
+
+    expect(screen.getByTestId("parameter-slider-u_gain")).toBeTruthy();
+    expect(current.onClose).not.toHaveBeenCalled();
+  });
+
   it("opens the parameter form from manage mode", async () => {
     await render(<ShaderParametersPanel {...props()} />);
 
