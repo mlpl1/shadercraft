@@ -23,12 +23,12 @@ describe("BottomNavigation", () => {
     mockReplace.mockClear();
   });
 
-  it("navigates to the editor route", async () => {
+  it("navigates to the shader library", async () => {
     await render(<BottomNavigation activeItem="home" />);
 
     await fireEvent.press(screen.getByText("Editor"));
 
-    expect(mockReplace).toHaveBeenCalledWith("/editor");
+    expect(mockReplace).toHaveBeenCalledWith("/library");
   });
 
   it("navigates to home", async () => {

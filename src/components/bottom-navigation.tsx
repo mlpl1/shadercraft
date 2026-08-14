@@ -70,7 +70,7 @@ export function BottomNavigation({ activeItem }: BottomNavigationProps) {
       return;
     }
 
-    router.replace("/editor");
+    router.replace("/library");
   };
 
   return (

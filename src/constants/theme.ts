@@ -10,6 +10,11 @@ export const Colors = {
   cyan: "#50D5FF",
   violet: "#9B7BFF",
   coral: "#FF6B6B",
+  acidGreen: "#CCF381",
+  electricBlue: "#648CF3",
+  magenta: "#D9689E",
+  surfaceLowest: "#0E0E10",
+  surfaceHigh: "#2A2A2C",
 } as const;
 
 export const Spacing = {
