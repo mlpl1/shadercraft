@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppIcon } from "./app-icon";
 import { Colors, Radius, Spacing } from "../constants/theme";
@@ -61,6 +62,7 @@ export function ShaderFileDrawer({
   onDelete,
   onClose,
 }: ShaderFileDrawerProps) {
+  const insets = useSafeAreaInsets();
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const progress = useRef(new Animated.Value(0)).current;
@@ -119,7 +121,10 @@ export function ShaderFileDrawer({
             },
           ]}
         >
-          <View style={styles.header}>
+          <View
+            style={[styles.header, { paddingTop: Spacing.lg + insets.top }]}
+            testID="shader-file-drawer-header"
+          >
             <Text style={styles.heading}>Shadercraft Files</Text>
             <Pressable
               accessibilityLabel="Close"
@@ -202,7 +207,10 @@ export function ShaderFileDrawer({
             ))}
           </ScrollView>
 
-          <View style={styles.footer}>
+          <View
+            style={[styles.footer, { paddingBottom: Spacing.lg + insets.bottom }]}
+            testID="shader-file-drawer-footer"
+          >
             <Pressable
               accessibilityRole="button"
               onPress={onCreate}

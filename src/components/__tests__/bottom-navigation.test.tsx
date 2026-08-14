@@ -5,11 +5,19 @@ jest.mock("react-native-safe-area-context", () =>
   require("react-native-safe-area-context/jest/mock").default,
 );
 
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 
 import { BottomNavigation } from "../bottom-navigation";
 
 const mockReplace = jest.fn();
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 
 jest.mock("expo-router", () => ({
   // Behaves like an ordinary mount effect rather than a no-op, so the focus-driven reloads these
@@ -45,6 +53,26 @@ describe("BottomNavigation", () => {
     await fireEvent.press(screen.getByText("Course"));
 
     expect(mockReplace).toHaveBeenCalledWith("/course");
+  });
+
+  it("awaits the pre-navigation hook before changing tabs", async () => {
+    const save = deferred();
+    const onBeforeNavigate = jest.fn(() => save.promise.then(() => true));
+    await render(
+      <BottomNavigation activeItem="editor" onBeforeNavigate={onBeforeNavigate} />,
+    );
+
+    await fireEvent.press(screen.getByText("Home"));
+
+    expect(onBeforeNavigate).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+
+    await act(async () => {
+      save.resolve();
+      await save.promise;
+    });
+
+    expect(mockReplace).toHaveBeenCalledWith("/");
   });
 
   it("does not navigate when the active tab is pressed", async () => {

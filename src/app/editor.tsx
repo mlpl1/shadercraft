@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import type { SymbolViewProps } from "expo-symbols";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -29,16 +29,19 @@ const METADATA_AUTOSAVE_DEBOUNCE_MS = 500;
 const PREVIEW_HEIGHT = 220;
 
 type PendingSource = {
+  revision: number;
   sketchId: string;
   source: string;
 };
 
 type PendingMetadata = {
-  sketchId: string;
   metadata: SketchMetadata;
+  revision: number;
+  sketchId: string;
 };
 
 export default function EditorScreen() {
+  const navigation = useNavigation();
   const router = useRouter();
   const { sketchId: routeSketchIdValue } = useLocalSearchParams<{
     sketchId?: string | string[];
@@ -68,6 +71,14 @@ export default function EditorScreen() {
   const metadataSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSourceRef = useRef<PendingSource | null>(null);
   const pendingMetadataRef = useRef<PendingMetadata | null>(null);
+  const sourceRevisionRef = useRef(0);
+  const metadataRevisionRef = useRef(0);
+  const sourceSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const metadataSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const sourceSaveWorkRef = useRef(0);
+  const metadataSaveWorkRef = useRef(0);
+  const replayingRemovalRef = useRef(false);
+  const removalFlushRef = useRef<Promise<void> | null>(null);
   const sketchRef = useRef<Sketch | null>(null);
   const mountedRef = useRef(true);
 
@@ -92,27 +103,49 @@ export default function EditorScreen() {
       sourceSaveTimer.current = null;
     }
 
-    const pending = pendingSourceRef.current;
-    if (!pending || !sketchRepository || !profileId) return true;
-    pendingSourceRef.current = null;
+    while (true) {
+      const pending = pendingSourceRef.current;
+      if (pending) {
+        if (!sketchRepository || !profileId) return false;
+        pendingSourceRef.current = null;
+        sourceSaveWorkRef.current += 1;
 
-    try {
-      await sketchRepository.updateSource(profileId, pending.sketchId, pending.source);
-      if (mountedRef.current) setSourceSaveError(null);
-    } catch {
-      if (pendingSourceRef.current === null) pendingSourceRef.current = pending;
-      if (mountedRef.current) setSourceSaveError("Could not save. Your code is still here.");
-      return false;
-    }
+        const queuedWrite = sourceSaveQueueRef.current.then(async () => {
+          try {
+            await sketchRepository.updateSource(profileId, pending.sketchId, pending.source);
+            if (mountedRef.current) setSourceSaveError(null);
+          } catch {
+            if (
+              pending.revision === sourceRevisionRef.current &&
+              pendingSourceRef.current === null
+            ) {
+              pendingSourceRef.current = pending;
+            }
+            if (mountedRef.current) setSourceSaveError("Could not save. Your code is still here.");
+            return false;
+          } finally {
+            sourceSaveWorkRef.current -= 1;
+          }
 
-    if (mountedRef.current) {
-      try {
-        await refreshSketches();
-      } catch {
-        // The write succeeded. A later drawer action will try the ordering read again.
+          if (mountedRef.current) {
+            try {
+              await refreshSketches();
+            } catch {
+              // The write succeeded. A later drawer action will try the ordering read again.
+            }
+          }
+          return true;
+        });
+
+        sourceSaveQueueRef.current = queuedWrite;
+      }
+
+      const queuedWrite = sourceSaveQueueRef.current;
+      if (!(await queuedWrite)) return false;
+      if (pendingSourceRef.current === null && sourceSaveQueueRef.current === queuedWrite) {
+        return true;
       }
     }
-    return true;
   }, [profileId, refreshSketches, sketchRepository]);
 
   const flushMetadataSave = useCallback(async (): Promise<boolean> => {
@@ -121,36 +154,77 @@ export default function EditorScreen() {
       metadataSaveTimer.current = null;
     }
 
-    const pending = pendingMetadataRef.current;
-    if (!pending || !sketchRepository || !profileId) return true;
-    pendingMetadataRef.current = null;
+    while (true) {
+      const pending = pendingMetadataRef.current;
+      if (pending) {
+        if (!sketchRepository || !profileId) return false;
+        pendingMetadataRef.current = null;
+        metadataSaveWorkRef.current += 1;
 
-    try {
-      await sketchRepository.updateMetadata(profileId, pending.sketchId, pending.metadata);
-      if (mountedRef.current) setMetadataSaveError(null);
-    } catch {
-      if (pendingMetadataRef.current === null) pendingMetadataRef.current = pending;
-      if (mountedRef.current) {
-        setMetadataSaveError("Could not save parameters. Your values are still here.");
-      }
-      return false;
-    }
+        const queuedWrite = metadataSaveQueueRef.current.then(async () => {
+          try {
+            await sketchRepository.updateMetadata(profileId, pending.sketchId, pending.metadata);
+            if (mountedRef.current) setMetadataSaveError(null);
+          } catch {
+            if (
+              pending.revision === metadataRevisionRef.current &&
+              pendingMetadataRef.current === null
+            ) {
+              pendingMetadataRef.current = pending;
+            }
+            if (mountedRef.current) {
+              setMetadataSaveError("Could not save parameters. Your values are still here.");
+            }
+            return false;
+          } finally {
+            metadataSaveWorkRef.current -= 1;
+          }
 
-    if (mountedRef.current) {
-      try {
-        await refreshSketches();
-      } catch {
-        // The values are saved even if this ordering refresh could not complete.
+          if (mountedRef.current) {
+            try {
+              await refreshSketches();
+            } catch {
+              // The values are saved even if this ordering refresh could not complete.
+            }
+          }
+          return true;
+        });
+
+        metadataSaveQueueRef.current = queuedWrite;
+      }
+
+      const queuedWrite = metadataSaveQueueRef.current;
+      if (!(await queuedWrite)) return false;
+      if (pendingMetadataRef.current === null && metadataSaveQueueRef.current === queuedWrite) {
+        return true;
       }
     }
-    return true;
   }, [profileId, refreshSketches, sketchRepository]);
 
   const flushAllSaves = useCallback(async (): Promise<boolean> => {
-    const sourceSaved = await flushSourceSave();
-    const metadataSaved = await flushMetadataSave();
-    return sourceSaved && metadataSaved;
+    while (true) {
+      const sourceSaved = await flushSourceSave();
+      const metadataSaved = await flushMetadataSave();
+      if (!sourceSaved || !metadataSaved) return false;
+      if (
+        pendingSourceRef.current === null &&
+        pendingMetadataRef.current === null &&
+        sourceSaveWorkRef.current === 0 &&
+        metadataSaveWorkRef.current === 0
+      ) {
+        return true;
+      }
+    }
   }, [flushMetadataSave, flushSourceSave]);
+
+  const hasOutstandingSaveWork = useCallback(
+    () =>
+      pendingSourceRef.current !== null ||
+      pendingMetadataRef.current !== null ||
+      sourceSaveWorkRef.current > 0 ||
+      metadataSaveWorkRef.current > 0,
+    [],
+  );
 
   const activateSketch = useCallback((next: Sketch) => {
     if (compileTimer.current) {
@@ -173,9 +247,6 @@ export default function EditorScreen() {
     if (!sketchRepository || !profileId) return;
 
     let cancelled = false;
-    setSketch(null);
-    sketchRef.current = null;
-    setSketches([]);
 
     void (async () => {
       if (!(await flushAllSaves())) return;
@@ -193,6 +264,7 @@ export default function EditorScreen() {
         : existing;
 
       if (cancelled) return;
+      if (!(await flushAllSaves()) || cancelled) return;
       setSketches(all);
       activateSketch(opened);
     })();
@@ -205,41 +277,9 @@ export default function EditorScreen() {
   useEffect(
     () => () => {
       if (compileTimer.current) clearTimeout(compileTimer.current);
-      if (sourceSaveTimer.current) clearTimeout(sourceSaveTimer.current);
-      if (metadataSaveTimer.current) clearTimeout(metadataSaveTimer.current);
-
-      const pendingSource = pendingSourceRef.current;
-      const pendingMetadata = pendingMetadataRef.current;
-      pendingSourceRef.current = null;
-      pendingMetadataRef.current = null;
-
-      if (!sketchRepository || !profileId) return;
-      void (async () => {
-        if (pendingSource) {
-          try {
-            await sketchRepository.updateSource(
-              profileId,
-              pendingSource.sketchId,
-              pendingSource.source,
-            );
-          } catch {
-            // The route is gone, so there is nowhere to display a retry warning.
-          }
-        }
-        if (pendingMetadata) {
-          try {
-            await sketchRepository.updateMetadata(
-              profileId,
-              pendingMetadata.sketchId,
-              pendingMetadata.metadata,
-            );
-          } catch {
-            // The in-memory values existed until unmount; persistence failure is intentionally safe.
-          }
-        }
-      })();
+      void flushAllSaves();
     },
-    [profileId, sketchRepository],
+    [flushAllSaves],
   );
 
   useEffect(() => {
@@ -260,12 +300,42 @@ export default function EditorScreen() {
     return () => subscription.remove();
   }, [drawerOpen, parametersOpen]);
 
+  useEffect(
+    () =>
+      navigation.addListener("beforeRemove", (event) => {
+        if (replayingRemovalRef.current) {
+          replayingRemovalRef.current = false;
+          return;
+        }
+        if (!hasOutstandingSaveWork()) return;
+
+        event.preventDefault();
+        if (removalFlushRef.current) return;
+
+        const action = event.data.action;
+        removalFlushRef.current = (async () => {
+          if (await flushAllSaves()) {
+            replayingRemovalRef.current = true;
+            navigation.dispatch(action);
+          }
+        })().finally(() => {
+          removalFlushRef.current = null;
+        });
+      }),
+    [flushAllSaves, hasOutstandingSaveWork, navigation],
+  );
+
   const handleSourceChange = useCallback(
     (next: string) => {
       const active = sketchRef.current;
       if (!active) return;
 
-      pendingSourceRef.current = { sketchId: active.id, source: next };
+      sourceRevisionRef.current += 1;
+      pendingSourceRef.current = {
+        revision: sourceRevisionRef.current,
+        sketchId: active.id,
+        source: next,
+      };
 
       if (compileTimer.current) clearTimeout(compileTimer.current);
       compileTimer.current = setTimeout(() => {
@@ -294,7 +364,12 @@ export default function EditorScreen() {
       setSketches((current) =>
         current.map((item) => (item.id === next.id ? { ...item, metadata } : item)),
       );
-      pendingMetadataRef.current = { sketchId: next.id, metadata };
+      metadataRevisionRef.current += 1;
+      pendingMetadataRef.current = {
+        metadata,
+        revision: metadataRevisionRef.current,
+        sketchId: next.id,
+      };
 
       if (metadataSaveTimer.current) clearTimeout(metadataSaveTimer.current);
       metadataSaveTimer.current = setTimeout(() => {
@@ -390,7 +465,7 @@ export default function EditorScreen() {
         <View style={styles.loading}>
           <Text style={styles.loadingText}>Opening editor…</Text>
         </View>
-        <BottomNavigation activeItem="editor" />
+        <BottomNavigation activeItem="editor" onBeforeNavigate={flushAllSaves} />
       </SafeAreaView>
     );
   }
@@ -499,7 +574,7 @@ export default function EditorScreen() {
           </View>
         </View>
 
-        <BottomNavigation activeItem="editor" />
+        <BottomNavigation activeItem="editor" onBeforeNavigate={flushAllSaves} />
 
         <ShaderFileDrawer
           activeSketchId={sketch.id}

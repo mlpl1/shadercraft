@@ -1,7 +1,8 @@
-import { Alert } from "react-native";
+import { Alert, StyleSheet } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 import { ShaderFileDrawer } from "../shader-file-drawer";
+import { Spacing } from "../../constants/theme";
 import type { Sketch } from "../../data/sketches/sketch-repository";
 
 const sketch = (
@@ -29,6 +30,13 @@ const props = () => ({
   onDelete: jest.fn(),
   onClose: jest.fn(),
 });
+
+const mockSafeAreaInsets = { bottom: 19, left: 0, right: 0, top: 23 };
+
+jest.mock("react-native-safe-area-context", () => ({
+  ...require("react-native-safe-area-context/jest/mock").default,
+  useSafeAreaInsets: () => mockSafeAreaInsets,
+}));
 
 describe("ShaderFileDrawer", () => {
   afterEach(() => {
@@ -146,5 +154,19 @@ describe("ShaderFileDrawer", () => {
     await fireEvent(screen.getByTestId("shader-file-drawer-modal"), "requestClose");
 
     expect(current.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps drawer content inside nonzero safe-area insets while the scrim stays edge-to-edge", async () => {
+    await render(<ShaderFileDrawer {...props()} />);
+
+    expect(StyleSheet.flatten(screen.getByTestId("shader-file-drawer-header").props.style)).toEqual(
+      expect.objectContaining({ paddingTop: Spacing.lg + mockSafeAreaInsets.top }),
+    );
+    expect(StyleSheet.flatten(screen.getByTestId("shader-file-drawer-footer").props.style)).toEqual(
+      expect.objectContaining({ paddingBottom: Spacing.lg + mockSafeAreaInsets.bottom }),
+    );
+    expect(StyleSheet.flatten(screen.getByTestId("shader-file-drawer-scrim").props.style)).toEqual(
+      expect.objectContaining({ bottom: 0, left: 0, right: 0, top: 0 }),
+    );
   });
 });

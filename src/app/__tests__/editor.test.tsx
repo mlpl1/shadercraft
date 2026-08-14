@@ -44,8 +44,25 @@ const mockRouter = {
   replace: jest.fn(),
 };
 
+type MockBeforeRemoveEvent = {
+  data: { action: { type: string } };
+  preventDefault: jest.Mock;
+};
+
+let mockBeforeRemoveHandler: ((event: MockBeforeRemoveEvent) => void) | null = null;
+const mockNavigation = {
+  addListener: jest.fn(
+    (_event: string, handler: (event: MockBeforeRemoveEvent) => void) => {
+      mockBeforeRemoveHandler = handler;
+      return jest.fn();
+    },
+  ),
+  dispatch: jest.fn(),
+};
+
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => mockRouteParams.current,
+  useNavigation: () => mockNavigation,
   useRouter: () => mockRouter,
 }));
 
@@ -59,6 +76,16 @@ import {
 } from "../../data/sketches/sketch-metadata";
 import type { Sketch, SketchRepository } from "../../data/sketches/sketch-repository";
 import { STARTER_SKETCH_SOURCE } from "../../data/sketches/starter-sketch";
+
+function deferredWrite() {
+  let resolve!: () => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<void>((done, fail) => {
+    resolve = () => done();
+    reject = fail;
+  });
+  return { promise, reject, resolve };
+}
 
 const GAIN: ShaderParameterDefinition = {
   key: "u_gain",
@@ -168,6 +195,7 @@ describe("EditorScreen", () => {
     configureRepository();
     jest.useFakeTimers();
     hardwareBackHandler = null;
+    mockBeforeRemoveHandler = null;
     jest.spyOn(Alert, "alert").mockImplementation(jest.fn());
     jest.spyOn(BackHandler, "addEventListener").mockImplementation((_event, handler) => {
       hardwareBackHandler = handler;
@@ -277,6 +305,151 @@ describe("EditorScreen", () => {
     );
   });
 
+  it("waits for in-flight source and metadata writes before selecting another sketch", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(0.1);", {
+        metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
+      }),
+      makeSketch("two", "Two", "fragColor = vec4(0.2);"),
+    ];
+    const sourceWrite = deferredWrite();
+    const metadataWrite = deferredWrite();
+    repository.updateSource.mockImplementationOnce(() => sourceWrite.promise);
+    repository.updateMetadata.mockImplementationOnce(() => metadataWrite.promise);
+    await openEditor();
+
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.7);");
+    await act(async () => {
+      jest.advanceTimersByTime(800);
+    });
+    await openParameters();
+    await fireEvent(screen.getByTestId("parameter-slider-u_gain"), "valueChange", 1.8);
+    await fireEvent.press(screen.getByLabelText("Open shader files"));
+    await fireEvent.press(screen.getByTestId("sketch-row-two"));
+
+    expect(repository.updateSource).toHaveBeenCalledTimes(1);
+    expect(repository.updateMetadata).not.toHaveBeenCalled();
+    expect(repository.get).not.toHaveBeenCalledWith("profile-a", "two");
+
+    await act(async () => {
+      sourceWrite.resolve();
+      await sourceWrite.promise;
+    });
+    await waitFor(() => expect(repository.updateMetadata).toHaveBeenCalledTimes(1));
+    expect(repository.get).not.toHaveBeenCalledWith("profile-a", "two");
+
+    await act(async () => {
+      metadataWrite.resolve();
+      await metadataWrite.promise;
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.2);"),
+    );
+    expect(repository.get).toHaveBeenCalledWith("profile-a", "two");
+  });
+
+  it("blocks selection when an in-flight source write fails and retries only the outgoing sketch", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(0.1);"),
+      makeSketch("two", "Two", "fragColor = vec4(0.2);"),
+    ];
+    const sourceWrite = deferredWrite();
+    repository.updateSource.mockImplementationOnce(() => sourceWrite.promise);
+    await openEditor();
+
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.7);");
+    await act(async () => {
+      jest.advanceTimersByTime(800);
+    });
+    await fireEvent.press(screen.getByLabelText("Open shader files"));
+    await fireEvent.press(screen.getByTestId("sketch-row-two"));
+
+    await act(async () => {
+      sourceWrite.reject(new Error("disk full"));
+      await sourceWrite.promise.catch(() => undefined);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText("Could not save. Your code is still here.")).toBeTruthy(),
+    );
+    expect(screen.getByTestId("sketch-row-one").props.accessibilityState).toEqual(
+      expect.objectContaining({ selected: true }),
+    );
+    expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.7);");
+    expect(repository.get).not.toHaveBeenCalledWith("profile-a", "two");
+
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.8);");
+    await fireEvent.press(screen.getByTestId("sketch-row-two"));
+    await waitFor(() =>
+      expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.2);"),
+    );
+
+    expect(repository.updateSource).toHaveBeenLastCalledWith(
+      "profile-a",
+      "one",
+      "fragColor = vec4(0.8);",
+    );
+    expect(repository.updateSource.mock.calls.every((call) => call[1] === "one")).toBe(true);
+  });
+
+  it("flushes edits made while a replacement route is loading before activation", async () => {
+    const current = makeSketch("one", "One", "fragColor = vec4(0.1);");
+    const requested = makeSketch("two", "Two", "fragColor = vec4(0.2);");
+    sketches = [current, requested];
+    let resolveRequested!: (sketch: Sketch | null) => void;
+    const requestedLoad = new Promise<Sketch | null>((resolve) => {
+      resolveRequested = resolve;
+    });
+    repository.get.mockImplementationOnce(() => requestedLoad);
+    const mounted = await render(<EditorScreen />);
+    await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
+
+    mockRouteParams.current = { sketchId: "two" };
+    await act(async () => {
+      mounted.rerender(<EditorScreen />);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(repository.get).toHaveBeenCalledWith("profile-a", "two"));
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.7);");
+
+    await act(async () => {
+      resolveRequested(requested);
+      await requestedLoad;
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.2);"),
+    );
+    expect(repository.updateSource).toHaveBeenCalledWith(
+      "profile-a",
+      "one",
+      "fragColor = vec4(0.7);",
+    );
+  });
+  it("keeps the current editor usable when a route change cannot flush the outgoing sketch", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(0.1);"),
+      makeSketch("two", "Two", "fragColor = vec4(0.2);"),
+    ];
+    repository.updateSource.mockRejectedValueOnce(new Error("disk full"));
+    const mounted = await render(<EditorScreen />);
+    await waitFor(() => expect(screen.getByTestId("glsl-input")).toBeTruthy());
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.7);");
+
+    mockRouteParams.current = { sketchId: "two" };
+    await act(async () => {
+      mounted.rerender(<EditorScreen />);
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText("Could not save. Your code is still here.")).toBeTruthy(),
+    );
+    expect(screen.queryByText(/Opening editor/)).toBeNull();
+    expect(screen.getByText("One")).toBeTruthy();
+    expect(screen.getByTestId("glsl-input").props.value).toBe("fragColor = vec4(0.7);");
+    expect(repository.get).not.toHaveBeenCalledWith("profile-a", "two");
+  });
   it("replaces the parameter panel with the file drawer instead of stacking native overlays", async () => {
     sketches = [makeSketch("one", "One", "fragColor = vec4(1.0);")];
     await openEditor();
@@ -309,6 +482,126 @@ describe("EditorScreen", () => {
     expect(removeBackHandler).toHaveBeenCalled();
   });
 
+  it("waits for source then metadata before bottom-tab navigation", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(u_gain);", {
+        metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
+      }),
+    ];
+    const sourceWrite = deferredWrite();
+    const laterSourceWrite = deferredWrite();
+    const metadataWrite = deferredWrite();
+    repository.updateSource
+      .mockImplementationOnce(() => sourceWrite.promise)
+      .mockImplementationOnce(() => laterSourceWrite.promise);
+    repository.updateMetadata.mockImplementationOnce(() => metadataWrite.promise);
+    await openEditor();
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(u_gain * 0.5);");
+    await openParameters();
+    await fireEvent(screen.getByTestId("parameter-slider-u_gain"), "valueChange", 1.9);
+
+    await fireEvent.press(screen.getByText("Home"));
+
+    expect(repository.updateSource).toHaveBeenCalledTimes(1);
+    expect(repository.updateMetadata).not.toHaveBeenCalled();
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(u_gain * 0.75);");
+    await act(async () => {
+      sourceWrite.resolve();
+      await sourceWrite.promise;
+    });
+    await waitFor(() => expect(repository.updateSource).toHaveBeenCalledTimes(2));
+    expect(repository.updateMetadata).not.toHaveBeenCalled();
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+
+    await act(async () => {
+      laterSourceWrite.resolve();
+      await laterSourceWrite.promise;
+    });
+    await waitFor(() => expect(repository.updateMetadata).toHaveBeenCalledTimes(1));
+    expect(repository.updateSource).toHaveBeenLastCalledWith(
+      "profile-a",
+      "one",
+      "fragColor = vec4(u_gain * 0.75);",
+    );
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+
+    await act(async () => {
+      metadataWrite.resolve();
+      await metadataWrite.promise;
+    });
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith("/"));
+  });
+
+  it("guards route back until source and metadata finish, then leaves later back events alone", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(u_gain);", {
+        metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
+      }),
+    ];
+    const sourceWrite = deferredWrite();
+    const metadataWrite = deferredWrite();
+    repository.updateSource.mockImplementationOnce(() => sourceWrite.promise);
+    repository.updateMetadata.mockImplementationOnce(() => metadataWrite.promise);
+    await openEditor();
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(u_gain * 0.5);");
+    await openParameters();
+    await fireEvent(screen.getByTestId("parameter-slider-u_gain"), "valueChange", 1.9);
+
+    const handler = mockBeforeRemoveHandler;
+    if (!handler) throw new Error("beforeRemove listener was not registered");
+    const action = { type: "GO_BACK" };
+    const event: MockBeforeRemoveEvent = { data: { action }, preventDefault: jest.fn() };
+    await act(async () => {
+      handler(event);
+    });
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(repository.updateSource).toHaveBeenCalledTimes(1);
+    expect(repository.updateMetadata).not.toHaveBeenCalled();
+    expect(mockNavigation.dispatch).not.toHaveBeenCalled();
+
+    await act(async () => {
+      sourceWrite.resolve();
+      await sourceWrite.promise;
+    });
+    await waitFor(() => expect(repository.updateMetadata).toHaveBeenCalledTimes(1));
+    expect(mockNavigation.dispatch).not.toHaveBeenCalled();
+
+    await act(async () => {
+      metadataWrite.resolve();
+      await metadataWrite.promise;
+    });
+    await waitFor(() => expect(mockNavigation.dispatch).toHaveBeenCalledWith(action));
+
+    const laterEvent: MockBeforeRemoveEvent = {
+      data: { action: { type: "GO_BACK" } },
+      preventDefault: jest.fn(),
+    };
+    await act(async () => {
+      handler(laterEvent);
+    });
+    expect(laterEvent.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("does not intercept route back when there is no save work", async () => {
+    sketches = [makeSketch("one", "One", "fragColor = vec4(1.0);")];
+    await openEditor();
+
+    const handler = mockBeforeRemoveHandler;
+    if (!handler) throw new Error("beforeRemove listener was not registered");
+    const event: MockBeforeRemoveEvent = {
+      data: { action: { type: "GO_BACK" } },
+      preventDefault: jest.fn(),
+    };
+    await act(async () => {
+      handler(event);
+    });
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(mockNavigation.dispatch).not.toHaveBeenCalled();
+  });
   it("opens the next recent sketch after deleting the active sketch", async () => {
     sketches = [
       makeSketch("one", "One", "fragColor = vec4(0.1);"),

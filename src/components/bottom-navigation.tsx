@@ -10,6 +10,7 @@ export type BottomTab = "home" | "course" | "tutorials" | "editor";
 
 type BottomNavigationProps = {
   activeItem: BottomTab;
+  onBeforeNavigate?: () => Promise<boolean | void>;
 };
 
 const items = [
@@ -48,12 +49,13 @@ const items = [
   fallback: string;
 }>;
 
-export function BottomNavigation({ activeItem }: BottomNavigationProps) {
+export function BottomNavigation({ activeItem, onBeforeNavigate }: BottomNavigationProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const navigate = (destination: BottomTab) => {
+  const navigate = async (destination: BottomTab) => {
     if (destination === activeItem) return;
+    if (onBeforeNavigate && (await onBeforeNavigate()) === false) return;
 
     if (destination === "home") {
       router.replace("/");
@@ -85,7 +87,7 @@ export function BottomNavigation({ activeItem }: BottomNavigationProps) {
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
               key={item.key}
-              onPress={() => navigate(item.key)}
+              onPress={() => void navigate(item.key)}
               style={({ pressed }) => [styles.item, pressed && styles.pressedItem]}
             >
               <AppIcon
