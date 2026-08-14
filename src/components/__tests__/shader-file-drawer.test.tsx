@@ -31,7 +31,7 @@ const props = () => ({
   onClose: jest.fn(),
 });
 
-const mockSafeAreaInsets = { bottom: 19, left: 0, right: 0, top: 23 };
+const mockSafeAreaInsets = { bottom: 19, left: 17, right: 11, top: 23 };
 
 jest.mock("react-native-safe-area-context", () => ({
   ...require("react-native-safe-area-context/jest/mock").default,
@@ -156,9 +156,12 @@ describe("ShaderFileDrawer", () => {
     expect(current.onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps drawer content inside nonzero safe-area insets while the scrim stays edge-to-edge", async () => {
+  it("keeps all drawer content inside nonzero safe-area insets while the scrim stays edge-to-edge", async () => {
     await render(<ShaderFileDrawer {...props()} />);
 
+    expect(StyleSheet.flatten(screen.getByTestId("shader-file-drawer-panel").props.style)).toEqual(
+      expect.objectContaining({ paddingLeft: mockSafeAreaInsets.left }),
+    );
     expect(StyleSheet.flatten(screen.getByTestId("shader-file-drawer-header").props.style)).toEqual(
       expect.objectContaining({ paddingTop: Spacing.lg + mockSafeAreaInsets.top }),
     );

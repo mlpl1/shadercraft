@@ -44,19 +44,13 @@ const mockRouter = {
   replace: jest.fn(),
 };
 
-type MockBeforeRemoveEvent = {
+type MockPreventRemoveEvent = {
   data: { action: { type: string } };
-  preventDefault: jest.Mock;
 };
 
-let mockBeforeRemoveHandler: ((event: MockBeforeRemoveEvent) => void) | null = null;
+let mockPreventRemoveEnabled = false;
+let mockPreventRemoveCallback: ((event: MockPreventRemoveEvent) => void) | null = null;
 const mockNavigation = {
-  addListener: jest.fn(
-    (_event: string, handler: (event: MockBeforeRemoveEvent) => void) => {
-      mockBeforeRemoveHandler = handler;
-      return jest.fn();
-    },
-  ),
   dispatch: jest.fn(),
 };
 
@@ -64,6 +58,16 @@ jest.mock("expo-router", () => ({
   useLocalSearchParams: () => mockRouteParams.current,
   useNavigation: () => mockNavigation,
   useRouter: () => mockRouter,
+}));
+
+jest.mock("expo-router/react-navigation", () => ({
+  usePreventRemove: (
+    enabled: boolean,
+    callback: (event: MockPreventRemoveEvent) => void,
+  ) => {
+    mockPreventRemoveEnabled = enabled;
+    mockPreventRemoveCallback = callback;
+  },
 }));
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
@@ -195,7 +199,8 @@ describe("EditorScreen", () => {
     configureRepository();
     jest.useFakeTimers();
     hardwareBackHandler = null;
-    mockBeforeRemoveHandler = null;
+    mockPreventRemoveEnabled = false;
+    mockPreventRemoveCallback = null;
     jest.spyOn(Alert, "alert").mockImplementation(jest.fn());
     jest.spyOn(BackHandler, "addEventListener").mockImplementation((_event, handler) => {
       hardwareBackHandler = handler;
@@ -534,7 +539,7 @@ describe("EditorScreen", () => {
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith("/"));
   });
 
-  it("guards route back until source and metadata finish, then leaves later back events alone", async () => {
+  it("uses the removal hook to flush source then metadata and dispatch the captured action once", async () => {
     sketches = [
       makeSketch("one", "One", "fragColor = vec4(u_gain);", {
         metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
@@ -549,15 +554,14 @@ describe("EditorScreen", () => {
     await openParameters();
     await fireEvent(screen.getByTestId("parameter-slider-u_gain"), "valueChange", 1.9);
 
-    const handler = mockBeforeRemoveHandler;
-    if (!handler) throw new Error("beforeRemove listener was not registered");
+    expect(mockPreventRemoveEnabled).toBe(true);
+    const callback = mockPreventRemoveCallback;
+    if (!callback) throw new Error("usePreventRemove callback was not registered");
     const action = { type: "GO_BACK" };
-    const event: MockBeforeRemoveEvent = { data: { action }, preventDefault: jest.fn() };
     await act(async () => {
-      handler(event);
+      callback({ data: { action } });
     });
 
-    expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(repository.updateSource).toHaveBeenCalledTimes(1);
     expect(repository.updateMetadata).not.toHaveBeenCalled();
     expect(mockNavigation.dispatch).not.toHaveBeenCalled();
@@ -574,32 +578,57 @@ describe("EditorScreen", () => {
       await metadataWrite.promise;
     });
     await waitFor(() => expect(mockNavigation.dispatch).toHaveBeenCalledWith(action));
-
-    const laterEvent: MockBeforeRemoveEvent = {
-      data: { action: { type: "GO_BACK" } },
-      preventDefault: jest.fn(),
-    };
-    await act(async () => {
-      handler(laterEvent);
-    });
-    expect(laterEvent.preventDefault).not.toHaveBeenCalled();
+    expect(mockNavigation.dispatch).toHaveBeenCalledTimes(1);
+    expect(mockPreventRemoveEnabled).toBe(false);
   });
 
-  it("does not intercept route back when there is no save work", async () => {
+  it("keeps the removal hook active and does not dispatch when an outgoing flush fails", async () => {
+    sketches = [
+      makeSketch("one", "One", "fragColor = vec4(u_gain);", {
+        metadata: { version: 1, category: "Drafts", parameters: [GAIN] },
+      }),
+    ];
+    const sourceWrite = deferredWrite();
+    const metadataWrite = deferredWrite();
+    repository.updateSource.mockImplementationOnce(() => sourceWrite.promise);
+    repository.updateMetadata.mockImplementationOnce(() => metadataWrite.promise);
+    await openEditor();
+    await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(u_gain * 0.5);");
+    await openParameters();
+    await fireEvent(screen.getByTestId("parameter-slider-u_gain"), "valueChange", 1.9);
+
+    expect(mockPreventRemoveEnabled).toBe(true);
+    const callback = mockPreventRemoveCallback;
+    if (!callback) throw new Error("usePreventRemove callback was not registered");
+    await act(async () => {
+      callback({ data: { action: { type: "GO_BACK" } } });
+      sourceWrite.reject(new Error("disk full"));
+      await sourceWrite.promise.catch(() => undefined);
+    });
+    await waitFor(() => expect(repository.updateMetadata).toHaveBeenCalledTimes(1));
+    expect(mockNavigation.dispatch).not.toHaveBeenCalled();
+
+    await act(async () => {
+      metadataWrite.resolve();
+      await metadataWrite.promise;
+    });
+    await waitFor(() =>
+      expect(screen.getByText("Could not save. Your code is still here.")).toBeTruthy(),
+    );
+    expect(mockNavigation.dispatch).not.toHaveBeenCalled();
+    expect(mockPreventRemoveEnabled).toBe(true);
+    expect(screen.getByTestId("glsl-input").props.value).toBe(
+      "fragColor = vec4(u_gain * 0.5);",
+    );
+    expect(screen.getByTestId("sandbox-parameters").props.children).toContain('"value":1.9');
+  });
+
+  it("leaves the removal hook disabled when there is no save work", async () => {
     sketches = [makeSketch("one", "One", "fragColor = vec4(1.0);")];
     await openEditor();
 
-    const handler = mockBeforeRemoveHandler;
-    if (!handler) throw new Error("beforeRemove listener was not registered");
-    const event: MockBeforeRemoveEvent = {
-      data: { action: { type: "GO_BACK" } },
-      preventDefault: jest.fn(),
-    };
-    await act(async () => {
-      handler(event);
-    });
-
-    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(mockPreventRemoveCallback).not.toBeNull();
+    expect(mockPreventRemoveEnabled).toBe(false);
     expect(mockNavigation.dispatch).not.toHaveBeenCalled();
   });
   it("opens the next recent sketch after deleting the active sketch", async () => {

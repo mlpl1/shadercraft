@@ -112,6 +112,7 @@ export function ShaderFileDrawer({
         <Animated.View
           style={[
             styles.drawer,
+            { paddingLeft: insets.left },
             {
               transform: [
                 {
@@ -120,6 +121,7 @@ export function ShaderFileDrawer({
               ],
             },
           ]}
+          testID="shader-file-drawer-panel"
         >
           <View
             style={[styles.header, { paddingTop: Spacing.lg + insets.top }]}

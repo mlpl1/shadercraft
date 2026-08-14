@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { usePreventRemove, type NavigationAction } from "expo-router/react-navigation";
 import type { SymbolViewProps } from "expo-symbols";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -65,6 +66,8 @@ export default function EditorScreen() {
   const [paused, setPaused] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [restartToken, setRestartToken] = useState(0);
+  const [removalGuardActive, setRemovalGuardActive] = useState(false);
+  const [readyRemovalAction, setReadyRemovalAction] = useState<NavigationAction | null>(null);
 
   const compileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sourceSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,7 +80,6 @@ export default function EditorScreen() {
   const metadataSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const sourceSaveWorkRef = useRef(0);
   const metadataSaveWorkRef = useRef(0);
-  const replayingRemovalRef = useRef(false);
   const removalFlushRef = useRef<Promise<void> | null>(null);
   const sketchRef = useRef<Sketch | null>(null);
   const mountedRef = useRef(true);
@@ -96,6 +98,19 @@ export default function EditorScreen() {
     if (mountedRef.current) setSketches(next);
     return next;
   }, [profileId, sketchRepository]);
+
+  const releaseRemovalGuardIfSaved = useCallback(() => {
+    if (
+      mountedRef.current &&
+      removalFlushRef.current === null &&
+      pendingSourceRef.current === null &&
+      pendingMetadataRef.current === null &&
+      sourceSaveWorkRef.current === 0 &&
+      metadataSaveWorkRef.current === 0
+    ) {
+      setRemovalGuardActive(false);
+    }
+  }, []);
 
   const flushSourceSave = useCallback(async (): Promise<boolean> => {
     if (sourceSaveTimer.current) {
@@ -125,6 +140,7 @@ export default function EditorScreen() {
             return false;
           } finally {
             sourceSaveWorkRef.current -= 1;
+            releaseRemovalGuardIfSaved();
           }
 
           if (mountedRef.current) {
@@ -146,7 +162,7 @@ export default function EditorScreen() {
         return true;
       }
     }
-  }, [profileId, refreshSketches, sketchRepository]);
+  }, [profileId, refreshSketches, releaseRemovalGuardIfSaved, sketchRepository]);
 
   const flushMetadataSave = useCallback(async (): Promise<boolean> => {
     if (metadataSaveTimer.current) {
@@ -178,6 +194,7 @@ export default function EditorScreen() {
             return false;
           } finally {
             metadataSaveWorkRef.current -= 1;
+            releaseRemovalGuardIfSaved();
           }
 
           if (mountedRef.current) {
@@ -199,7 +216,7 @@ export default function EditorScreen() {
         return true;
       }
     }
-  }, [profileId, refreshSketches, sketchRepository]);
+  }, [profileId, refreshSketches, releaseRemovalGuardIfSaved, sketchRepository]);
 
   const flushAllSaves = useCallback(async (): Promise<boolean> => {
     while (true) {
@@ -217,15 +234,6 @@ export default function EditorScreen() {
     }
   }, [flushMetadataSave, flushSourceSave]);
 
-  const hasOutstandingSaveWork = useCallback(
-    () =>
-      pendingSourceRef.current !== null ||
-      pendingMetadataRef.current !== null ||
-      sourceSaveWorkRef.current > 0 ||
-      metadataSaveWorkRef.current > 0,
-    [],
-  );
-
   const activateSketch = useCallback((next: Sketch) => {
     if (compileTimer.current) {
       clearTimeout(compileTimer.current);
@@ -233,6 +241,7 @@ export default function EditorScreen() {
     }
     pendingSourceRef.current = null;
     pendingMetadataRef.current = null;
+    setRemovalGuardActive(false);
     sketchRef.current = next;
     setSketch(next);
     setCompiledSource(next.source);
@@ -300,36 +309,38 @@ export default function EditorScreen() {
     return () => subscription.remove();
   }, [drawerOpen, parametersOpen]);
 
-  useEffect(
-    () =>
-      navigation.addListener("beforeRemove", (event) => {
-        if (replayingRemovalRef.current) {
-          replayingRemovalRef.current = false;
-          return;
-        }
-        if (!hasOutstandingSaveWork()) return;
+  usePreventRemove(removalGuardActive, ({ data: { action } }) => {
+    if (removalFlushRef.current) return;
 
-        event.preventDefault();
-        if (removalFlushRef.current) return;
+    const removalFlush = (async () => {
+      let actionReady = false;
+      try {
+        if (!(await flushAllSaves()) || !mountedRef.current) return;
+        actionReady = true;
+        setRemovalGuardActive(false);
+        setReadyRemovalAction(action);
+      } finally {
+        if (!actionReady) removalFlushRef.current = null;
+      }
+    })();
+    removalFlushRef.current = removalFlush;
+  });
 
-        const action = event.data.action;
-        removalFlushRef.current = (async () => {
-          if (await flushAllSaves()) {
-            replayingRemovalRef.current = true;
-            navigation.dispatch(action);
-          }
-        })().finally(() => {
-          removalFlushRef.current = null;
-        });
-      }),
-    [flushAllSaves, hasOutstandingSaveWork, navigation],
-  );
+  useEffect(() => {
+    if (removalGuardActive || !readyRemovalAction) return;
+
+    const action = readyRemovalAction;
+    setReadyRemovalAction(null);
+    removalFlushRef.current = null;
+    navigation.dispatch(action);
+  }, [navigation, readyRemovalAction, removalGuardActive]);
 
   const handleSourceChange = useCallback(
     (next: string) => {
       const active = sketchRef.current;
       if (!active) return;
 
+      setRemovalGuardActive(true);
       sourceRevisionRef.current += 1;
       pendingSourceRef.current = {
         revision: sourceRevisionRef.current,
@@ -364,6 +375,7 @@ export default function EditorScreen() {
       setSketches((current) =>
         current.map((item) => (item.id === next.id ? { ...item, metadata } : item)),
       );
+      setRemovalGuardActive(true);
       metadataRevisionRef.current += 1;
       pendingMetadataRef.current = {
         metadata,
