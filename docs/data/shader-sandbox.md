@@ -15,7 +15,9 @@ Not a whole program — the body of `mainImage`. The app supplies everything aro
 #extension GL_OES_standard_derivatives : enable         // 1
 precision highp float;
 uniform vec3  iResolution;   // x = width, y = height, z = pixel aspect
-uniform float iTime;         // seconds since the sandbox started    // 4
+uniform float iTime;         // seconds since the sandbox started
+
+  // one `uniform float <key>;` line for each saved shader parameter sits here
 
   // ← an optional block of stage `helpers` sits here, when the stage declares one
 
@@ -31,10 +33,12 @@ void main() {
 }
 ```
 
-Four header lines plus the `mainImage` opener sit above the body, so **`SHADER_BODY_LINE_OFFSET` is
-5** — `HEADER_LINES.length + 1` — and every reported error line is corrected by it. That constant is
-derived from the header array rather than hardcoded: adding a line shifts every error message in the
-app, and deriving it is what stops that happening silently.
+Four header lines plus the `mainImage` opener sit above the body when there are no saved parameters
+or helpers, so **`SHADER_BODY_LINE_OFFSET` is 5** — `HEADER_LINES.length + 1`. It is the
+no-parameters, no-helpers baseline, not a universal error offset. `wrapMainImageBody` returns the
+actual count of every generated uniform declaration and helper line above the body; every reported
+error line is corrected by that returned value. Adding a saved parameter therefore cannot silently
+shift a learner's error location.
 
 The `#extension` directive arrived with Module 3, which needs `fwidth`, and this document said "four
 prologue lines … the offset is 4" for some time afterwards. Deriving the constant meant the app was
@@ -56,8 +60,32 @@ drivers, and a local costs nothing.
 | `iResolution` | `vec3` | Framebuffer width, height, and pixel aspect (always `1.0`) |
 | `iTime` | `float` | Seconds since the sandbox started, or since the last restart |
 
-That is the whole set. **`iMouse`, `iFrame` and `iTimeDelta` do not exist.** Adding a uniform later is
-additive and breaks no existing content, so they were left out rather than shipped unused.
+`iResolution` and `iTime` remain built-ins. **`iMouse`, `iFrame` and `iTimeDelta` do not exist.**
+
+### Saved custom float uniforms
+
+An editor sketch may save parameter definitions in its sketch metadata. That metadata is the source
+of truth for the parameter's key, display label, range, step, default value, and current value. Each
+valid saved definition generates exactly one declaration immediately after the built-ins:
+
+```glsl
+uniform float u_gain;
+```
+
+Use the same key in the authored `mainImage` body. Metadata is normalized on read and before it is
+saved: keys and labels are trimmed; values and defaults are clamped to the inclusive `min`–`max`
+range; and malformed metadata is reset to an empty parameter list with a warning. A definition needs
+a unique GLSL identifier key, a non-empty label, finite numeric fields, `max > min`, and `step > 0`.
+Keys may not use GLSL keywords, `gl_`, `__`, or the built-in/reserved names such as `iTime`,
+`iResolution`, `main`, or `mainImage`.
+
+Changing a definition (for example its key or range) changes the generated source and recompiles the
+program. Changing only a slider value does not: the active linked program is retained and the new
+finite value is uploaded to its cached uniform location on the next render. This is what keeps slider
+interaction from causing compile flicker.
+
+Only saved scalar `float` parameters are supported. Full shader programs and custom non-float
+uniforms (`vec*`, matrices, booleans, integers, samplers, and arrays) remain unsupported.
 
 `fragCoord` is real framebuffer pixels, taken from `gl_FragCoord.xy` exactly as Shadertoy does. Note
 that this is what makes the curriculum's own claim honest: Module 1 Lesson 5 teaches `gl_FragCoord.xy`
