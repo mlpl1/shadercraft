@@ -45,6 +45,7 @@ export const GLSL_SYMBOLS = [
 ] as const;
 
 type GlslInputProps = {
+  editable?: boolean;
   initialValue: string;
   errors: CompileError[];
   onChange: (source: string) => void;
@@ -60,7 +61,12 @@ type GlslInputProps = {
  * on the New Architecture: `setNativeProps` is unsupported under Fabric, which RN 0.86 always uses,
  * so an uncontrolled input could not be edited programmatically at all.
  */
-export function GlslInput({ initialValue, errors, onChange }: GlslInputProps) {
+export function GlslInput({
+  editable = true,
+  initialValue,
+  errors,
+  onChange,
+}: GlslInputProps) {
   const [value, setValue] = useState(initialValue);
   const selectionRef = useRef<{ start: number; end: number } | null>(null);
   /**
@@ -79,10 +85,11 @@ export function GlslInput({ initialValue, errors, onChange }: GlslInputProps) {
 
   const handleChangeText = useCallback(
     (next: string) => {
+      if (!editable) return;
       setValue(next);
       onChange(next);
     },
-    [onChange],
+    [editable, onChange],
   );
 
   const handleSelectionChange = useCallback(
@@ -95,6 +102,7 @@ export function GlslInput({ initialValue, errors, onChange }: GlslInputProps) {
 
   const insert = useCallback(
     (symbol: string) => {
+      if (!editable) return;
       const selection = selectionRef.current;
       // With no observed caret — the input has not been focused yet — appending is the only
       // non-destructive choice.
@@ -108,7 +116,7 @@ export function GlslInput({ initialValue, errors, onChange }: GlslInputProps) {
       setValue(next);
       onChange(next);
     },
-    [onChange, value],
+    [editable, onChange, value],
   );
 
   return (
@@ -129,6 +137,7 @@ export function GlslInput({ initialValue, errors, onChange }: GlslInputProps) {
           autoCapitalize="none"
           autoComplete="off"
           autoCorrect={false}
+          editable={editable}
           keyboardAppearance="dark"
           multiline
           onChangeText={handleChangeText}
@@ -155,6 +164,8 @@ export function GlslInput({ initialValue, errors, onChange }: GlslInputProps) {
         {GLSL_SYMBOLS.map((symbol) => (
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: !editable }}
+            disabled={!editable}
             key={symbol}
             onPress={() => insert(symbol)}
             style={({ pressed }) => [styles.symbol, pressed && styles.symbolPressed]}

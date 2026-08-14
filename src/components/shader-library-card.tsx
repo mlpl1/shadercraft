@@ -20,12 +20,19 @@ export function ShaderLibraryCard({ sketch, active, onPress }: ShaderLibraryCard
       testID={`shader-library-card-${sketch.id}`}
     >
       <View pointerEvents="none" style={styles.preview}>
-        <ShaderSandbox
-          active={active}
-          height={164}
-          parameters={sketch.metadata.parameters}
-          source={sketch.source}
-        />
+        {active ? (
+          <ShaderSandbox
+            active
+            height={164}
+            parameters={sketch.metadata.parameters}
+            source={sketch.source}
+          />
+        ) : (
+          <View
+            style={styles.previewPlaceholder}
+            testID={`shader-library-preview-placeholder-${sketch.id}`}
+          />
+        )}
       </View>
 
       <View style={styles.details}>
@@ -60,6 +67,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
     backgroundColor: Colors.surface,
+  },
+  previewPlaceholder: {
+    backgroundColor: Colors.surface,
+    height: 164,
   },
   details: {
     gap: Spacing.sm,

@@ -43,16 +43,26 @@ describe("ShaderLibraryCard", () => {
     mockSandbox.mockClear();
   });
 
-  it("passes the saved source, parameters, and visibility to the preview", async () => {
+  it("renders a native placeholder without mounting a sandbox while inactive", async () => {
     await render(<ShaderLibraryCard active={false} onPress={jest.fn()} sketch={sketch} />);
+
+    expect(mockSandbox).not.toHaveBeenCalled();
+    expect(screen.getByTestId("shader-library-preview-placeholder-sketch-a")).toBeTruthy();
+    expect(screen.queryByTestId("library-card-sandbox")).toBeNull();
+  });
+
+  it("mounts a sandbox with the saved source and parameters while active", async () => {
+    await render(<ShaderLibraryCard active onPress={jest.fn()} sketch={sketch} />);
 
     expect(mockSandbox).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        active: false,
+        active: true,
         parameters: sketch.metadata.parameters,
         source: sketch.source,
       }),
     );
+    expect(screen.getByTestId("library-card-sandbox")).toBeTruthy();
+    expect(screen.queryByTestId("shader-library-preview-placeholder-sketch-a")).toBeNull();
   });
 
   it("opens the sketch when pressed", async () => {

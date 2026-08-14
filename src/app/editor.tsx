@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { usePreventRemove, type NavigationAction } from "expo-router/react-navigation";
 import type { SymbolViewProps } from "expo-symbols";
@@ -19,7 +19,7 @@ import type {
   ShaderParameterDefinition,
   SketchMetadata,
 } from "../data/sketches/sketch-metadata";
-import type { Sketch } from "../data/sketches/sketch-repository";
+import type { Sketch, SketchRepository } from "../data/sketches/sketch-repository";
 import { STARTER_SKETCH_SOURCE, STARTER_SKETCH_TITLE } from "../data/sketches/starter-sketch";
 import type { HostCompileResult } from "../shaders/shader-program-host";
 import type { CompileError } from "../shaders/shader-source";
@@ -29,8 +29,30 @@ const SOURCE_AUTOSAVE_DEBOUNCE_MS = 800;
 const METADATA_AUTOSAVE_DEBOUNCE_MS = 500;
 const PREVIEW_HEIGHT = 220;
 
+type EditorScope = {
+  profileId: string;
+  repository: SketchRepository;
+};
+
+type LoadedEditor = {
+  scope: EditorScope;
+  sketch: Sketch;
+  sketches: Sketch[];
+};
+
+type ScopedMessage = {
+  message: string;
+  scope: EditorScope;
+};
+
+type RequestToken = {
+  requestId: number;
+  scope: EditorScope;
+};
+
 type PendingSource = {
   revision: number;
+  scope: EditorScope;
   sketchId: string;
   source: string;
 };
@@ -38,6 +60,7 @@ type PendingSource = {
 type PendingMetadata = {
   metadata: SketchMetadata;
   revision: number;
+  scope: EditorScope;
   sketchId: string;
 };
 
@@ -53,265 +76,633 @@ export default function EditorScreen() {
   const data = useData();
   const { profileId } = useAuth();
   const sketchRepository = data.status === "ready" ? data.sketchRepository : null;
+  const scope = useMemo<EditorScope | null>(
+    () =>
+      sketchRepository && profileId
+        ? { profileId, repository: sketchRepository }
+        : null,
+    [profileId, sketchRepository],
+  );
 
-  const [sketch, setSketch] = useState<Sketch | null>(null);
-  const [sketches, setSketches] = useState<Sketch[]>([]);
+  const [loadedEditor, setLoadedEditor] = useState<LoadedEditor | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [parametersOpen, setParametersOpen] = useState(false);
   const [compiledSource, setCompiledSource] = useState("");
   const [errors, setErrors] = useState<CompileError[]>([]);
   const [showingLastWorking, setShowingLastWorking] = useState(false);
-  const [sourceSaveError, setSourceSaveError] = useState<string | null>(null);
-  const [metadataSaveError, setMetadataSaveError] = useState<string | null>(null);
+  const [sourceSaveErrorState, setSourceSaveErrorState] = useState<ScopedMessage | null>(null);
+  const [metadataSaveErrorState, setMetadataSaveErrorState] =
+    useState<ScopedMessage | null>(null);
+  const [loadErrorState, setLoadErrorState] = useState<ScopedMessage | null>(null);
+  const [mutationErrorState, setMutationErrorState] = useState<ScopedMessage | null>(null);
+  const [orderingRefreshErrorScope, setOrderingRefreshErrorScope] =
+    useState<EditorScope | null>(null);
+  const [loadBusyScope, setLoadBusyScope] = useState<EditorScope | null>(null);
+  const [actionBusyScope, setActionBusyScope] = useState<EditorScope | null>(null);
+  const [loadRetry, setLoadRetry] = useState(0);
   const [paused, setPaused] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [restartToken, setRestartToken] = useState(0);
   const [removalGuardActive, setRemovalGuardActive] = useState(false);
+  const [capturedRemovalAction, setCapturedRemovalAction] =
+    useState<NavigationAction | null>(null);
   const [readyRemovalAction, setReadyRemovalAction] = useState<NavigationAction | null>(null);
+  const [libraryReturnScope, setLibraryReturnScope] = useState<EditorScope | null>(null);
+  const [directBackScope, setDirectBackScope] = useState<EditorScope | null>(null);
+
+  const activeEditor = loadedEditor?.scope === scope ? loadedEditor : null;
+  const sketch = activeEditor?.sketch ?? null;
+  const sketches = activeEditor?.sketches ?? [];
+  const sourceSaveError =
+    sourceSaveErrorState?.scope === scope ? sourceSaveErrorState.message : null;
+  const metadataSaveError =
+    metadataSaveErrorState?.scope === scope ? metadataSaveErrorState.message : null;
+  const loadError = loadErrorState?.scope === scope ? loadErrorState.message : null;
+  const mutationError =
+    mutationErrorState?.scope === scope ? mutationErrorState.message : null;
+  const orderingRefreshError =
+    orderingRefreshErrorScope === scope
+      ? "The change was saved, but the file list could not refresh."
+      : null;
+  const editorActionBusy = actionBusyScope === scope;
+  const editorBusy = loadBusyScope === scope || editorActionBusy;
 
   const compileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sourceSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const metadataSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingSourceRef = useRef<PendingSource | null>(null);
-  const pendingMetadataRef = useRef<PendingMetadata | null>(null);
+  const sourceSaveTimersRef = useRef(
+    new WeakMap<EditorScope, ReturnType<typeof setTimeout>>(),
+  );
+  const metadataSaveTimersRef = useRef(
+    new WeakMap<EditorScope, ReturnType<typeof setTimeout>>(),
+  );
+  const pendingSourceRef = useRef(new WeakMap<EditorScope, PendingSource>());
+  const pendingMetadataRef = useRef(new WeakMap<EditorScope, PendingMetadata>());
   const sourceRevisionRef = useRef(0);
   const metadataRevisionRef = useRef(0);
-  const sourceSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
-  const metadataSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
-  const sourceSaveWorkRef = useRef(0);
-  const metadataSaveWorkRef = useRef(0);
+  const sourceSaveQueueRef = useRef(new WeakMap<EditorScope, Promise<boolean>>());
+  const metadataSaveQueueRef = useRef(new WeakMap<EditorScope, Promise<boolean>>());
+  const sourceSaveWorkRef = useRef(new WeakMap<EditorScope, number>());
+  const metadataSaveWorkRef = useRef(new WeakMap<EditorScope, number>());
+  const requestGenerationRef = useRef(0);
+  const previousScopeRef = useRef(scope);
+  const activeScopeRef = useRef(scope);
+  const routeSketchIdRef = useRef(routeSketchId);
+  const editorRef = useRef<LoadedEditor | null>(activeEditor);
+  const sketchRef = useRef<Sketch | null>(sketch);
+  const loadBusyRef = useRef<RequestToken | null>(null);
+  const actionBusyRef = useRef<RequestToken | null>(null);
   const removalFlushRef = useRef<Promise<void> | null>(null);
-  const sketchRef = useRef<Sketch | null>(null);
+  const capturedRemovalActionRef = useRef<NavigationAction | null>(null);
+  const directBackRequestRef = useRef<EditorScope | null>(null);
   const mountedRef = useRef(true);
+
+  if (previousScopeRef.current !== scope) {
+    previousScopeRef.current = scope;
+    requestGenerationRef.current += 1;
+  }
+  activeScopeRef.current = scope;
+  routeSketchIdRef.current = routeSketchId;
+  editorRef.current = activeEditor;
+  sketchRef.current = sketch;
+
+  const isScopeCurrent = useCallback(
+    (targetScope: EditorScope) =>
+      mountedRef.current && activeScopeRef.current === targetScope,
+    [],
+  );
+
+  const isRequestCurrent = useCallback(
+    (targetScope: EditorScope, requestId: number) =>
+      mountedRef.current &&
+      activeScopeRef.current === targetScope &&
+      requestGenerationRef.current === requestId,
+    [],
+  );
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      requestGenerationRef.current += 1;
     };
   }, []);
 
-  const refreshSketches = useCallback(async () => {
-    if (!sketchRepository || !profileId) return [];
-
-    const next = await sketchRepository.list(profileId);
-    if (mountedRef.current) setSketches(next);
-    return next;
-  }, [profileId, sketchRepository]);
-
-  const releaseRemovalGuardIfSaved = useCallback(() => {
-    if (
-      mountedRef.current &&
-      removalFlushRef.current === null &&
-      pendingSourceRef.current === null &&
-      pendingMetadataRef.current === null &&
-      sourceSaveWorkRef.current === 0 &&
-      metadataSaveWorkRef.current === 0
-    ) {
-      setRemovalGuardActive(false);
-    }
-  }, []);
-
-  const flushSourceSave = useCallback(async (): Promise<boolean> => {
-    if (sourceSaveTimer.current) {
-      clearTimeout(sourceSaveTimer.current);
-      sourceSaveTimer.current = null;
-    }
-
-    while (true) {
-      const pending = pendingSourceRef.current;
-      if (pending) {
-        if (!sketchRepository || !profileId) return false;
-        pendingSourceRef.current = null;
-        sourceSaveWorkRef.current += 1;
-
-        const queuedWrite = sourceSaveQueueRef.current.then(async () => {
-          try {
-            await sketchRepository.updateSource(profileId, pending.sketchId, pending.source);
-            if (mountedRef.current) setSourceSaveError(null);
-          } catch {
-            if (
-              pending.revision === sourceRevisionRef.current &&
-              pendingSourceRef.current === null
-            ) {
-              pendingSourceRef.current = pending;
-            }
-            if (mountedRef.current) setSourceSaveError("Could not save. Your code is still here.");
-            return false;
-          } finally {
-            sourceSaveWorkRef.current -= 1;
-            releaseRemovalGuardIfSaved();
-          }
-
-          if (mountedRef.current) {
-            try {
-              await refreshSketches();
-            } catch {
-              // The write succeeded. A later drawer action will try the ordering read again.
-            }
-          }
-          return true;
-        });
-
-        sourceSaveQueueRef.current = queuedWrite;
-      }
-
-      const queuedWrite = sourceSaveQueueRef.current;
-      if (!(await queuedWrite)) return false;
-      if (pendingSourceRef.current === null && sourceSaveQueueRef.current === queuedWrite) {
-        return true;
-      }
-    }
-  }, [profileId, refreshSketches, releaseRemovalGuardIfSaved, sketchRepository]);
-
-  const flushMetadataSave = useCallback(async (): Promise<boolean> => {
-    if (metadataSaveTimer.current) {
-      clearTimeout(metadataSaveTimer.current);
-      metadataSaveTimer.current = null;
-    }
-
-    while (true) {
-      const pending = pendingMetadataRef.current;
-      if (pending) {
-        if (!sketchRepository || !profileId) return false;
-        pendingMetadataRef.current = null;
-        metadataSaveWorkRef.current += 1;
-
-        const queuedWrite = metadataSaveQueueRef.current.then(async () => {
-          try {
-            await sketchRepository.updateMetadata(profileId, pending.sketchId, pending.metadata);
-            if (mountedRef.current) setMetadataSaveError(null);
-          } catch {
-            if (
-              pending.revision === metadataRevisionRef.current &&
-              pendingMetadataRef.current === null
-            ) {
-              pendingMetadataRef.current = pending;
-            }
-            if (mountedRef.current) {
-              setMetadataSaveError("Could not save parameters. Your values are still here.");
-            }
-            return false;
-          } finally {
-            metadataSaveWorkRef.current -= 1;
-            releaseRemovalGuardIfSaved();
-          }
-
-          if (mountedRef.current) {
-            try {
-              await refreshSketches();
-            } catch {
-              // The values are saved even if this ordering refresh could not complete.
-            }
-          }
-          return true;
-        });
-
-        metadataSaveQueueRef.current = queuedWrite;
-      }
-
-      const queuedWrite = metadataSaveQueueRef.current;
-      if (!(await queuedWrite)) return false;
-      if (pendingMetadataRef.current === null && metadataSaveQueueRef.current === queuedWrite) {
-        return true;
-      }
-    }
-  }, [profileId, refreshSketches, releaseRemovalGuardIfSaved, sketchRepository]);
-
-  const flushAllSaves = useCallback(async (): Promise<boolean> => {
-    while (true) {
-      const sourceSaved = await flushSourceSave();
-      const metadataSaved = await flushMetadataSave();
-      if (!sourceSaved || !metadataSaved) return false;
-      if (
-        pendingSourceRef.current === null &&
-        pendingMetadataRef.current === null &&
-        sourceSaveWorkRef.current === 0 &&
-        metadataSaveWorkRef.current === 0
-      ) {
-        return true;
-      }
-    }
-  }, [flushMetadataSave, flushSourceSave]);
-
-  const activateSketch = useCallback((next: Sketch) => {
-    if (compileTimer.current) {
-      clearTimeout(compileTimer.current);
-      compileTimer.current = null;
-    }
-    pendingSourceRef.current = null;
-    pendingMetadataRef.current = null;
-    setRemovalGuardActive(false);
-    sketchRef.current = next;
-    setSketch(next);
-    setCompiledSource(next.source);
-    setErrors([]);
-    setShowingLastWorking(false);
-    setSourceSaveError(null);
-    setMetadataSaveError(null);
+  useEffect(() => {
+    setDrawerOpen(false);
     setParametersOpen(false);
-  }, []);
+    setRemovalGuardActive(false);
+    setCapturedRemovalAction(null);
+    setReadyRemovalAction(null);
+    setDirectBackScope(null);
+    capturedRemovalActionRef.current = null;
+    removalFlushRef.current = null;
+    directBackRequestRef.current = null;
+  }, [scope]);
+
+  const refreshSketches = useCallback(
+    async (targetScope: EditorScope, requestId: number) => {
+      const next = await targetScope.repository.list(targetScope.profileId);
+      if (isRequestCurrent(targetScope, requestId)) {
+        setLoadedEditor((current) =>
+          current?.scope === targetScope ? { ...current, sketches: next } : current,
+        );
+        setOrderingRefreshErrorScope((errorScope) =>
+          errorScope === targetScope ? null : errorScope,
+        );
+      }
+      return next;
+    },
+    [isRequestCurrent],
+  );
+
+  const releaseRemovalGuardIfSaved = useCallback(
+    (targetScope: EditorScope) => {
+      if (
+        isScopeCurrent(targetScope) &&
+        !pendingSourceRef.current.has(targetScope) &&
+        !pendingMetadataRef.current.has(targetScope) &&
+        (sourceSaveWorkRef.current.get(targetScope) ?? 0) === 0 &&
+        (metadataSaveWorkRef.current.get(targetScope) ?? 0) === 0
+      ) {
+        setRemovalGuardActive(false);
+      }
+    },
+    [isScopeCurrent],
+  );
+
+  const flushSourceSave = useCallback(
+    async (targetScope?: EditorScope | null): Promise<boolean> => {
+      const flushScope = targetScope ?? activeScopeRef.current;
+      if (!flushScope) return true;
+
+      const saveTimer = sourceSaveTimersRef.current.get(flushScope);
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        sourceSaveTimersRef.current.delete(flushScope);
+      }
+
+      while (true) {
+        const pending = pendingSourceRef.current.get(flushScope) ?? null;
+        if (pending) {
+          pendingSourceRef.current.delete(flushScope);
+          sourceSaveWorkRef.current.set(
+            flushScope,
+            (sourceSaveWorkRef.current.get(flushScope) ?? 0) + 1,
+          );
+          const requestId = requestGenerationRef.current;
+          const previousWrite =
+            sourceSaveQueueRef.current.get(flushScope) ?? Promise.resolve(true);
+
+          const queuedWrite = previousWrite.then(async () => {
+            try {
+              await pending.scope.repository.updateSource(
+                pending.scope.profileId,
+                pending.sketchId,
+                pending.source,
+              );
+              if (isScopeCurrent(pending.scope)) setSourceSaveErrorState(null);
+            } catch {
+              if (
+                isScopeCurrent(pending.scope) &&
+                pending.revision === sourceRevisionRef.current &&
+                !pendingSourceRef.current.has(pending.scope)
+              ) {
+                pendingSourceRef.current.set(pending.scope, pending);
+              }
+              if (isScopeCurrent(pending.scope)) {
+                setSourceSaveErrorState({
+                  message: "Could not save. Your code is still here.",
+                  scope: pending.scope,
+                });
+              }
+              return false;
+            } finally {
+              const remainingWork =
+                (sourceSaveWorkRef.current.get(flushScope) ?? 1) - 1;
+              if (remainingWork > 0) {
+                sourceSaveWorkRef.current.set(flushScope, remainingWork);
+              } else {
+                sourceSaveWorkRef.current.delete(flushScope);
+              }
+              releaseRemovalGuardIfSaved(pending.scope);
+            }
+
+            if (isRequestCurrent(pending.scope, requestId)) {
+              try {
+                await refreshSketches(pending.scope, requestId);
+              } catch {
+                // The write succeeded. A later drawer action will try the ordering read again.
+              }
+            }
+            return true;
+          });
+
+          sourceSaveQueueRef.current.set(flushScope, queuedWrite);
+        }
+
+        const queuedWrite = sourceSaveQueueRef.current.get(flushScope);
+        if (!queuedWrite) return true;
+        const saved = await queuedWrite;
+        if (!saved) {
+          if (
+            sourceSaveQueueRef.current.get(flushScope) === queuedWrite &&
+            !pendingSourceRef.current.has(flushScope) &&
+            (sourceSaveWorkRef.current.get(flushScope) ?? 0) === 0
+          ) {
+            sourceSaveQueueRef.current.delete(flushScope);
+          }
+          return false;
+        }
+        if (
+          !pendingSourceRef.current.has(flushScope) &&
+          sourceSaveQueueRef.current.get(flushScope) === queuedWrite
+        ) {
+          return true;
+        }
+      }
+    },
+    [isRequestCurrent, isScopeCurrent, refreshSketches, releaseRemovalGuardIfSaved],
+  );
+
+  const flushMetadataSave = useCallback(
+    async (targetScope?: EditorScope | null): Promise<boolean> => {
+      const flushScope = targetScope ?? activeScopeRef.current;
+      if (!flushScope) return true;
+
+      const saveTimer = metadataSaveTimersRef.current.get(flushScope);
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        metadataSaveTimersRef.current.delete(flushScope);
+      }
+
+      while (true) {
+        const pending = pendingMetadataRef.current.get(flushScope) ?? null;
+        if (pending) {
+          pendingMetadataRef.current.delete(flushScope);
+          metadataSaveWorkRef.current.set(
+            flushScope,
+            (metadataSaveWorkRef.current.get(flushScope) ?? 0) + 1,
+          );
+          const requestId = requestGenerationRef.current;
+          const previousWrite =
+            metadataSaveQueueRef.current.get(flushScope) ?? Promise.resolve(true);
+
+          const queuedWrite = previousWrite.then(async () => {
+            try {
+              await pending.scope.repository.updateMetadata(
+                pending.scope.profileId,
+                pending.sketchId,
+                pending.metadata,
+              );
+              if (isScopeCurrent(pending.scope)) setMetadataSaveErrorState(null);
+            } catch {
+              if (
+                isScopeCurrent(pending.scope) &&
+                pending.revision === metadataRevisionRef.current &&
+                !pendingMetadataRef.current.has(pending.scope)
+              ) {
+                pendingMetadataRef.current.set(pending.scope, pending);
+              }
+              if (isScopeCurrent(pending.scope)) {
+                setMetadataSaveErrorState({
+                  message: "Could not save parameters. Your values are still here.",
+                  scope: pending.scope,
+                });
+              }
+              return false;
+            } finally {
+              const remainingWork =
+                (metadataSaveWorkRef.current.get(flushScope) ?? 1) - 1;
+              if (remainingWork > 0) {
+                metadataSaveWorkRef.current.set(flushScope, remainingWork);
+              } else {
+                metadataSaveWorkRef.current.delete(flushScope);
+              }
+              releaseRemovalGuardIfSaved(pending.scope);
+            }
+
+            if (isRequestCurrent(pending.scope, requestId)) {
+              try {
+                await refreshSketches(pending.scope, requestId);
+              } catch {
+                // The values are saved even if this ordering refresh could not complete.
+              }
+            }
+            return true;
+          });
+
+          metadataSaveQueueRef.current.set(flushScope, queuedWrite);
+        }
+
+        const queuedWrite = metadataSaveQueueRef.current.get(flushScope);
+        if (!queuedWrite) return true;
+        const saved = await queuedWrite;
+        if (!saved) {
+          if (
+            metadataSaveQueueRef.current.get(flushScope) === queuedWrite &&
+            !pendingMetadataRef.current.has(flushScope) &&
+            (metadataSaveWorkRef.current.get(flushScope) ?? 0) === 0
+          ) {
+            metadataSaveQueueRef.current.delete(flushScope);
+          }
+          return false;
+        }
+        if (
+          !pendingMetadataRef.current.has(flushScope) &&
+          metadataSaveQueueRef.current.get(flushScope) === queuedWrite
+        ) {
+          return true;
+        }
+      }
+    },
+    [isRequestCurrent, isScopeCurrent, refreshSketches, releaseRemovalGuardIfSaved],
+  );
+
+  const flushAllSaves = useCallback(
+    async (targetScope?: EditorScope | null): Promise<boolean> => {
+      const flushScope = targetScope ?? activeScopeRef.current;
+      if (!flushScope) return true;
+
+      while (true) {
+        const sourceSaved = await flushSourceSave(flushScope);
+        const metadataSaved = await flushMetadataSave(flushScope);
+        if (!sourceSaved || !metadataSaved) return false;
+        if (
+          !pendingSourceRef.current.has(flushScope) &&
+          !pendingMetadataRef.current.has(flushScope) &&
+          (sourceSaveWorkRef.current.get(flushScope) ?? 0) === 0 &&
+          (metadataSaveWorkRef.current.get(flushScope) ?? 0) === 0
+        ) {
+          return true;
+        }
+      }
+    },
+    [flushMetadataSave, flushSourceSave],
+  );
+  const restoreActiveRoute = useCallback(
+    (targetScope: EditorScope) => {
+      const current = editorRef.current;
+      if (!isScopeCurrent(targetScope) || current?.scope !== targetScope) return;
+      if (routeSketchIdRef.current === current.sketch.id) return;
+
+      routeSketchIdRef.current = current.sketch.id;
+      router.setParams({ sketchId: current.sketch.id });
+    },
+    [isScopeCurrent, router],
+  );
+
+  const activateSketch = useCallback(
+    (
+      targetScope: EditorScope,
+      requestId: number,
+      next: Sketch,
+      nextSketches: Sketch[],
+    ) => {
+      if (!isRequestCurrent(targetScope, requestId)) return false;
+
+      if (compileTimer.current) {
+        clearTimeout(compileTimer.current);
+        compileTimer.current = null;
+      }
+      pendingSourceRef.current.delete(targetScope);
+      pendingMetadataRef.current.delete(targetScope);
+      setRemovalGuardActive(false);
+
+      const snapshot = { scope: targetScope, sketch: next, sketches: nextSketches };
+      editorRef.current = snapshot;
+      sketchRef.current = next;
+      setLoadedEditor(snapshot);
+      setCompiledSource(next.source);
+      setErrors([]);
+      setShowingLastWorking(false);
+      setSourceSaveErrorState(null);
+      setMetadataSaveErrorState(null);
+      setLoadErrorState(null);
+      setMutationErrorState(null);
+      setParametersOpen(false);
+
+      if (routeSketchIdRef.current !== next.id) {
+        routeSketchIdRef.current = next.id;
+        router.setParams({ sketchId: next.id });
+      }
+      return true;
+    },
+    [isRequestCurrent, router],
+  );
 
   useEffect(() => {
-    if (!sketchRepository || !profileId) return;
+    if (!scope) return;
 
+    const current = editorRef.current;
+    if (current?.scope === scope && routeSketchId && current.sketch.id === routeSketchId) {
+      return;
+    }
+
+    const requestId = ++requestGenerationRef.current;
+    const request = { requestId, scope };
+    loadBusyRef.current = request;
+    setLoadBusyScope(scope);
+    setLoadErrorState(null);
     let cancelled = false;
+    const currentRequest = () => !cancelled && isRequestCurrent(scope, requestId);
 
     void (async () => {
-      if (!(await flushAllSaves())) return;
+      try {
+        if (current?.scope === scope) {
+          const saved = await flushAllSaves();
+          if (!currentRequest()) return;
+          if (!saved) {
+            restoreActiveRoute(scope);
+            return;
+          }
+        }
 
-      const existing = await sketchRepository.list(profileId);
-      const requested = routeSketchId
-        ? await sketchRepository.get(profileId, routeSketchId)
-        : null;
-      const opened =
-        requested ??
-        existing[0] ??
-        (await sketchRepository.create(profileId, STARTER_SKETCH_TITLE, STARTER_SKETCH_SOURCE));
-      const all = existing.length === 0
-        ? await sketchRepository.list(profileId)
-        : existing;
+        const existing = await scope.repository.list(scope.profileId);
+        if (!currentRequest()) return;
 
-      if (cancelled) return;
-      if (!(await flushAllSaves()) || cancelled) return;
-      setSketches(all);
-      activateSketch(opened);
+        const requested = routeSketchId
+          ? await scope.repository.get(scope.profileId, routeSketchId)
+          : null;
+        if (!currentRequest()) return;
+
+        let opened = requested ?? existing[0] ?? null;
+        let all = existing;
+        if (!opened) {
+          opened = await scope.repository.create(
+            scope.profileId,
+            STARTER_SKETCH_TITLE,
+            STARTER_SKETCH_SOURCE,
+          );
+          if (!currentRequest()) return;
+          all = await scope.repository.list(scope.profileId);
+          if (!currentRequest()) return;
+        }
+
+        if (current?.scope === scope) {
+          const saved = await flushAllSaves();
+          if (!currentRequest()) return;
+          if (!saved) {
+            restoreActiveRoute(scope);
+            return;
+          }
+        }
+        activateSketch(scope, requestId, opened, all);
+      } catch {
+        if (currentRequest()) {
+          setLoadErrorState({ message: "Could not load the editor. Try again.", scope });
+          restoreActiveRoute(scope);
+        }
+      } finally {
+        if (loadBusyRef.current === request) {
+          loadBusyRef.current = null;
+          setLoadBusyScope((busyScope) => (busyScope === scope ? null : busyScope));
+        }
+      }
     })();
 
     return () => {
       cancelled = true;
+      if (requestGenerationRef.current === requestId) requestGenerationRef.current += 1;
     };
-  }, [activateSketch, flushAllSaves, profileId, routeSketchId, sketchRepository]);
+  }, [
+    activateSketch,
+    flushAllSaves,
+    isRequestCurrent,
+    loadRetry,
+    restoreActiveRoute,
+    routeSketchId,
+    scope,
+  ]);
 
   useEffect(
     () => () => {
       if (compileTimer.current) clearTimeout(compileTimer.current);
-      void flushAllSaves();
+      void flushAllSaves(scope);
     },
-    [flushAllSaves],
+    [flushAllSaves, scope],
   );
 
   useEffect(() => {
-    if (!parametersOpen && !drawerOpen) return;
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState !== "inactive" && nextAppState !== "background") return;
 
+      void flushAllSaves()
+        .then((saved) => {
+          if (!saved) {
+            console.warn(
+              "Could not finish saving editor changes while the app is in the background.",
+            );
+          }
+        })
+        .catch(() => {
+          console.warn(
+            "Could not finish saving editor changes while the app is in the background.",
+          );
+        });
+    });
+
+    return () => subscription.remove();
+  }, [flushAllSaves]);
+
+  const leaveDirectEntry = useCallback(() => {
+    const targetScope = activeScopeRef.current;
+    if (!targetScope || directBackRequestRef.current) return;
+
+    directBackRequestRef.current = targetScope;
+    setParametersOpen(false);
+    setDrawerOpen(false);
+    setDirectBackScope(targetScope);
+  }, []);
+
+  useEffect(() => {
+    if (!directBackScope) return;
+    if (!isScopeCurrent(directBackScope)) {
+      if (directBackRequestRef.current === directBackScope) {
+        directBackRequestRef.current = null;
+      }
+      setDirectBackScope(null);
+      return;
+    }
+    if (parametersOpen || drawerOpen) return;
+
+    setDirectBackScope(null);
+    void (async () => {
+      try {
+        if (
+          !(await flushAllSaves(directBackScope)) ||
+          !isScopeCurrent(directBackScope)
+        ) {
+          return;
+        }
+        router.replace("/library");
+      } finally {
+        if (directBackRequestRef.current === directBackScope) {
+          directBackRequestRef.current = null;
+        }
+      }
+    })();
+  }, [
+    directBackScope,
+    drawerOpen,
+    flushAllSaves,
+    isScopeCurrent,
+    parametersOpen,
+    router,
+  ]);
+  const handleEditorBack = useCallback(() => {
+    if (editorActionBusy) return;
+    if (!router.canGoBack()) {
+      leaveDirectEntry();
+      return;
+    }
+    router.back();
+  }, [editorActionBusy, leaveDirectEntry, router]);
+
+  useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       if (parametersOpen) {
         setParametersOpen(false);
         return true;
       }
       if (drawerOpen) {
-        setDrawerOpen(false);
+        if (!editorActionBusy) setDrawerOpen(false);
+        return true;
+      }
+      if (!router.canGoBack()) {
+        leaveDirectEntry();
         return true;
       }
       return false;
     });
 
     return () => subscription.remove();
-  }, [drawerOpen, parametersOpen]);
+  }, [drawerOpen, editorActionBusy, leaveDirectEntry, parametersOpen, router]);
 
-  usePreventRemove(removalGuardActive, ({ data: { action } }) => {
-    if (removalFlushRef.current) return;
+  usePreventRemove(removalGuardActive || drawerOpen || parametersOpen, ({ data: { action } }) => {
+    if (
+      editorActionBusy ||
+      capturedRemovalActionRef.current ||
+      removalFlushRef.current
+    ) {
+      return;
+    }
 
+    capturedRemovalActionRef.current = action;
+    setCapturedRemovalAction(action);
+    setParametersOpen(false);
+    setDrawerOpen(false);
+  });
+
+  useEffect(() => {
+    if (
+      drawerOpen ||
+      parametersOpen ||
+      !capturedRemovalAction ||
+      removalFlushRef.current
+    ) {
+      return;
+    }
+
+    const action = capturedRemovalAction;
     const removalFlush = (async () => {
       let actionReady = false;
       try {
@@ -320,146 +711,369 @@ export default function EditorScreen() {
         setRemovalGuardActive(false);
         setReadyRemovalAction(action);
       } finally {
-        if (!actionReady) removalFlushRef.current = null;
+        removalFlushRef.current = null;
+        capturedRemovalActionRef.current = null;
+        setCapturedRemovalAction(null);
+        if (!actionReady) setReadyRemovalAction(null);
       }
     })();
     removalFlushRef.current = removalFlush;
-  });
+  }, [capturedRemovalAction, drawerOpen, flushAllSaves, parametersOpen]);
 
   useEffect(() => {
-    if (removalGuardActive || !readyRemovalAction) return;
+    if (
+      removalGuardActive ||
+      drawerOpen ||
+      parametersOpen ||
+      !readyRemovalAction
+    ) {
+      return;
+    }
 
     const action = readyRemovalAction;
     setReadyRemovalAction(null);
-    removalFlushRef.current = null;
     navigation.dispatch(action);
-  }, [navigation, readyRemovalAction, removalGuardActive]);
+  }, [drawerOpen, navigation, parametersOpen, readyRemovalAction, removalGuardActive]);
+
+  useEffect(() => {
+    if (!libraryReturnScope) return;
+    if (!isScopeCurrent(libraryReturnScope)) {
+      setLibraryReturnScope(null);
+      return;
+    }
+    if (drawerOpen || parametersOpen) return;
+
+    setLibraryReturnScope(null);
+    router.replace("/library");
+  }, [drawerOpen, isScopeCurrent, libraryReturnScope, parametersOpen, router]);
 
   const handleSourceChange = useCallback(
     (next: string) => {
-      const active = sketchRef.current;
-      if (!active) return;
+      const current = editorRef.current;
+      if (!current || !isScopeCurrent(current.scope)) return;
 
       setRemovalGuardActive(true);
       sourceRevisionRef.current += 1;
-      pendingSourceRef.current = {
+      pendingSourceRef.current.set(current.scope, {
         revision: sourceRevisionRef.current,
-        sketchId: active.id,
+        scope: current.scope,
+        sketchId: current.sketch.id,
         source: next,
-      };
+      });
 
       if (compileTimer.current) clearTimeout(compileTimer.current);
       compileTimer.current = setTimeout(() => {
         compileTimer.current = null;
-        setCompiledSource(next);
+        if (isScopeCurrent(current.scope)) setCompiledSource(next);
       }, COMPILE_DEBOUNCE_MS);
 
-      if (sourceSaveTimer.current) clearTimeout(sourceSaveTimer.current);
-      sourceSaveTimer.current = setTimeout(() => {
-        sourceSaveTimer.current = null;
-        void flushSourceSave();
+      const previousSaveTimer = sourceSaveTimersRef.current.get(current.scope);
+      if (previousSaveTimer) clearTimeout(previousSaveTimer);
+      const saveTimer = setTimeout(() => {
+        sourceSaveTimersRef.current.delete(current.scope);
+        void flushSourceSave(current.scope);
       }, SOURCE_AUTOSAVE_DEBOUNCE_MS);
+      sourceSaveTimersRef.current.set(current.scope, saveTimer);
     },
-    [flushSourceSave],
+    [flushSourceSave, isScopeCurrent],
   );
 
   const handleParametersChange = useCallback(
     (parameters: ShaderParameterDefinition[]) => {
-      const active = sketchRef.current;
-      if (!active) return;
+      const current = editorRef.current;
+      if (!current || !isScopeCurrent(current.scope)) return;
 
-      const metadata: SketchMetadata = { ...active.metadata, parameters };
-      const next = { ...active, metadata };
-      sketchRef.current = next;
-      setSketch(next);
-      setSketches((current) =>
-        current.map((item) => (item.id === next.id ? { ...item, metadata } : item)),
-      );
+      const metadata: SketchMetadata = { ...current.sketch.metadata, parameters };
+      const nextSketch = { ...current.sketch, metadata };
+      const nextEditor = {
+        ...current,
+        sketch: nextSketch,
+        sketches: current.sketches.map((item) =>
+          item.id === nextSketch.id ? { ...item, metadata } : item,
+        ),
+      };
+      editorRef.current = nextEditor;
+      sketchRef.current = nextSketch;
+      setLoadedEditor(nextEditor);
       setRemovalGuardActive(true);
       metadataRevisionRef.current += 1;
-      pendingMetadataRef.current = {
+      pendingMetadataRef.current.set(current.scope, {
         metadata,
         revision: metadataRevisionRef.current,
-        sketchId: next.id,
-      };
+        scope: current.scope,
+        sketchId: nextSketch.id,
+      });
 
-      if (metadataSaveTimer.current) clearTimeout(metadataSaveTimer.current);
-      metadataSaveTimer.current = setTimeout(() => {
-        metadataSaveTimer.current = null;
-        void flushMetadataSave();
+      const previousSaveTimer = metadataSaveTimersRef.current.get(current.scope);
+      if (previousSaveTimer) clearTimeout(previousSaveTimer);
+      const saveTimer = setTimeout(() => {
+        metadataSaveTimersRef.current.delete(current.scope);
+        void flushMetadataSave(current.scope);
       }, METADATA_AUTOSAVE_DEBOUNCE_MS);
+      metadataSaveTimersRef.current.set(current.scope, saveTimer);
     },
-    [flushMetadataSave],
+    [flushMetadataSave, isScopeCurrent],
+  );
+
+  const refreshAfterMutation = useCallback(
+    async (
+      targetScope: EditorScope,
+      requestId: number,
+      localFallback: Sketch[],
+    ): Promise<Sketch[] | null> => {
+      try {
+        const refreshed = await targetScope.repository.list(targetScope.profileId);
+        if (!isRequestCurrent(targetScope, requestId)) return null;
+        setOrderingRefreshErrorScope((errorScope) =>
+          errorScope === targetScope ? null : errorScope,
+        );
+        return refreshed;
+      } catch {
+        if (!isRequestCurrent(targetScope, requestId)) return null;
+        setOrderingRefreshErrorScope(targetScope);
+        return localFallback;
+      }
+    },
+    [isRequestCurrent],
+  );
+
+  const runEditorAction = useCallback(
+    async (
+      targetScope: EditorScope,
+      errorMessage: string,
+      operation: (requestId: number) => Promise<void>,
+    ) => {
+      if (
+        !isScopeCurrent(targetScope) ||
+        actionBusyRef.current?.scope === targetScope ||
+        loadBusyRef.current?.scope === targetScope
+      ) {
+        return;
+      }
+
+      const requestId = ++requestGenerationRef.current;
+      const request = { requestId, scope: targetScope };
+      actionBusyRef.current = request;
+      setActionBusyScope(targetScope);
+      setMutationErrorState(null);
+
+      try {
+        await operation(requestId);
+      } catch {
+        if (isRequestCurrent(targetScope, requestId)) {
+          setMutationErrorState({ message: errorMessage, scope: targetScope });
+        }
+      } finally {
+        if (actionBusyRef.current === request) {
+          actionBusyRef.current = null;
+          setActionBusyScope((busyScope) => (busyScope === targetScope ? null : busyScope));
+        }
+      }
+    },
+    [isRequestCurrent, isScopeCurrent],
   );
 
   const openSketch = useCallback(
     async (id: string) => {
-      if (!(await flushAllSaves()) || !sketchRepository || !profileId) return;
+      if (!scope) return;
 
-      const next = await sketchRepository.get(profileId, id);
-      if (!next) return;
+      await runEditorAction(
+        scope,
+        "Could not open that shader. Your current shader is unchanged.",
+        async (requestId) => {
+          if (!(await flushAllSaves()) || !isRequestCurrent(scope, requestId)) return;
 
-      setSketches(await sketchRepository.list(profileId));
-      activateSketch(next);
-      setDrawerOpen(false);
+          const next = await scope.repository.get(scope.profileId, id);
+          if (!isRequestCurrent(scope, requestId)) return;
+          if (!next) throw new Error("Sketch not found");
+
+          const all = await scope.repository.list(scope.profileId);
+          if (!isRequestCurrent(scope, requestId)) return;
+          if (!(await flushAllSaves()) || !isRequestCurrent(scope, requestId)) return;
+
+          if (activateSketch(scope, requestId, next, all)) setDrawerOpen(false);
+        },
+      );
     },
-    [activateSketch, flushAllSaves, profileId, sketchRepository],
+    [activateSketch, flushAllSaves, isRequestCurrent, runEditorAction, scope],
   );
 
   const createSketch = useCallback(async () => {
-    if (!(await flushAllSaves()) || !sketchRepository || !profileId) return;
+    if (!scope) return;
 
-    const created = await sketchRepository.create(
-      profileId,
-      STARTER_SKETCH_TITLE,
-      STARTER_SKETCH_SOURCE,
+    await runEditorAction(
+      scope,
+      "Could not create a shader. Your current shader is unchanged.",
+      async (requestId) => {
+        if (!(await flushAllSaves(scope)) || !isRequestCurrent(scope, requestId)) return;
+
+        const current = editorRef.current;
+        if (current?.scope !== scope) return;
+        const created = await scope.repository.create(
+          scope.profileId,
+          STARTER_SKETCH_TITLE,
+          STARTER_SKETCH_SOURCE,
+        );
+        if (!isRequestCurrent(scope, requestId)) return;
+
+        const localFallback = [
+          created,
+          ...current.sketches.filter((item) => item.id !== created.id),
+        ];
+        const refreshed = await refreshAfterMutation(
+          scope,
+          requestId,
+          localFallback,
+        );
+        if (!refreshed || !isRequestCurrent(scope, requestId)) return;
+        const all = refreshed.some((item) => item.id === created.id)
+          ? refreshed.map((item) => (item.id === created.id ? created : item))
+          : [created, ...refreshed];
+
+        if (activateSketch(scope, requestId, created, all)) setDrawerOpen(false);
+      },
     );
-    setSketches(await sketchRepository.list(profileId));
-    activateSketch(created);
-    setDrawerOpen(false);
-  }, [activateSketch, flushAllSaves, profileId, sketchRepository]);
+  }, [
+    activateSketch,
+    flushAllSaves,
+    isRequestCurrent,
+    refreshAfterMutation,
+    runEditorAction,
+    scope,
+  ]);
 
   const renameSketch = useCallback(
     async (id: string, title: string) => {
-      if (!(await flushAllSaves()) || !sketchRepository || !profileId) return;
+      if (!scope) return;
 
-      await sketchRepository.rename(profileId, id, title);
-      setSketches(await sketchRepository.list(profileId));
-      const active = sketchRef.current;
-      if (active?.id === id) {
-        const next = { ...active, title };
-        sketchRef.current = next;
-        setSketch(next);
-      }
+      await runEditorAction(
+        scope,
+        "Could not rename that shader. Its current title is unchanged.",
+        async (requestId) => {
+          if (!(await flushAllSaves(scope)) || !isRequestCurrent(scope, requestId)) return;
+
+          await scope.repository.rename(scope.profileId, id, title);
+          if (!isRequestCurrent(scope, requestId)) return;
+
+          const current = editorRef.current;
+          if (current?.scope !== scope) return;
+          const localFallback = current.sketches.map((item) =>
+            item.id === id ? { ...item, title } : item,
+          );
+          const refreshed = await refreshAfterMutation(
+            scope,
+            requestId,
+            localFallback,
+          );
+          if (!refreshed || !isRequestCurrent(scope, requestId)) return;
+
+          const nextSketch =
+            current.sketch.id === id ? { ...current.sketch, title } : current.sketch;
+          const nextEditor = {
+            scope,
+            sketch: nextSketch,
+            sketches: refreshed.map((item) =>
+              item.id === id ? { ...item, title } : item,
+            ),
+          };
+          editorRef.current = nextEditor;
+          sketchRef.current = nextSketch;
+          setLoadedEditor(nextEditor);
+        },
+      );
     },
-    [flushAllSaves, profileId, sketchRepository],
+    [
+      flushAllSaves,
+      isRequestCurrent,
+      refreshAfterMutation,
+      runEditorAction,
+      scope,
+    ],
   );
 
   const deleteSketch = useCallback(
     async (id: string) => {
-      if (!(await flushAllSaves()) || !sketchRepository || !profileId) return;
+      if (!scope) return;
 
-      await sketchRepository.delete(profileId, id);
-      const remaining = await sketchRepository.list(profileId);
-      setSketches(remaining);
+      await runEditorAction(
+        scope,
+        "Could not delete that shader. Your current shader is unchanged.",
+        async (requestId) => {
+          if (!(await flushAllSaves(scope)) || !isRequestCurrent(scope, requestId)) return;
 
-      if (sketchRef.current?.id !== id) return;
+          await scope.repository.delete(scope.profileId, id);
+          if (!isRequestCurrent(scope, requestId)) return;
 
-      if (remaining[0]) {
-        activateSketch(remaining[0]);
-        setDrawerOpen(false);
-        return;
-      }
+          const current = editorRef.current;
+          if (current?.scope !== scope) return;
+          const localRemaining = current.sketches.filter((item) => item.id !== id);
+          const refreshed = await refreshAfterMutation(
+            scope,
+            requestId,
+            localRemaining,
+          );
+          if (!refreshed || !isRequestCurrent(scope, requestId)) return;
+          const remaining = refreshed.filter((item) => item.id !== id);
 
-      sketchRef.current = null;
-      setSketch(null);
-      setDrawerOpen(false);
-      setParametersOpen(false);
-      router.replace("/library");
+          if (current.sketch.id !== id) {
+            const nextEditor = { ...current, sketches: remaining };
+            editorRef.current = nextEditor;
+            setLoadedEditor(nextEditor);
+            return;
+          }
+
+          if (remaining[0]) {
+            if (activateSketch(scope, requestId, remaining[0], remaining)) {
+              setDrawerOpen(false);
+            }
+            return;
+          }
+
+          editorRef.current = null;
+          sketchRef.current = null;
+          setLoadedEditor(null);
+          setDrawerOpen(false);
+          setParametersOpen(false);
+          setLibraryReturnScope(scope);
+        },
+      );
     },
-    [activateSketch, flushAllSaves, profileId, router, sketchRepository],
+    [
+      activateSketch,
+      flushAllSaves,
+      isRequestCurrent,
+      refreshAfterMutation,
+      runEditorAction,
+      scope,
+    ],
   );
 
+  const retryOrderingRefresh = useCallback(async () => {
+    if (!scope || orderingRefreshErrorScope !== scope) return;
+
+    await runEditorAction(
+      scope,
+      "Could not refresh the file list. Try again.",
+      async (requestId) => {
+        const refreshed = await scope.repository.list(scope.profileId);
+        if (!isRequestCurrent(scope, requestId)) return;
+
+        const current = editorRef.current;
+        if (current?.scope !== scope) return;
+        const nextEditor = { ...current, sketches: refreshed };
+        editorRef.current = nextEditor;
+        setLoadedEditor(nextEditor);
+        setOrderingRefreshErrorScope((errorScope) =>
+          errorScope === scope ? null : errorScope,
+        );
+      },
+    );
+  }, [
+    isRequestCurrent,
+    orderingRefreshErrorScope,
+    runEditorAction,
+    scope,
+  ]);
   const handleCompileResult = useCallback((result: HostCompileResult) => {
     if (result.ok) {
       setErrors([]);
@@ -475,17 +1089,34 @@ export default function EditorScreen() {
     return (
       <SafeAreaView edges={["top"]} style={styles.screen}>
         <View style={styles.loading}>
-          <Text style={styles.loadingText}>Opening editor…</Text>
+          {loadError ? (
+            <>
+              <Text accessibilityRole="alert" style={styles.loadingError}>
+                {loadError}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setLoadRetry((retry) => retry + 1)}
+                style={styles.retryButton}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Text style={styles.loadingText}>Opening editor…</Text>
+          )}
         </View>
         <BottomNavigation activeItem="editor" onBeforeNavigate={flushAllSaves} />
       </SafeAreaView>
     );
   }
-
   const hasEditorMessage =
     showingLastWorking ||
     sourceSaveError !== null ||
     metadataSaveError !== null ||
+    loadError !== null ||
+    mutationError !== null ||
+    orderingRefreshError !== null ||
     sketch.metadataWarning !== null;
 
   return (
@@ -493,6 +1124,13 @@ export default function EditorScreen() {
       <View style={styles.appFrame}>
         <View style={styles.header} testID="editor-header">
           <View style={styles.fileIdentity}>
+            <HeaderAction
+              fallback="‹"
+              label="Back to shader library"
+              name={{ android: "arrow_back", ios: "chevron.left", web: "arrow_back" }}
+              onPress={handleEditorBack}
+              testID="editor-back"
+            />
             <HeaderAction
               fallback="☰"
               label="Open shader files"
@@ -564,10 +1202,35 @@ export default function EditorScreen() {
                 {metadataSaveError !== null && (
                   <Text style={styles.saveError}>{metadataSaveError}</Text>
                 )}
+                {loadError !== null && <Text style={styles.saveError}>{loadError}</Text>}
+                {mutationError !== null && (
+                  <Text accessibilityRole="alert" style={styles.saveError}>
+                    {mutationError}
+                  </Text>
+                )}
+                {orderingRefreshError !== null && (
+                  <View>
+                    <Text accessibilityRole="alert" style={styles.saveError}>
+                      {orderingRefreshError}
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={editorBusy}
+                      onPress={() => void retryOrderingRefresh()}
+                      style={({ pressed }) => [
+                        styles.orderingRetryButton,
+                        pressed && styles.headerActionPressed,
+                      ]}
+                    >
+                      <Text style={styles.orderingRetryButtonText}>Retry file order</Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
             )}
 
             <GlslInput
+              editable={!editorActionBusy}
               errors={errors}
               initialValue={sketch.source}
               key={sketch.id}
@@ -590,7 +1253,8 @@ export default function EditorScreen() {
 
         <ShaderFileDrawer
           activeSketchId={sketch.id}
-          onClose={() => setDrawerOpen(false)}
+          busy={editorBusy}
+          onClose={() => !editorActionBusy && setDrawerOpen(false)}
           onCreate={() => void createSketch()}
           onDelete={(id) => void deleteSketch(id)}
           onRename={(id, title) => void renameSketch(id, title)}
@@ -780,6 +1444,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
   },
+  orderingRetryButton: {
+    alignSelf: "flex-start",
+    borderColor: Colors.electricBlue,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    marginBottom: Spacing.xs,
+    marginHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  orderingRetryButtonText: {
+    color: Colors.electricBlue,
+    fontSize: 11,
+    fontWeight: "700",
+  },
   parametersOverlay: {
     bottom: Spacing.sm,
     left: Spacing.md,
@@ -791,7 +1470,26 @@ const styles = StyleSheet.create({
   loading: {
     alignItems: "center",
     flex: 1,
+    gap: Spacing.md,
     justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  loadingError: {
+    color: Colors.coral,
+    fontSize: 14,
+    textAlign: "center",
+  },
+  retryButton: {
+    borderColor: Colors.electricBlue,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  retryButtonText: {
+    color: Colors.electricBlue,
+    fontSize: 13,
+    fontWeight: "700",
   },
   loadingText: {
     color: Colors.textMuted,

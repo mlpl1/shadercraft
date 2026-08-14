@@ -17,6 +17,7 @@ import { Colors, Radius, Spacing } from "../constants/theme";
 import type { Sketch } from "../data/sketches/sketch-repository";
 
 type ShaderFileDrawerProps = {
+  busy?: boolean;
   visible: boolean;
   sketches: Sketch[];
   activeSketchId: string;
@@ -53,6 +54,7 @@ function groupByCategory(sketches: Sketch[]): Array<[string, Sketch[]]> {
 }
 
 export function ShaderFileDrawer({
+  busy = false,
   visible,
   sketches,
   activeSketchId,
@@ -78,13 +80,14 @@ export function ShaderFileDrawer({
   }, [progress, visible]);
 
   const submitRename = (id: string) => {
+    if (busy) return;
     const trimmed = draftTitle.trim();
     setRenamingId(null);
     if (trimmed.length > 0) onRename(id, trimmed);
   };
 
   const confirmDelete = (sketch: Sketch) => {
-    if (!canDelete) return;
+    if (busy || !canDelete) return;
 
     Alert.alert("Delete " + sketch.title + "?", "This shader file will be permanently deleted.", [
       { style: "cancel", text: "Cancel" },
@@ -92,10 +95,14 @@ export function ShaderFileDrawer({
     ]);
   };
 
+  const requestClose = () => {
+    if (!busy) onClose();
+  };
+
   return (
     <Modal
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={requestClose}
       testID="shader-file-drawer-modal"
       transparent
       visible={visible}
@@ -104,7 +111,9 @@ export function ShaderFileDrawer({
         <Pressable
           accessibilityLabel="Close file drawer"
           accessibilityRole="button"
-          onPress={onClose}
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          onPress={requestClose}
           style={styles.scrim}
           testID="shader-file-drawer-scrim"
         />
@@ -131,8 +140,10 @@ export function ShaderFileDrawer({
             <Pressable
               accessibilityLabel="Close"
               accessibilityRole="button"
+              accessibilityState={{ disabled: busy }}
+              disabled={busy}
               hitSlop={8}
-              onPress={onClose}
+              onPress={requestClose}
             >
               <AppIcon
                 color={Colors.textMuted}
@@ -152,6 +163,7 @@ export function ShaderFileDrawer({
                     {renamingId === sketch.id ? (
                       <TextInput
                         autoFocus
+                        editable={!busy}
                         onChangeText={setDraftTitle}
                         onSubmitEditing={() => submitRename(sketch.id)}
                         style={styles.titleInput}
@@ -161,7 +173,11 @@ export function ShaderFileDrawer({
                     ) : (
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityState={{ selected: sketch.id === activeSketchId }}
+                        accessibilityState={{
+                          disabled: busy,
+                          selected: sketch.id === activeSketchId,
+                        }}
+                        disabled={busy}
                         onPress={() => onSelect(sketch.id)}
                         style={[
                           styles.file,
@@ -183,6 +199,7 @@ export function ShaderFileDrawer({
                       <Pressable
                         accessibilityLabel={`Rename ${sketch.title}`}
                         accessibilityRole="button"
+                        disabled={busy}
                         hitSlop={8}
                         onPress={() => {
                           setRenamingId(sketch.id);
@@ -195,12 +212,14 @@ export function ShaderFileDrawer({
                       <Pressable
                         accessibilityLabel={`Delete ${sketch.title}`}
                         accessibilityRole="button"
-                        disabled={!canDelete}
+                        disabled={busy || !canDelete}
                         hitSlop={8}
                         onPress={() => confirmDelete(sketch)}
                         testID={`sketch-delete-${sketch.id}`}
                       >
-                        <Text style={[styles.action, !canDelete && styles.actionDisabled]}>Delete</Text>
+                        <Text style={[styles.action, (busy || !canDelete) && styles.actionDisabled]}>
+                          Delete
+                        </Text>
                       </Pressable>
                     </View>
                   </View>
@@ -215,8 +234,12 @@ export function ShaderFileDrawer({
           >
             <Pressable
               accessibilityRole="button"
+              disabled={busy}
               onPress={onCreate}
-              style={({ pressed }) => [styles.createButton, pressed && styles.createButtonPressed]}
+              style={({ pressed }) => [
+                styles.createButton,
+                (pressed || busy) && styles.createButtonPressed,
+              ]}
             >
               <Text style={styles.createButtonText}>New sketch</Text>
             </Pressable>

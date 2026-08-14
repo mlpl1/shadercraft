@@ -1,4 +1,4 @@
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 import { ShaderParametersPanel } from "../shader-parameters-panel";
@@ -131,6 +131,28 @@ describe("ShaderParametersPanel", () => {
         step: 0.1,
         defaultValue: 1,
         value: 1,
+      }),
+    ]);
+  });
+
+  it("accepts signed range values from a signed numeric keyboard", async () => {
+    const current = props({ parameters: [] });
+    await render(<ShaderParametersPanel {...current} />);
+    await openAddForm();
+
+    expect(screen.getByLabelText("Minimum value").props.keyboardType).toBe(
+      Platform.select({ android: "numeric", ios: "numbers-and-punctuation", default: "default" }),
+    );
+    await completeForm({ min: "-2", max: "2", defaultValue: "-1" });
+    await fireEvent.press(screen.getByRole("button", { name: "Add parameter" }));
+
+    expect(current.onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        key: "u_speed",
+        min: -2,
+        max: 2,
+        defaultValue: -1,
+        value: -1,
       }),
     ]);
   });

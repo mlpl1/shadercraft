@@ -348,7 +348,7 @@ describe("LibraryScreen", () => {
     expect(screen.getAllByRole("button", { name: "All" })).toHaveLength(1);
   });
 
-  it("deactivates visible previews on blur and restores only visible previews on focus", async () => {
+  it("unmounts visible sandboxes on blur and restores only visible previews on focus", async () => {
     sketches = [makeSketch("visible", "Visible"), makeSketch("hidden", "Hidden")];
     await render(<LibraryScreen />);
     await screen.findByText("Visible");
@@ -362,15 +362,16 @@ describe("LibraryScreen", () => {
     expect(mockSandbox).toHaveBeenCalledWith(
       expect.objectContaining({ active: true, source: "source-visible" }),
     );
+    expect(screen.getByTestId("sandbox-source-visible")).toBeTruthy();
+    expect(screen.queryByTestId("sandbox-source-hidden")).toBeNull();
 
     mockSandbox.mockClear();
     await act(async () => {
       mockFocusRef.current.cleanup?.();
       mockFocusRef.current.cleanup = null;
     });
-    expect(mockSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({ active: false, source: "source-visible" }),
-    );
+    expect(screen.queryByTestId("sandbox-source-visible")).toBeNull();
+    expect(mockSandbox).not.toHaveBeenCalled();
 
     mockSandbox.mockClear();
     await act(async () => {
@@ -380,21 +381,19 @@ describe("LibraryScreen", () => {
     expect(mockSandbox).toHaveBeenCalledWith(
       expect.objectContaining({ active: true, source: "source-visible" }),
     );
-    expect(mockSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({ active: false, source: "source-hidden" }),
-    );
+    expect(screen.getByTestId("sandbox-source-visible")).toBeTruthy();
+    expect(screen.queryByTestId("sandbox-source-hidden")).toBeNull();
   });
 
-  it("keeps off-screen previews inactive and activates visible cards", async () => {
+  it("does not mount off-screen sandboxes and mounts only visible cards", async () => {
     sketches = [makeSketch("visible", "Visible"), makeSketch("hidden", "Hidden")];
     await render(<LibraryScreen />);
     await screen.findByText("Visible");
 
-    expect(mockSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({ active: false, source: "source-hidden" }),
-    );
+    expect(mockSandbox).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("sandbox-source-visible")).toBeNull();
+    expect(screen.queryByTestId("sandbox-source-hidden")).toBeNull();
 
-    mockSandbox.mockClear();
     await act(async () => {
       mockViewabilityRef.current?.({
         changed: [],
@@ -405,8 +404,7 @@ describe("LibraryScreen", () => {
     expect(mockSandbox).toHaveBeenCalledWith(
       expect.objectContaining({ active: true, source: "source-visible" }),
     );
-    expect(mockSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({ active: false, source: "source-hidden" }),
-    );
+    expect(screen.getByTestId("sandbox-source-visible")).toBeTruthy();
+    expect(screen.queryByTestId("sandbox-source-hidden")).toBeNull();
   });
 });

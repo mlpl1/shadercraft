@@ -283,8 +283,10 @@ export default function LibraryScreen() {
           ]}
           data={filteredSketches}
           extraData={isFocused ? visibleSketchIds : null}
+          initialNumToRender={3}
           keyExtractor={(sketch) => sketch.id}
           keyboardShouldPersistTaps="handled"
+          maxToRenderPerBatch={3}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               {isLoading ? (
@@ -319,7 +321,9 @@ export default function LibraryScreen() {
             />
           )}
           showsVerticalScrollIndicator={false}
+          updateCellsBatchingPeriod={50}
           viewabilityConfig={viewabilityConfig}
+          windowSize={5}
         />
 
         <BottomNavigation activeItem="editor" />

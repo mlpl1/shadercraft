@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -282,7 +283,15 @@ function Field({ label, onChangeText, value }: { label: string; onChangeText: (v
         accessibilityLabel={label}
         autoCapitalize="none"
         autoCorrect={false}
-        keyboardType={label === "Parameter key" || label === "Parameter label" ? "default" : "decimal-pad"}
+        keyboardType={
+          label === "Parameter key" || label === "Parameter label"
+            ? "default"
+            : Platform.select({
+                android: "numeric",
+                ios: "numbers-and-punctuation",
+                default: "default",
+              })
+        }
         onChangeText={onChangeText}
         selectTextOnFocus
         style={styles.input}

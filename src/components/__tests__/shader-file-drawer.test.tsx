@@ -21,6 +21,7 @@ const sketch = (
 });
 
 const props = () => ({
+  busy: false,
   visible: true,
   sketches: [sketch("a", "Alpha", "Drafts"), sketch("b", "Beta", "Experiments")],
   activeSketchId: "a",
@@ -77,6 +78,33 @@ describe("ShaderFileDrawer", () => {
     await fireEvent.press(screen.getByText("New sketch"));
 
     expect(current.onCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables every conflicting file action while the editor is busy", async () => {
+    const current = { ...props(), busy: true };
+    const alertSpy = jest.spyOn(Alert, "alert");
+    await render(<ShaderFileDrawer {...current} />);
+
+    await fireEvent.press(screen.getByTestId("sketch-row-b"));
+    await fireEvent.press(screen.getByText("New sketch"));
+    await fireEvent.press(screen.getByTestId("sketch-rename-a"));
+    await fireEvent.press(screen.getByTestId("sketch-delete-b"));
+    await fireEvent.press(screen.getByLabelText("Close"));
+    await fireEvent.press(screen.getByTestId("shader-file-drawer-scrim"));
+    await fireEvent(screen.getByTestId("shader-file-drawer-modal"), "requestClose");
+
+    expect(screen.getByTestId("sketch-row-b").props.accessibilityState).toEqual(
+      expect.objectContaining({ disabled: true, selected: false }),
+    );
+    expect(current.onSelect).not.toHaveBeenCalled();
+    expect(current.onCreate).not.toHaveBeenCalled();
+    expect(current.onRename).not.toHaveBeenCalled();
+    expect(current.onDelete).not.toHaveBeenCalled();
+    expect(current.onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Close").props.accessibilityState).toEqual(
+      expect.objectContaining({ disabled: true }),
+    );
+    expect(alertSpy).not.toHaveBeenCalled();
   });
 
   it("renames a sketch through its inline field", async () => {
