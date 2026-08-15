@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, BackHandler, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { usePreventRemove, type NavigationAction } from "expo-router/react-navigation";
 import type { SymbolViewProps } from "expo-symbols";
@@ -10,6 +10,7 @@ import { BottomNavigation } from "../components/bottom-navigation";
 import { GlslInput } from "../components/glsl-input";
 import { PreviewControls } from "../components/preview-controls";
 import { ShaderFileDrawer } from "../components/shader-file-drawer";
+import { clampPreviewHeight } from "./editor-layout";
 import { ShaderParametersPanel } from "../components/shader-parameters-panel";
 import { ShaderSandbox } from "../components/shader-sandbox";
 import { Colors, Radius, Spacing } from "../constants/theme";
@@ -98,6 +99,16 @@ export default function EditorScreen() {
 
   const [loadedEditor, setLoadedEditor] = useState<LoadedEditor | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { height: windowHeight } = useWindowDimensions();
+  const [previewHeight, setPreviewHeight] = useState(PREVIEW_HEIGHT);
+  const previewStartHeightRef = useRef(PREVIEW_HEIGHT);
+  const dividerPanResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => { previewStartHeightRef.current = previewHeight; },
+    onPanResponderMove: (_event, gesture) => {
+      setPreviewHeight(clampPreviewHeight(previewStartHeightRef.current + gesture.dy, windowHeight));
+    },
+  }), [previewHeight, windowHeight]);
   const [parametersOpen, setParametersOpen] = useState(false);
   const [compiledSource, setCompiledSource] = useState("");
   const [errors, setErrors] = useState<CompileError[]>([]);
@@ -1224,7 +1235,7 @@ export default function EditorScreen() {
           {!collapsed && (
             <View style={styles.preview} testID="preview-workspace">
               <ShaderSandbox
-                height={PREVIEW_HEIGHT}
+                height={previewHeight}
                 onCompileResult={handleCompileResult}
                 parameters={sketch.metadata.parameters}
                 paused={paused}
@@ -1238,7 +1249,7 @@ export default function EditorScreen() {
             </View>
           )}
 
-          <View style={styles.divider} testID="workspace-divider">
+          <View style={styles.divider} testID="workspace-divider" {...dividerPanResponder.panHandlers}>
             <View style={styles.dividerHandle} />
           </View>
 
