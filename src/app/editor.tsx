@@ -100,15 +100,16 @@ export default function EditorScreen() {
   const [loadedEditor, setLoadedEditor] = useState<LoadedEditor | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { height: windowHeight } = useWindowDimensions();
+  const [workspaceHeight, setWorkspaceHeight] = useState(0);
   const [previewHeight, setPreviewHeight] = useState(PREVIEW_HEIGHT);
   const previewStartHeightRef = useRef(PREVIEW_HEIGHT);
   const dividerPanResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onPanResponderGrant: () => { previewStartHeightRef.current = previewHeight; },
     onPanResponderMove: (_event, gesture) => {
-      setPreviewHeight(clampPreviewHeight(previewStartHeightRef.current + gesture.dy, windowHeight));
+      setPreviewHeight(clampPreviewHeight(previewStartHeightRef.current + gesture.dy, workspaceHeight || windowHeight));
     },
-  }), [previewHeight, windowHeight]);
+  }), [previewHeight, windowHeight, workspaceHeight]);
   const [parametersOpen, setParametersOpen] = useState(false);
   const [compiledSource, setCompiledSource] = useState("");
   const [errors, setErrors] = useState<CompileError[]>([]);
@@ -1231,7 +1232,7 @@ export default function EditorScreen() {
           </View>
         </View>
 
-        <View style={styles.workspace}>
+        <View onLayout={(event) => setWorkspaceHeight(event.nativeEvent.layout.height)} style={styles.workspace}>
           {!collapsed && (
             <View style={[styles.preview, { height: previewHeight }]} testID="preview-workspace">
               <ShaderSandbox
@@ -1431,6 +1432,7 @@ const styles = StyleSheet.create({
   },
   preview: {
     backgroundColor: Colors.surfaceLowest,
+    flexShrink: 0,
     height: PREVIEW_HEIGHT,
     overflow: "hidden",
     position: "relative",
