@@ -107,7 +107,7 @@ export default function EditorScreen() {
   const previewModeChangedRef = useRef(false);
   useEffect(() => { void import("../data/preview-preferences").then(({ loadPreviewMode }) => loadPreviewMode().then((mode) => { if (!previewModeChangedRef.current) setPreviewMode(mode); })); }, []);
   const [previewHeight, setPreviewHeight] = useState(PREVIEW_HEIGHT);
-  const displayedPreviewHeight = previewMode === "responsive" || workspaceWidth <= 0 ? previewHeight : previewMode === "square" ? workspaceWidth : workspaceWidth * 0.5625;
+  const displayedPreviewHeight = workspaceHeight > 0 && previewMode === "responsive" ? Math.max(120, workspaceHeight * 0.4) : previewMode === "square" && workspaceWidth > 0 ? workspaceWidth : previewMode === "wide" && workspaceWidth > 0 ? workspaceWidth * 0.5625 : previewHeight;
   const previewStartHeightRef = useRef(PREVIEW_HEIGHT);
   const previewWasDraggedRef = useRef(false);
   const dividerPanResponder = useMemo(() => PanResponder.create({
