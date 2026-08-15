@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   highlight: {
     ...StyleSheet.absoluteFill,
     opacity: 1,
-    zIndex: 0,
+    zIndex: 2,
     color: Colors.text,
     fontFamily: "monospace",
     fontSize: 13,
