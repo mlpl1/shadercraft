@@ -11,6 +11,7 @@ import { GlslInput } from "../components/glsl-input";
 import { PreviewControls } from "../components/preview-controls";
 import { ShaderFileDrawer } from "../components/shader-file-drawer";
 import { clampPreviewHeight } from "./editor-layout";
+import { loadPreviewMode, type PreviewMode } from "../data/preview-preferences";
 import { ShaderParametersPanel } from "../components/shader-parameters-panel";
 import { ShaderSandbox } from "../components/shader-sandbox";
 import { Colors, Radius, Spacing } from "../constants/theme";
@@ -101,6 +102,10 @@ export default function EditorScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { height: windowHeight } = useWindowDimensions();
   const [workspaceHeight, setWorkspaceHeight] = useState(0);
+  const [workspaceWidth, setWorkspaceWidth] = useState(0);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("responsive");
+  useEffect(() => { void loadPreviewMode().then(setPreviewMode); }, []);
+  const displayedPreviewHeight = previewMode === "responsive" || workspaceWidth <= 0 ? previewHeight : previewMode === "square" ? workspaceWidth : workspaceWidth * 0.5625;
   const [previewHeight, setPreviewHeight] = useState(PREVIEW_HEIGHT);
   const previewStartHeightRef = useRef(PREVIEW_HEIGHT);
   const dividerPanResponder = useMemo(() => PanResponder.create({
@@ -1232,11 +1237,11 @@ export default function EditorScreen() {
           </View>
         </View>
 
-        <View onLayout={(event) => setWorkspaceHeight(event.nativeEvent.layout.height)} style={styles.workspace}>
+        <View onLayout={(event) => { setWorkspaceHeight(event.nativeEvent.layout.height); setWorkspaceWidth(event.nativeEvent.layout.width); }} style={styles.workspace}>
           {!collapsed && (
-            <View style={[styles.preview, { height: previewHeight }]} testID="preview-workspace">
+            <View style={[styles.preview, { height: displayedPreviewHeight }]} testID="preview-workspace">
               <ShaderSandbox
-                height={previewHeight}
+                height={displayedPreviewHeight}
                 onCompileResult={handleCompileResult}
                 parameters={sketch.metadata.parameters}
                 paused={paused}
