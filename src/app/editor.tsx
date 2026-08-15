@@ -1334,6 +1334,8 @@ export default function EditorScreen() {
           onSelect={(id) => void openSketch(id)}
           sketches={sketches}
           visible={drawerOpen}
+          previewMode={previewMode}
+          onPreviewModeChange={(mode) => { setPreviewMode(mode); void import("../data/preview-preferences").then(({ savePreviewMode }) => savePreviewMode(mode)); }}
         />
       </View>
     </SafeAreaView>

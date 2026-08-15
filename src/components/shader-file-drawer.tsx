@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppIcon } from "./app-icon";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import type { Sketch } from "../data/sketches/sketch-repository";
+import type { PreviewMode } from "../data/preview-preferences";
 
 type ShaderFileDrawerProps = {
   busy?: boolean;
@@ -26,6 +27,8 @@ type ShaderFileDrawerProps = {
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  previewMode: PreviewMode;
+  onPreviewModeChange: (mode: PreviewMode) => void;
 };
 
 function formatModifiedAt(updatedAt: string): string {
@@ -63,6 +66,8 @@ export function ShaderFileDrawer({
   onRename,
   onDelete,
   onClose,
+  previewMode,
+  onPreviewModeChange,
 }: ShaderFileDrawerProps) {
   const insets = useSafeAreaInsets();
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -243,7 +248,8 @@ export function ShaderFileDrawer({
             >
               <Text style={styles.createButtonText}>New sketch</Text>
             </Pressable>
-            <Text style={styles.storage}>Internal App Storage</Text>
+<Text style={styles.storage}>Preview sizing</Text><View style={styles.previewModes}>{([["responsive", "Responsive"], ["square", "1:1"], ["wide", "16:9"]] as const).map(([value, label]) => <Pressable key={value} onPress={() => onPreviewModeChange(value)}><Text style={{ color: previewMode === value ? Colors.accent : Colors.textMuted, fontSize: 12 }}>{label}</Text></Pressable>)}</View>
+                        <Text style={styles.storage}>Internal App Storage</Text>
           </View>
         </Animated.View>
       </View>
