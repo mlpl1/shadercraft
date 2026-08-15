@@ -204,8 +204,6 @@ export default function AccountScreen() {
             <Text style={styles.title}>Account</Text>
           </View>
         </View>
-
-        <PreviewModePanel mode={previewMode} onChange={(mode) => { setPreviewMode(mode); void savePreviewMode(mode); }} />
         <ScrollView
           contentContainerStyle={styles.content}
           overScrollMode="never"
