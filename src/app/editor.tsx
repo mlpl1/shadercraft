@@ -105,8 +105,8 @@ export default function EditorScreen() {
   const [workspaceWidth, setWorkspaceWidth] = useState(0);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("responsive");
   useEffect(() => { void loadPreviewMode().then(setPreviewMode); }, []);
-  const displayedPreviewHeight = previewMode === "responsive" || workspaceWidth <= 0 ? previewHeight : previewMode === "square" ? workspaceWidth : workspaceWidth * 0.5625;
   const [previewHeight, setPreviewHeight] = useState(PREVIEW_HEIGHT);
+  const displayedPreviewHeight = previewMode === "responsive" || workspaceWidth <= 0 ? previewHeight : previewMode === "square" ? workspaceWidth : workspaceWidth * 0.5625;
   const previewStartHeightRef = useRef(PREVIEW_HEIGHT);
   const dividerPanResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
