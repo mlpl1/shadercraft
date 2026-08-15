@@ -1233,7 +1233,7 @@ export default function EditorScreen() {
 
         <View style={styles.workspace}>
           {!collapsed && (
-            <View style={styles.preview} testID="preview-workspace">
+            <View style={[styles.preview, { height: previewHeight }]} testID="preview-workspace">
               <ShaderSandbox
                 height={previewHeight}
                 onCompileResult={handleCompileResult}
