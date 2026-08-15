@@ -243,6 +243,8 @@ const styles = StyleSheet.create({
   },
   highlight: {
     ...StyleSheet.absoluteFill,
+    opacity: 1,
+    zIndex: 0,
     color: Colors.text,
     fontFamily: "monospace",
     fontSize: 13,
@@ -251,6 +253,8 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.sm,
   },
   input: {
+    backgroundColor: "transparent",
+    zIndex: 1,
     color: "transparent",
     flex: 1,
     fontFamily: "monospace",
