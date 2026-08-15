@@ -104,7 +104,8 @@ export default function EditorScreen() {
   const [workspaceHeight, setWorkspaceHeight] = useState(0);
   const [workspaceWidth, setWorkspaceWidth] = useState(0);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("responsive");
-  useEffect(() => { void import("../data/preview-preferences").then(({ loadPreviewMode }) => loadPreviewMode().then(setPreviewMode)); }, []);
+  const previewModeChangedRef = useRef(false);
+  useEffect(() => { void import("../data/preview-preferences").then(({ loadPreviewMode }) => loadPreviewMode().then((mode) => { if (!previewModeChangedRef.current) setPreviewMode(mode); })); }, []);
   const [previewHeight, setPreviewHeight] = useState(PREVIEW_HEIGHT);
   const displayedPreviewHeight = previewMode === "responsive" || workspaceWidth <= 0 ? previewHeight : previewMode === "square" ? workspaceWidth : workspaceWidth * 0.5625;
   const previewStartHeightRef = useRef(PREVIEW_HEIGHT);
@@ -1335,7 +1336,7 @@ export default function EditorScreen() {
           sketches={sketches}
           visible={drawerOpen}
           previewMode={previewMode}
-          onPreviewModeChange={(mode) => { setPreviewMode(mode); void import("../data/preview-preferences").then(({ savePreviewMode }) => savePreviewMode(mode)); }}
+          onPreviewModeChange={(mode) => { previewModeChangedRef.current = true; setPreviewMode(mode); void import("../data/preview-preferences").then(({ savePreviewMode }) => savePreviewMode(mode)); }}
         />
       </View>
     </SafeAreaView>
