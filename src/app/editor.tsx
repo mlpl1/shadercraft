@@ -104,14 +104,16 @@ export default function EditorScreen() {
   const [workspaceHeight, setWorkspaceHeight] = useState(0);
   const [workspaceWidth, setWorkspaceWidth] = useState(0);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("responsive");
-  const previewModeChangedRef = useRef(false);
-  useEffect(() => { void import("../data/preview-preferences").then(({ loadPreviewMode }) => loadPreviewMode().then((mode) => { if (!previewModeChangedRef.current) setPreviewMode(mode); })); }, []);
   const [previewHeight, setPreviewHeight] = useState(PREVIEW_HEIGHT);
-  const displayedPreviewHeight = workspaceHeight > 0 && previewMode === "responsive" ? Math.max(120, workspaceHeight * 0.4) : previewMode === "square" && workspaceWidth > 0 ? workspaceWidth : previewMode === "wide" && workspaceWidth > 0 ? workspaceWidth * 0.5625 : previewHeight;
+  const maxPreviewHeight = Math.max(120, workspaceHeight - 180);
+  const displayedPreviewHeight = Math.min(maxPreviewHeight, previewHeight);
   const previewStartHeightRef = useRef(PREVIEW_HEIGHT);
   const previewWasDraggedRef = useRef(false);
+  const workspaceSizeRef = useRef({ height: 0, width: 0 });
   const dividerPanResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderTerminationRequest: () => false,
     onPanResponderGrant: () => { previewWasDraggedRef.current = true; previewStartHeightRef.current = previewHeight; },
     onPanResponderMove: (_event, gesture) => {
       setPreviewHeight(clampPreviewHeight(previewStartHeightRef.current + gesture.dy, workspaceHeight || windowHeight));
@@ -1239,7 +1241,7 @@ export default function EditorScreen() {
           </View>
         </View>
 
-        <View onLayout={(event) => { const { height, width } = event.nativeEvent.layout; setWorkspaceHeight(height); setWorkspaceWidth(width); if (!previewWasDraggedRef.current && previewMode === "responsive") setPreviewHeight(clampPreviewHeight(height * 0.4, height)); }} style={styles.workspace}>
+        <View onLayout={(event) => { const { height, width } = event.nativeEvent.layout; const sizeChanged = workspaceSizeRef.current.height !== height || workspaceSizeRef.current.width !== width; workspaceSizeRef.current = { height, width }; setWorkspaceHeight(height); setWorkspaceWidth(width); if (sizeChanged && !previewWasDraggedRef.current && previewMode === "responsive") setPreviewHeight(clampPreviewHeight(height * 0.4, height)); }} style={styles.workspace}>
           {!collapsed && (
             <View style={[styles.preview, { height: displayedPreviewHeight }]} testID="preview-workspace">
               <ShaderSandbox
@@ -1336,7 +1338,7 @@ export default function EditorScreen() {
           sketches={sketches}
           visible={drawerOpen}
           previewMode={previewMode}
-          onPreviewModeChange={(mode) => { previewModeChangedRef.current = true; setPreviewMode(mode); void import("../data/preview-preferences").then(({ savePreviewMode }) => savePreviewMode(mode)); }}
+          onPreviewModeChange={(mode) => { setPreviewMode(mode); const target = mode === "responsive" ? (workspaceHeight || windowHeight) * 0.4 : mode === "square" ? workspaceWidth : workspaceWidth * 0.5625; setPreviewHeight(clampPreviewHeight(target, workspaceHeight || windowHeight)); void import("../data/preview-preferences").then(({ savePreviewMode }) => savePreviewMode(mode)); }}
         />
       </View>
     </SafeAreaView>
