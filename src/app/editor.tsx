@@ -104,13 +104,14 @@ export default function EditorScreen() {
   const [workspaceHeight, setWorkspaceHeight] = useState(0);
   const [workspaceWidth, setWorkspaceWidth] = useState(0);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("responsive");
-  useEffect(() => { void loadPreviewMode().then(setPreviewMode); }, []);
+  useEffect(() => { void import("../data/preview-preferences").then(({ loadPreviewMode }) => loadPreviewMode().then(setPreviewMode)); }, []);
   const [previewHeight, setPreviewHeight] = useState(PREVIEW_HEIGHT);
   const displayedPreviewHeight = previewMode === "responsive" || workspaceWidth <= 0 ? previewHeight : previewMode === "square" ? workspaceWidth : workspaceWidth * 0.5625;
   const previewStartHeightRef = useRef(PREVIEW_HEIGHT);
+  const previewWasDraggedRef = useRef(false);
   const dividerPanResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => { previewStartHeightRef.current = previewHeight; },
+    onPanResponderGrant: () => { previewWasDraggedRef.current = true; previewStartHeightRef.current = previewHeight; },
     onPanResponderMove: (_event, gesture) => {
       setPreviewHeight(clampPreviewHeight(previewStartHeightRef.current + gesture.dy, workspaceHeight || windowHeight));
     },
@@ -1237,7 +1238,7 @@ export default function EditorScreen() {
           </View>
         </View>
 
-        <View onLayout={(event) => { setWorkspaceHeight(event.nativeEvent.layout.height); setWorkspaceWidth(event.nativeEvent.layout.width); }} style={styles.workspace}>
+        <View onLayout={(event) => { const { height, width } = event.nativeEvent.layout; setWorkspaceHeight(height); setWorkspaceWidth(width); if (!previewWasDraggedRef.current && previewMode === "responsive") setPreviewHeight(clampPreviewHeight(height * 0.4, height)); }} style={styles.workspace}>
           {!collapsed && (
             <View style={[styles.preview, { height: displayedPreviewHeight }]} testID="preview-workspace">
               <ShaderSandbox
