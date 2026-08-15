@@ -940,7 +940,11 @@ describe("EditorScreen", () => {
     await openEditor();
     await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.6);");
 
-    await fireEvent.press(screen.getByLabelText("Back to shader library"));
+    await act(async () => {
+      expect(hardwareBackHandler?.({} as never)).toBe(true);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith("/library"));
     expect(repository.updateSource).toHaveBeenCalledWith(
@@ -963,7 +967,17 @@ describe("EditorScreen", () => {
     await fireEvent.changeText(screen.getByTestId("glsl-input"), "fragColor = vec4(0.6);");
     await openParameters();
 
-    await fireEvent.press(screen.getByLabelText("Back to shader library"));
+    await act(async () => {
+      expect(hardwareBackHandler?.({} as never)).toBe(true);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      expect(hardwareBackHandler?.({} as never)).toBe(true);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
     await waitFor(() => expect(repository.updateSource).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith("/library"));

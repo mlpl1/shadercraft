@@ -1185,13 +1185,7 @@ export default function EditorScreen() {
       <View style={styles.appFrame}>
         <View style={styles.header} testID="editor-header">
           <View style={styles.fileIdentity}>
-            <HeaderAction
-              fallback="‹"
-              label="Back to shader library"
-              name={{ android: "arrow_back", ios: "chevron.left", web: "arrow_back" }}
-              onPress={handleEditorBack}
-              testID="editor-back"
-            />
+
             <HeaderAction
               fallback="☰"
               label="Open shader files"
