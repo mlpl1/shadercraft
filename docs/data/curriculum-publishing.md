@@ -131,15 +131,12 @@ app versions can read a release. That is entirely the installed app's decision, 
 Neither check costs a payload download: both are decided from the lightweight manifest
 (`get_active_course_manifest`) before `get_course_release` is ever called.
 
-### Current limitation: nothing tells a learner about `requires-app-update`
+### Learner-facing `requires-app-update` behavior
 
-`CourseSyncEngine` computes `requires-app-update` and `CourseSyncScheduler`/`sync-context.tsx` hold
-it in `courseUpdate.requiredAppVersion`, but **no screen currently reads or renders it**. A learner
-on a build too old for the active published release gets no message; the sync check simply finds
-itself unable to install and the device keeps running its current release, exactly as it would for
-any other sync failure. This is a real, present gap — not a hypothetical — and should be treated as
-one when deciding whether a release's `minimumAppVersion` is safe to raise: raising it currently
-means older builds silently stop receiving remote content updates rather than being told to upgrade.
+`CourseSyncEngine` computes `requires-app-update`, and `CourseSyncScheduler`/`sync-context.tsx` hold
+the required version in `courseUpdate.requiredAppVersion`. The Course screen renders that version
+in a non-blocking update notice while leaving the installed curriculum available. The incompatible
+release is still refused before download; the notice tells the learner which app version is needed.
 
 ### Current behavior: an app update's own bundled release can outrun a stale remote one — while offline
 

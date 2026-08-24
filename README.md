@@ -10,8 +10,8 @@ The project is currently an early working prototype built with Expo and React Na
 
 - Home dashboard and eleven-module curriculum browser, spanning two acts (2D fundamentals, then
   3D ray marching), with sequential module and lesson unlocking
-- Module 1, Fragments & Coordinates, is published; Modules 2–11 are `planned` and show a
-  topic-list roadmap card until they ship real lessons
+- All eleven modules are published, with 48 lessons spanning 2D fundamentals through ray marching,
+  lighting, and performance craft
 - Each lesson is a short progression of 3–5 stages, and every stage carries a complete, runnable
   GLSL shader that the live sandbox compiles and renders as the learner reads it — never a
   paraphrase of code the learner cannot see

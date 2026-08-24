@@ -17,16 +17,16 @@ One file per module, in `content/`, in position order. `scripts/content/build-co
 them explicitly and reads them in this order:
 
 - `content/module-01-fragments.json` — **published**
-- `content/module-02-shaping.json` — planned
-- `content/module-03-distance-fields.json` — planned
-- `content/module-04-colour.json` — planned
-- `content/module-05-space.json` — planned
-- `content/module-06-noise.json` — planned
-- `content/module-07-composition.json` — planned
-- `content/module-08-raymarching.json` — planned
-- `content/module-09-3d-shape.json` — planned
-- `content/module-10-lighting.json` — planned
-- `content/module-11-performance.json` — planned
+- `content/module-02-shaping.json` — **published**
+- `content/module-03-distance-fields.json` — **published**
+- `content/module-04-colour.json` — **published**
+- `content/module-05-space.json` — **published**
+- `content/module-06-noise.json` — **published**
+- `content/module-07-composition.json` — **published**
+- `content/module-08-raymarching.json` — **published**
+- `content/module-09-3d-shape.json` — **published**
+- `content/module-10-lighting.json` — **published**
+- `content/module-11-performance.json` — **published**
 
 Each file is a single module object: metadata (`id`, `position`, `status`, `title`,
 `description`) plus its `lessons` array. See [Published versus planned modules](#7-published-versus-planned-modules)
@@ -67,8 +67,8 @@ These rules run whenever `npm run content:build` or `npm run content:check` pars
 [The build workflow](#5-the-build-workflow). There is no separate lint step; a violation is a
 build failure with the message quoted above.
 
-`content/module-01-fragments.json` is the one authored lesson and the reference example throughout
-this document. Its first stage:
+`content/module-01-fragments.json` is a compact reference example used throughout this document.
+Its first stage:
 
 ```json
 {
@@ -191,8 +191,9 @@ After editing any `content/module-*.json` file:
 
 ## 6. Release ids and checksums
 
-`scripts/content/build-course.ts` compiles the modules into a release with a fixed `id` (currently
-`bundled-2026-08-07`) and a SHA-256 `checksum` over the canonicalized content. `installBundledRelease`
+`scripts/content/build-course.ts` compiles the modules into a release using `BUNDLED_RELEASE_ID`
+from `scripts/content/release-metadata.ts` (currently `bundled-2026-08-11-20`) and a SHA-256
+`checksum` over the canonicalized content. `installBundledRelease`
 (`src/data/database/seed.ts`) hands that pair to `ReleaseInstaller.stageAndActivate`
 (`src/data/course/release-installer.ts`) — the same installer downloaded remote releases go
 through — with checksum verification skipped (it is already verified at build time by
@@ -201,8 +202,10 @@ through — with checksum verification skipped (it is already verified at build 
 The installer's behaviour on a device that already has SQLite data is what makes the release id a
 real constraint, not paperwork:
 
-- Unseen release id → install it, and activate it if nothing usable is currently active.
-- Same release id, matching checksum → no-op.
+- Unseen release id → install and activate it. The bundled `only-when-none-active` policy can skip
+  activation only when that same release id is already installed and another usable release is active.
+- Same release id, matching checksum → reuse the installed rows and activate it unless the
+  activation policy keeps the current usable release.
 - **Same release id, different checksum → throws `Release <id> is already installed with a
   different checksum`, permanently, on every launch of that device.**
 
@@ -211,8 +214,8 @@ That last case is exactly what happens if you edit `content/*.json`, regenerate
 id an already-seeded device recognises now points at different content, the checksum no longer
 matches what that device stored, and the install is rejected forever short of a data reset. **Once
 a release id has reached any device, any further content change needs a new release id** — bump
-the `id` string in `build-course.ts` (e.g. `bundled-2026-08-07`) as part of the same change that
-edits content.
+`BUNDLED_RELEASE_ID` in `scripts/content/release-metadata.ts` as part of the same change that edits
+content.
 
 ## 7. Published versus planned modules
 
@@ -220,7 +223,7 @@ A module's `status` is either `"published"` or `"planned"`, and `src/data/course
 enforces the two shapes strictly:
 
 - **Published** modules must have at least one lesson, and must leave `plannedLessonCount` at `0`
-  and `plannedTopics` empty. `content/module-01-fragments.json` is the only one today.
+  and `plannedTopics` empty. All eleven current modules use this shape.
 - **Planned** modules must have zero lessons, and `plannedLessonCount` must equal
   `plannedTopics.length` exactly. They render as a roadmap card (lesson count + topic list),
   contribute nothing to progress totals, and cannot be opened as a lesson route.
@@ -228,9 +231,9 @@ enforces the two shapes strictly:
 Mixing the two fails to build — e.g. a planned module with lesson rows, or a published module with
 leftover `plannedTopics`.
 
-`plannedTopics` are not placeholder text. Each entry is a real lesson goal drawn from
+Future `plannedTopics` must not be placeholder text. Each entry must be a real lesson goal drawn from
 [`docs/superpowers/specs/2026-08-06-curriculum-syllabus-design.md`](../superpowers/specs/2026-08-06-curriculum-syllabus-design.md),
-the authority on the eleven-module arc. For example, Module 2's five planned topics are the five
+the authority on the course arc. Before publication, Module 2's five planned topics were the five
 lesson titles the spec already commits to — "Hard edges with step", "Soft edges with smoothstep",
 "Blending with mix", "Keeping values in range", "Remapping and easing" — not five invented names
 padding out a count.
