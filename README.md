@@ -29,7 +29,7 @@ The project is currently an early working prototype built with Expo and React Na
   an account icon on the Course screen; disabled by default and entirely inert until configured
 - Remote curriculum publishing: an immutable, checksummed course release can be published to
   Supabase and picked up by installed apps in the background, without an app-store update.
-  **Currently broken** — see the caveat under [Curriculum content](#curriculum-content).
+  Publishing reads the release back and verifies its checksum before reporting success.
 
 See [`docs/data/local-curriculum.md`](docs/data/local-curriculum.md) for the authoring model and
 [`docs/superpowers/specs/2026-08-06-curriculum-syllabus-design.md`](docs/superpowers/specs/2026-08-06-curriculum-syllabus-design.md)
@@ -56,7 +56,7 @@ for the full eleven-module arc.
   in the background (see
   [`docs/data/curriculum-publishing.md`](docs/data/curriculum-publishing.md)); reads are open to
   every client, publishing is restricted to a service-role credential held only by CI.
-  Publishing itself is temporarily broken — see [Curriculum content](#curriculum-content)
+  Publishing also verifies the stored payload through the same read path devices use.
 - TypeScript and the React Compiler
 
 ## Requirements
@@ -106,6 +106,7 @@ the installed application.
 | `npm run content:build` | Regenerate `assets/course/bundled-course.json` from `content/module-*.json` |
 | `npm run content:check` | Fail if the tracked bundled course is stale |
 | `npm run content:publish -- --release <id>` | Publish authored content to Supabase as a new immutable release (requires `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`; see [`docs/data/curriculum-publishing.md`](docs/data/curriculum-publishing.md)) |
+| `npm run lint` | Run the committed Expo ESLint configuration |
 | `npm test` | Run the Jest suite |
 | `npm run test:watch` | Run the Jest suite in watch mode |
 | `npx tsc --noEmit` | Run the TypeScript check without emitting files |
@@ -168,26 +169,24 @@ in the background, without an app-store update. See
 [`docs/data/curriculum-publishing.md`](docs/data/curriculum-publishing.md) for the immutability
 contract, the pull-request and manual-publish CI workflows
 (`.github/workflows/content-check.yml`, `.github/workflows/publish-course.yml`), compatibility
-rules, and rollback by publishing a prior payload under a new release id. Two current limitations
-documented there: a learner on a build too old for the active release gets no on-screen message
-(the check just quietly fails to install), and a device that updates the app and then stays offline
-can be stranded on the app update's own bundled curriculum instead of a newer one it had already
-downloaded — no progress is lost either way, since progress is keyed by lesson id.
+rules, and rollback by publishing a prior payload under a new release id. If a published release
+requires a newer app, the Course screen keeps the installed curriculum available and tells the
+learner which Shadercraft version is required. One current limitation remains: a device that
+updates the app and then stays offline can be stranded on the app update's own bundled curriculum
+instead of a newer one it had already downloaded — no progress is lost either way, since progress
+is keyed by lesson id.
 
-**Publishing is currently broken.** `supabase/migrations/202608030002_curriculum_releases.sql`
-still declares the retired `concept_title`, `concept_lede`, `try_hint`, and `preview_caption`
-lesson columns `NOT NULL`, so `publish_course_release` fails against the current stage-based
-content shape. Do not run `npm run content:publish` until a migration updates the Supabase schema
-to match; the bundled, on-device curriculum is unaffected. See
+The stage-based publishing schema is installed by
+`supabase/migrations/202608080001_curriculum_stages.sql`, with tutorial exercises added by
+`202608080002_tutorials.sql`. The publisher reads each release back through
+`get_course_release` and recomputes its checksum, so drift between the write and read RPCs fails
+the publish instead of reaching devices. See
 [`docs/data/curriculum-publishing.md`](docs/data/curriculum-publishing.md) for detail.
 
 ## Roadmap
 
-- Editable GLSL with debounced shader recompilation and compiler feedback
-- Configured linting (`expo lint` runs, but the project has no committed ESLint
-  setup yet and currently reports pre-existing violations)
-- Surface `requires-app-update` to the learner instead of silently declining to install (see
-  [`docs/data/curriculum-publishing.md`](docs/data/curriculum-publishing.md))
+- Resolve the narrowly baselined React Compiler lint exceptions in `eslint.config.js` through
+  focused, behavior-preserving component refactors
 
 ## Contributing
 
@@ -198,6 +197,7 @@ still evolving. Before submitting a change, run:
 npm run content:check
 npm test -- --runInBand
 npx tsc --noEmit
+npm run lint
 ```
 
 If you edited any `content/module-*.json` file, run `npm run content:build` first and commit the

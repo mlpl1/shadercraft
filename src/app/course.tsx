@@ -11,6 +11,8 @@ import { useProgress } from "../context/progress-context";
 import { buildNavigationModel } from "../data/course/navigation-model";
 import { isCloudSyncEnabled } from "../data/supabase/client";
 
+import { useSyncStatus } from '../context/sync-context';
+
 function AccountButton({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
@@ -33,6 +35,7 @@ function AccountButton({ onPress }: { onPress: () => void }) {
 export default function CourseScreen() {
   const router = useRouter();
   const showAccountButton = isCloudSyncEnabled();
+  const { courseUpdate } = useSyncStatus();
   const { error: courseError, isHydrated: isCourseHydrated, modules, retry: retryCourse } = useCourse();
   const {
     error: progressError,
@@ -115,6 +118,17 @@ export default function CourseScreen() {
           <Text style={styles.eyebrow}>Learning path</Text>
           <Text style={styles.title}>Curriculum</Text>
         </View>
+
+        {courseUpdate.status === 'requires-app-update' ? (
+          <View accessibilityRole='alert' style={styles.updateNotice}>
+            <Text style={styles.updateNoticeTitle}>Course update available</Text>
+            <Text style={styles.updateNoticeBody}>
+              {courseUpdate.requiredAppVersion
+                ? `Update Shadercraft to version ${courseUpdate.requiredAppVersion} to receive the latest course.`
+                : 'Update Shadercraft to receive the latest course.'}
+            </Text>
+          </View>
+        ) : null}
 
         {courseError ? (
           <View style={styles.courseErrorBanner}>
@@ -289,6 +303,26 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: 13,
     fontWeight: "800",
+  },
+  updateNotice: {
+    marginHorizontal: Spacing.xl,
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    backgroundColor: Colors.surface,
+    gap: Spacing.xs,
+  },
+  updateNoticeTitle: {
+    color: Colors.accent,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  updateNoticeBody: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
   },
   progressRetry: {
     color: Colors.coral,

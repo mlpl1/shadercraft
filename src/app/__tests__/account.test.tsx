@@ -1,3 +1,7 @@
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 // The real `SafeAreaProvider` only renders its children after a native `onInsetsChange` event that
 // never fires under Jest, so children would never mount. Swap in the package's own documented test
 // mock, which provides insets synchronously instead — same precedent as `course.test.tsx`.

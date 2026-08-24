@@ -1,3 +1,5 @@
+jest.mock('../../context/sync-context', () => ({ useSyncStatus: jest.fn() }));
+
 // `../../context/data-context` imports the AsyncStorage native module at module scope (used only by
 // `DataProvider`'s real initialization path, not exercised here since these tests inject fake
 // repositories directly through `DataContext.Provider`). That native module isn't available under
@@ -39,6 +41,8 @@ import {
   STUB_RELEASE_INSTALLER,
 } from "../../data/course/testing/stub-release-installer";
 
+import { useSyncStatus } from '../../context/sync-context';
+
 const mockRouter = { back: jest.fn(), push: jest.fn(), replace: jest.fn() };
 
 jest.mock("../../context/auth-context", () => ({
@@ -52,6 +56,7 @@ jest.mock("expo-router", () => ({
   useRouter: () => mockRouter,
 }));
 
+const mockUseSyncStatus = useSyncStatus as jest.MockedFunction<typeof useSyncStatus>;
 const mockIsCloudSyncEnabled = isCloudSyncEnabled as jest.MockedFunction<typeof isCloudSyncEnabled>;
 
 function buildLesson(id: string, moduleId: string, position: number, title: string): CourseLesson {
@@ -203,6 +208,20 @@ function buildDataValue(
   };
 }
 
+function buildSyncStatus(
+  courseUpdate: ReturnType<typeof useSyncStatus>['courseUpdate'],
+): ReturnType<typeof useSyncStatus> {
+  return {
+    status: 'up-to-date',
+    errorKind: null,
+    pending: 0,
+    lastSuccessAt: null,
+    retrySync: jest.fn(),
+    courseUpdate,
+    checkForCourseUpdate: jest.fn(),
+  };
+}
+
 async function renderCourseScreen(
   completedLessonIds: readonly string[],
   courseReadError?: Error,
@@ -226,6 +245,32 @@ describe("CourseScreen", () => {
   beforeEach(() => {
     mockRouter.push.mockClear();
     mockIsCloudSyncEnabled.mockReturnValue(true);
+    mockUseSyncStatus.mockReturnValue(
+      buildSyncStatus({
+        status: 'up-to-date',
+        updatedReleaseId: null,
+        requiredAppVersion: null,
+      }),
+    );
+  });
+
+  test('shows the required app version without hiding the curriculum', async () => {
+    mockUseSyncStatus.mockReturnValue(
+      buildSyncStatus({
+        status: 'requires-app-update',
+        updatedReleaseId: null,
+        requiredAppVersion: '2.1.0',
+      }),
+    );
+
+    await renderCourseScreen([]);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Update Shadercraft to version 2.1.0 to receive the latest course.'),
+      ).toBeTruthy(),
+    );
+    expect(screen.getByText('Coordinate systems')).toBeTruthy();
   });
 
   test("shows an account button that navigates to /account when cloud sync is enabled", async () => {
