@@ -386,7 +386,7 @@ export default function EditorScreen() {
         }
       }
     },
-    [isRequestCurrent, isScopeCurrent, refreshSketches, releaseRemovalGuardIfSaved],
+    [isRequestCurrent, refreshSketches, releaseRemovalGuardIfSaved],
   );
 
   const flushMetadataSave = useCallback(
@@ -488,7 +488,7 @@ export default function EditorScreen() {
         }
       }
     },
-    [isRequestCurrent, isScopeCurrent, refreshSketches, releaseRemovalGuardIfSaved],
+    [isRequestCurrent, refreshSketches, releaseRemovalGuardIfSaved],
   );
 
   const flushAllSaves = useCallback(
@@ -757,15 +757,6 @@ export default function EditorScreen() {
     parametersOpen,
     router,
   ]);
-  const handleEditorBack = useCallback(() => {
-    if (editorActionBusy) return;
-    if (!router.canGoBack()) {
-      leaveDirectEntry();
-      return;
-    }
-    router.back();
-  }, [editorActionBusy, leaveDirectEntry, router]);
-
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       if (parametersOpen) {
