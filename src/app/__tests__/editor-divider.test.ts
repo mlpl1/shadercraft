@@ -1,4 +1,4 @@
-import { clampPreviewHeight } from "../editor-layout";
+import { clampPreviewHeight } from "../../components/editor-layout";
 
 describe("clampPreviewHeight", () => {
   it("keeps the divider within usable preview bounds", () => {

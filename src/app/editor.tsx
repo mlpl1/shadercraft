@@ -10,7 +10,7 @@ import { BottomNavigation } from "../components/bottom-navigation";
 import { GlslInput } from "../components/glsl-input";
 import { PreviewControls } from "../components/preview-controls";
 import { ShaderFileDrawer } from "../components/shader-file-drawer";
-import { clampPreviewHeight } from "./editor-layout";
+import { clampPreviewHeight } from "../components/editor-layout";
 import { loadPreviewMode, savePreviewMode, type PreviewMode } from '../data/preview-preferences';
 import { ShaderParametersPanel } from "../components/shader-parameters-panel";
 import { ShaderSandbox } from "../components/shader-sandbox";
