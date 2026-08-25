@@ -133,7 +133,10 @@ export function LessonWorkspace({
   // on-screen one blank until a scroll happened to fire `onScroll` and correct it. Landing at the
   // start of a lesson is also simply what a reader expects.
   useEffect(() => {
-    boundsRef.current = stages.map(() => ({ top: 0, height: 0 }));
+    boundsRef.current = Array.from({ length: stages.length }, () => ({
+      top: 0,
+      height: 0,
+    }));
     scrollYRef.current = 0;
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [lesson.id, stages.length]);
