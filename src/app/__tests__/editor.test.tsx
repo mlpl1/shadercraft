@@ -1,3 +1,8 @@
+jest.mock('../../data/preview-preferences', () => ({
+  loadPreviewMode: jest.fn(),
+  savePreviewMode: jest.fn(),
+}));
+
 // The real SafeAreaProvider waits for a native inset event that Jest never sends.
 jest.mock("react-native-safe-area-context", () =>
   require("react-native-safe-area-context/jest/mock").default,
@@ -82,6 +87,12 @@ import {
 } from "../../data/sketches/sketch-metadata";
 import type { Sketch, SketchRepository } from "../../data/sketches/sketch-repository";
 import { STARTER_SKETCH_SOURCE } from "../../data/sketches/starter-sketch";
+
+import { Colors } from '../../constants/theme';
+import { loadPreviewMode, savePreviewMode, type PreviewMode } from '../../data/preview-preferences';
+
+const mockLoadPreviewMode = loadPreviewMode as jest.MockedFunction<typeof loadPreviewMode>;
+const mockSavePreviewMode = savePreviewMode as jest.MockedFunction<typeof savePreviewMode>;
 
 function deferredWrite() {
   let resolve!: () => void;
@@ -213,6 +224,8 @@ describe("EditorScreen", () => {
     mockProfileRef.current = "profile-a";
     mockRouteParams.current = {};
     jest.clearAllMocks();
+    mockLoadPreviewMode.mockResolvedValue('responsive');
+    mockSavePreviewMode.mockResolvedValue();
     mockRouter.canGoBack.mockReturnValue(true);
     configureRepository();
     jest.useFakeTimers();
@@ -229,6 +242,44 @@ describe("EditorScreen", () => {
       hardwareBackHandler = handler;
       return { remove: removeBackHandler };
     });
+  });
+
+  it('restores the saved preview mode when the editor mounts', async () => {
+    sketches = [makeSketch('one', 'One', 'fragColor = vec4(1.0);')];
+    const pendingMode = deferred<PreviewMode>();
+    mockLoadPreviewMode.mockReturnValue(pendingMode.promise);
+
+    await openEditor();
+    await waitFor(() => expect(mockLoadPreviewMode).toHaveBeenCalledTimes(1));
+    let workspace = screen.getByTestId('preview-workspace').parent;
+    while (workspace && typeof workspace.props.onLayout !== 'function') {
+      workspace = workspace.parent;
+    }
+    if (!workspace) throw new Error('expected editor workspace layout handler');
+
+    await fireEvent(workspace, 'layout', {
+      nativeEvent: { layout: { height: 600, width: 320, x: 0, y: 0 } },
+    });
+    await act(async () => pendingMode.resolve('wide'));
+    await fireEvent.press(screen.getByLabelText('Open shader files'));
+
+    expect(screen.getByText('16:9').props.style.color).toBe(Colors.accent);
+    expect(screen.getByTestId('preview-workspace').props.style[1].height).toBe(180);
+  });
+
+  it('does not overwrite a new preview choice when the saved mode resolves later', async () => {
+    sketches = [makeSketch('one', 'One', 'fragColor = vec4(1.0);')];
+    const pendingMode = deferred<PreviewMode>();
+    mockLoadPreviewMode.mockReturnValue(pendingMode.promise);
+
+    await openEditor();
+    await fireEvent.press(screen.getByLabelText('Open shader files'));
+    await fireEvent.press(screen.getByText('16:9'));
+
+    await act(async () => pendingMode.resolve('square'));
+
+    expect(screen.getByText('16:9').props.style.color).toBe(Colors.accent);
+    expect(mockSavePreviewMode).toHaveBeenCalledWith('wide');
   });
 
   afterEach(() => {

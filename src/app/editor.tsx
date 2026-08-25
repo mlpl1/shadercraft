@@ -11,7 +11,7 @@ import { GlslInput } from "../components/glsl-input";
 import { PreviewControls } from "../components/preview-controls";
 import { ShaderFileDrawer } from "../components/shader-file-drawer";
 import { clampPreviewHeight } from "./editor-layout";
-import { loadPreviewMode, type PreviewMode } from "../data/preview-preferences";
+import { loadPreviewMode, savePreviewMode, type PreviewMode } from '../data/preview-preferences';
 import { ShaderParametersPanel } from "../components/shader-parameters-panel";
 import { ShaderSandbox } from "../components/shader-sandbox";
 import { Colors, Radius, Spacing } from "../constants/theme";
@@ -30,6 +30,21 @@ const COMPILE_DEBOUNCE_MS = 300;
 const SOURCE_AUTOSAVE_DEBOUNCE_MS = 800;
 const METADATA_AUTOSAVE_DEBOUNCE_MS = 500;
 const PREVIEW_HEIGHT = 220;
+
+function previewHeightForMode(
+  mode: PreviewMode,
+  workspaceWidth: number,
+  workspaceHeight: number,
+): number {
+  const target =
+    mode === 'responsive'
+      ? workspaceHeight * 0.4
+      : mode === 'square'
+        ? workspaceWidth
+        : workspaceWidth * 0.5625;
+
+  return clampPreviewHeight(target, workspaceHeight);
+}
 
 type EditorScope = {
   profileId: string;
@@ -104,12 +119,24 @@ export default function EditorScreen() {
   const [workspaceHeight, setWorkspaceHeight] = useState(0);
   const [workspaceWidth, setWorkspaceWidth] = useState(0);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("responsive");
+  const previewModeChangedRef = useRef(false);
   const [previewHeight, setPreviewHeight] = useState(PREVIEW_HEIGHT);
   const maxPreviewHeight = Math.max(120, workspaceHeight - 180);
   const displayedPreviewHeight = Math.min(maxPreviewHeight, previewHeight);
   const previewStartHeightRef = useRef(PREVIEW_HEIGHT);
   const previewWasDraggedRef = useRef(false);
   const workspaceSizeRef = useRef({ height: 0, width: 0 });
+  useEffect(() => {
+    void loadPreviewMode().then((mode) => {
+      if (previewModeChangedRef.current) return;
+
+      setPreviewMode(mode);
+      const { height, width } = workspaceSizeRef.current;
+      if (height > 0 && width > 0 && !previewWasDraggedRef.current) {
+        setPreviewHeight(previewHeightForMode(mode, width, height));
+      }
+    });
+  }, []);
   const dividerPanResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
@@ -1241,7 +1268,7 @@ export default function EditorScreen() {
           </View>
         </View>
 
-        <View onLayout={(event) => { const { height, width } = event.nativeEvent.layout; const sizeChanged = workspaceSizeRef.current.height !== height || workspaceSizeRef.current.width !== width; workspaceSizeRef.current = { height, width }; setWorkspaceHeight(height); setWorkspaceWidth(width); if (sizeChanged && !previewWasDraggedRef.current && previewMode === "responsive") setPreviewHeight(clampPreviewHeight(height * 0.4, height)); }} style={styles.workspace}>
+        <View onLayout={(event) => { const { height, width } = event.nativeEvent.layout; const sizeChanged = workspaceSizeRef.current.height !== height || workspaceSizeRef.current.width !== width; workspaceSizeRef.current = { height, width }; setWorkspaceHeight(height); setWorkspaceWidth(width); if (sizeChanged && !previewWasDraggedRef.current) setPreviewHeight(previewHeightForMode(previewMode, width, height)); }} style={styles.workspace}>
           {!collapsed && (
             <View style={[styles.preview, { height: displayedPreviewHeight }]} testID="preview-workspace">
               <ShaderSandbox
@@ -1338,7 +1365,18 @@ export default function EditorScreen() {
           sketches={sketches}
           visible={drawerOpen}
           previewMode={previewMode}
-          onPreviewModeChange={(mode) => { setPreviewMode(mode); const target = mode === "responsive" ? (workspaceHeight || windowHeight) * 0.4 : mode === "square" ? workspaceWidth : workspaceWidth * 0.5625; setPreviewHeight(clampPreviewHeight(target, workspaceHeight || windowHeight)); void import("../data/preview-preferences").then(({ savePreviewMode }) => savePreviewMode(mode)); }}
+          onPreviewModeChange={(mode) => {
+            previewModeChangedRef.current = true;
+            setPreviewMode(mode);
+      setPreviewHeight(
+        previewHeightForMode(
+          mode,
+          workspaceWidth,
+          workspaceHeight || windowHeight,
+        ),
+      );
+            void savePreviewMode(mode);
+          }}
         />
       </View>
     </SafeAreaView>
