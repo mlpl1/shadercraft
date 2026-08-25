@@ -4,13 +4,13 @@ import type { StyleProp, ViewStyle } from "react-native";
 import type { ShaderParameterDefinition } from "../../data/sketches/sketch-metadata";
 import { ShaderSandbox } from "../shader-sandbox";
 
-const mockHosts: Array<{
+const mockHosts: {
   dispose: jest.Mock;
   hasProgram: jest.Mock;
   render: jest.Mock;
   setBody: jest.Mock;
   setParameterValues: jest.Mock;
-}> = [];
+}[] = [];
 
 jest.mock("../../shaders/shader-program-host", () => ({
   ShaderProgramHost: jest.fn().mockImplementation(() => {

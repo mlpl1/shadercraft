@@ -42,12 +42,12 @@ const items = [
     } as const,
     fallback: "</>",
   },
-] satisfies ReadonlyArray<{
+] satisfies readonly {
   key: BottomTab;
   label: string;
   icon: SymbolViewProps["name"];
   fallback: string;
-}>;
+}[];
 
 export function BottomNavigation({ activeItem, onBeforeNavigate }: BottomNavigationProps) {
   const insets = useSafeAreaInsets();

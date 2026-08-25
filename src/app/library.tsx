@@ -187,7 +187,7 @@ export default function LibraryScreen() {
   }, []);
 
   const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: Array<ViewToken<Sketch>> }) => {
+    ({ viewableItems }: { viewableItems: ViewToken<Sketch>[] }) => {
       setVisibleSketchIds(
         new Set(
           viewableItems

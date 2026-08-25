@@ -75,7 +75,6 @@ export default function ShaderAuditScreen() {
           line: first?.line ?? null,
           message: first?.message ?? result.rawLog.slice(0, 200),
         });
-        // eslint-disable-next-line no-console
         console.log(`SHADER-AUDIT FAIL ${entry.kind} ${entry.id} line=${first?.line ?? "?"}: ${first?.message ?? result.rawLog}`);
       }
     }
@@ -84,7 +83,6 @@ export default function ShaderAuditScreen() {
     setTotal(sources.length);
     setFailures(found);
     setStatus(found.length === 0 ? "All compiled." : `${found.length} failed.`);
-    // eslint-disable-next-line no-console
     console.log(`SHADER-AUDIT DONE compiled=${sources.length} failed=${found.length}`);
   }, []);
 

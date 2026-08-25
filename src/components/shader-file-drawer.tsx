@@ -43,7 +43,7 @@ function formatModifiedAt(updatedAt: string): string {
   })}`;
 }
 
-function groupByCategory(sketches: Sketch[]): Array<[string, Sketch[]]> {
+function groupByCategory(sketches: Sketch[]): [string, Sketch[]][] {
   const grouped = new Map<string, Sketch[]>();
 
   for (const sketch of sketches) {
