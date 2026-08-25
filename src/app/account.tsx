@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,7 +8,6 @@ import { Colors, Radius, Spacing } from "../constants/theme";
 import { useAuth } from "../context/auth-context";
 import { type ProgressRemoteErrorKind, type SyncStatus, useSyncStatus } from "../context/sync-context";
 import { isCloudSyncEnabled } from "../data/supabase/client";
-import { loadPreviewMode, savePreviewMode, type PreviewMode } from "../data/preview-preferences";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 6;
 
@@ -17,22 +16,6 @@ type PendingAction = AuthAction | "sign-out" | null;
 
 /** Client-side validation only — never reaches the auth service until this passes, matching the
  * validation-error state the task brief calls out as distinct from a server-reported auth error. */
-function PreviewModePanel({ mode, onChange }: { mode: PreviewMode; onChange: (mode: PreviewMode) => void }) {
-  return (
-    <View style={{ paddingHorizontal: Spacing.md, paddingTop: Spacing.md }} testID="preview-mode-settings">
-      <Text style={{ color: Colors.text, fontSize: 14, fontWeight: "700" }}>Preview sizing</Text>
-      <View style={{ flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.sm }}>
-        {([["responsive", "Responsive"], ["square", "1:1"], ["wide", "16:9"]] as const).map(([value, label]) => (
-          <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: mode === value }} onPress={() => onChange(value)} style={{ backgroundColor: mode === value ? Colors.accent : Colors.surfaceRaised, borderRadius: Radius.sm, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs }}>
-            <Text style={{ color: mode === value ? Colors.background : Colors.textMuted, fontSize: 12 }}>{label}</Text>
-          </Pressable>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-
 function validateCredentials(email: string, password: string): string | null {
   if (!email.trim() || !password) {
     return "Enter an email and a password.";
@@ -114,10 +97,6 @@ export default function AccountScreen() {
   const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState<PreviewMode>("responsive");
-  useEffect(() => { void loadPreviewMode().then(setPreviewMode); }, []);
-
-
   const isBusy = pendingAction !== null;
 
   const submit = async (action: AuthAction) => {
