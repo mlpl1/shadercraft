@@ -1,7 +1,3 @@
-jest.mock('../../data/preview-preferences', () => ({
-  loadPreviewMode: jest.fn(),
-  savePreviewMode: jest.fn(),
-}));
 
 // The real SafeAreaProvider waits for a native inset event that Jest never sends.
 jest.mock("react-native-safe-area-context", () =>
@@ -9,6 +5,16 @@ jest.mock("react-native-safe-area-context", () =>
 );
 
 jest.mock("@react-native-community/slider", () => "Slider");
+
+jest.mock("../../components/glsl-input", () => {
+  const actual = jest.requireActual("../../components/glsl-input");
+  return {
+    ...actual,
+    GlslInput: jest.fn((props) => actual.GlslInput(props)),
+  };
+});
+
+jest.mock("../../context/settings-context", () => ({ useSettings: jest.fn() }));
 
 // Route tests keep the GL boundary mocked, but expose every editor-to-sandbox input and the compile
 // callback so the screen's integration contract remains observable.
@@ -81,18 +87,20 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 import { Alert, AppState, BackHandler, type AppStateStatus } from "react-native";
 
 import EditorScreen from "../editor";
+import { GlslInput } from "../../components/glsl-input";
 import {
   DEFAULT_SKETCH_METADATA,
   type ShaderParameterDefinition,
 } from "../../data/sketches/sketch-metadata";
 import type { Sketch, SketchRepository } from "../../data/sketches/sketch-repository";
 import { STARTER_SKETCH_SOURCE } from "../../data/sketches/starter-sketch";
+import { useSettings } from "../../context/settings-context";
 
 import { Colors } from '../../constants/theme';
-import { loadPreviewMode, savePreviewMode, type PreviewMode } from '../../data/preview-preferences';
 
-const mockLoadPreviewMode = loadPreviewMode as jest.MockedFunction<typeof loadPreviewMode>;
-const mockSavePreviewMode = savePreviewMode as jest.MockedFunction<typeof savePreviewMode>;
+const mockGlslInput = GlslInput as jest.MockedFunction<typeof GlslInput>;
+const mockUseSettings = useSettings as jest.MockedFunction<typeof useSettings>;
+const mockUpdateSettings = jest.fn(async () => undefined);
 
 function deferredWrite() {
   let resolve!: () => void;
@@ -224,8 +232,20 @@ describe("EditorScreen", () => {
     mockProfileRef.current = "profile-a";
     mockRouteParams.current = {};
     jest.clearAllMocks();
-    mockLoadPreviewMode.mockResolvedValue('responsive');
-    mockSavePreviewMode.mockResolvedValue();
+    mockUpdateSettings.mockResolvedValue(undefined);
+    mockUseSettings.mockReturnValue({
+      settings: {
+        version: 1,
+        editorFontSize: 14,
+        showEditorLineNumbers: true,
+        previewPerformance: "full-speed",
+        editorPreviewMode: "responsive",
+      },
+      hydrated: true,
+      error: null,
+      retry: jest.fn(),
+      update: mockUpdateSettings,
+    });
     mockRouter.canGoBack.mockReturnValue(true);
     configureRepository();
     jest.useFakeTimers();
@@ -244,13 +264,23 @@ describe("EditorScreen", () => {
     });
   });
 
-  it('restores the saved preview mode when the editor mounts', async () => {
+  it('uses the provider preview mode when the editor mounts', async () => {
     sketches = [makeSketch('one', 'One', 'fragColor = vec4(1.0);')];
-    const pendingMode = deferred<PreviewMode>();
-    mockLoadPreviewMode.mockReturnValue(pendingMode.promise);
+    mockUseSettings.mockReturnValue({
+      settings: {
+        version: 1,
+        editorFontSize: 14,
+        showEditorLineNumbers: true,
+        previewPerformance: "full-speed",
+        editorPreviewMode: "wide",
+      },
+      hydrated: true,
+      error: null,
+      retry: jest.fn(),
+      update: mockUpdateSettings,
+    });
 
     await openEditor();
-    await waitFor(() => expect(mockLoadPreviewMode).toHaveBeenCalledTimes(1));
     let workspace = screen.getByTestId('preview-workspace').parent;
     while (workspace && typeof workspace.props.onLayout !== 'function') {
       workspace = workspace.parent;
@@ -260,26 +290,36 @@ describe("EditorScreen", () => {
     await fireEvent(workspace, 'layout', {
       nativeEvent: { layout: { height: 600, width: 320, x: 0, y: 0 } },
     });
-    await act(async () => pendingMode.resolve('wide'));
     await fireEvent.press(screen.getByLabelText('Open shader files'));
 
     expect(screen.getByText('16:9').props.style.color).toBe(Colors.accent);
     expect(screen.getByTestId('preview-workspace').props.style[1].height).toBe(180);
   });
 
-  it('does not overwrite a new preview choice when the saved mode resolves later', async () => {
+  it('does not overwrite a new preview choice when the provider hydrates later', async () => {
     sketches = [makeSketch('one', 'One', 'fragColor = vec4(1.0);')];
-    const pendingMode = deferred<PreviewMode>();
-    mockLoadPreviewMode.mockReturnValue(pendingMode.promise);
 
-    await openEditor();
+    const rendered = await openEditor();
     await fireEvent.press(screen.getByLabelText('Open shader files'));
     await fireEvent.press(screen.getByText('16:9'));
 
-    await act(async () => pendingMode.resolve('square'));
+    mockUseSettings.mockReturnValue({
+      settings: {
+        version: 1,
+        editorFontSize: 14,
+        showEditorLineNumbers: true,
+        previewPerformance: "full-speed",
+        editorPreviewMode: "square",
+      },
+      hydrated: true,
+      error: null,
+      retry: jest.fn(),
+      update: mockUpdateSettings,
+    });
+    await rendered.rerender(<EditorScreen />);
 
     expect(screen.getByText('16:9').props.style.color).toBe(Colors.accent);
-    expect(mockSavePreviewMode).toHaveBeenCalledWith('wide');
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ editorPreviewMode: 'wide' });
   });
 
   afterEach(() => {
@@ -287,6 +327,29 @@ describe("EditorScreen", () => {
     jest.restoreAllMocks();
   });
 
+  it("passes editor typography preferences to the GLSL input", async () => {
+    sketches = [makeSketch("one", "One", "fragColor = vec4(0.1);")];
+    mockUseSettings.mockReturnValue({
+      settings: {
+        version: 1,
+        editorFontSize: 16,
+        showEditorLineNumbers: false,
+        previewPerformance: "full-speed",
+        editorPreviewMode: "responsive",
+      },
+      hydrated: true,
+      error: null,
+      retry: jest.fn(),
+      update: mockUpdateSettings,
+    });
+
+    await openEditor();
+
+    expect(mockGlslInput).toHaveBeenCalledWith(
+      expect.objectContaining({ fontSize: 16, showLineNumbers: false }),
+      undefined,
+    );
+  });
   it("opens the sketch requested by the route instead of the most recent sketch", async () => {
     sketches = [
       makeSketch("recent", "Recent", "fragColor = vec4(0.9);"),

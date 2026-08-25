@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppIcon } from "./app-icon";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import type { Sketch } from "../data/sketches/sketch-repository";
-import type { PreviewMode } from "../data/preview-preferences";
+import type { PreviewMode } from "../data/settings/device-settings";
 
 type ShaderFileDrawerProps = {
   busy?: boolean;

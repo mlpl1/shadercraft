@@ -7,7 +7,7 @@ jest.mock("../../context/settings-context", () => ({ useSettings: jest.fn() }));
 jest.mock("../../context/sync-context", () => ({ useSyncStatus: jest.fn() }));
 jest.mock("../../data/supabase/client", () => ({ isCloudSyncEnabled: jest.fn() }));
 
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import SettingsScreen from "../settings";
 import { useAuth } from "../../context/auth-context";
@@ -135,6 +135,83 @@ describe("SettingsScreen", () => {
     expect(screen.getByText("We'll retry automatically when possible.")).toBeTruthy();
   });
 
+  test("updates the editor font size preference", async () => {
+    const update = jest.fn(async () => undefined);
+    mockUseSettings.mockReturnValue({
+      settings: {
+        version: 1,
+        editorFontSize: 14,
+        showEditorLineNumbers: true,
+        previewPerformance: "full-speed",
+        editorPreviewMode: "responsive",
+      },
+      hydrated: true,
+      error: null,
+      retry: jest.fn(),
+      update,
+    });
+
+    await render(<SettingsScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "16" }));
+
+    expect(update).toHaveBeenCalledWith({ editorFontSize: 16 });
+  });
+
+  test("updates the editor line-number visibility preference", async () => {
+    const update = jest.fn(async () => undefined);
+    mockUseSettings.mockReturnValue({
+      settings: {
+        version: 1,
+        editorFontSize: 14,
+        showEditorLineNumbers: true,
+        previewPerformance: "full-speed",
+        editorPreviewMode: "responsive",
+      },
+      hydrated: true,
+      error: null,
+      retry: jest.fn(),
+      update,
+    });
+
+    await render(<SettingsScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "Show line numbers" }));
+
+    expect(update).toHaveBeenCalledWith({ showEditorLineNumbers: false });
+  });
+
+  test("keeps the retryable settings error visible after a preference update rejects", async () => {
+    const retry = jest.fn(async () => undefined);
+    const update = jest.fn(async () => {
+      throw new Error("storage full");
+    });
+    mockUseSettings.mockReturnValue({
+      settings: {
+        version: 1,
+        editorFontSize: 14,
+        showEditorLineNumbers: true,
+        previewPerformance: "full-speed",
+        editorPreviewMode: "responsive",
+      },
+      hydrated: true,
+      error: new Error("storage full"),
+      retry,
+      update,
+    });
+
+    await render(<SettingsScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "16" }));
+
+    await waitFor(() => expect(update).toHaveBeenCalledWith({ editorFontSize: 16 }));
+    expect(screen.getByText("Could not save settings: storage full")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+  });
+
+  test("explains that editor changes save automatically without offering an autosave toggle", async () => {
+    await render(<SettingsScreen />);
+
+    expect(screen.getByText("Changes save automatically")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Changes save automatically" })).toBeNull();
+  });
   test("keeps Settings selected in the root bottom navigation", async () => {
     await render(<SettingsScreen />);
 

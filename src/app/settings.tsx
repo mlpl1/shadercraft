@@ -7,8 +7,9 @@ import { BottomNavigation } from "../components/bottom-navigation";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { useAuth } from "../context/auth-context";
 import { useData } from "../context/data-context";
-import { useSettings } from "../context/settings-context";
+import { type DeviceSettingsPatch, useSettings } from "../context/settings-context";
 import { type SyncStatus, useSyncStatus } from "../context/sync-context";
+import type { EditorFontSize } from "../data/settings/device-settings";
 import { isCloudSyncEnabled } from "../data/supabase/client";
 
 function describePendingChanges(pending: number): string {
@@ -37,6 +38,12 @@ function syncStatusDetail(status: SyncStatus): string | null {
   if (status === "offline") return "Your local changes stay safe on this device.";
   if (status === "attention") return "Open Account to review sync details.";
   return null;
+}
+
+const EDITOR_FONT_SIZES: EditorFontSize[] = [12, 14, 16];
+
+function savePreference(update: (patch: DeviceSettingsPatch) => Promise<void>, patch: DeviceSettingsPatch) {
+  void update(patch).catch(() => undefined);
 }
 
 type SectionProps = {
@@ -144,8 +151,9 @@ function AccountSection() {
 }
 
 export default function SettingsScreen() {
-  const settings = useSettings();
+  const settingsContext = useSettings();
   const data = useData();
+  const { settings, update } = settingsContext;
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
@@ -161,12 +169,12 @@ export default function SettingsScreen() {
           overScrollMode="never"
           showsVerticalScrollIndicator={false}
         >
-          {settings.error ? (
+          {settingsContext.error ? (
             <View accessibilityRole="alert" style={styles.notice}>
-              <Text style={styles.noticeText}>Could not save settings: {settings.error.message}</Text>
+              <Text style={styles.noticeText}>Could not save settings: {settingsContext.error.message}</Text>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => void settings.retry()}
+                onPress={() => void settingsContext.retry()}
                 style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
               >
                 <Text style={styles.retryText}>Retry</Text>
@@ -179,6 +187,63 @@ export default function SettingsScreen() {
             </View>
           ) : null}
           <AccountSection />
+          <Section title="Editor">
+            <View style={styles.preferenceBlock}>
+              <Text style={styles.preferenceLabel}>Editor font size</Text>
+              <View style={styles.segmented}>
+                {EDITOR_FONT_SIZES.map((size) => {
+                  const selected = settings.editorFontSize === size;
+                  return (
+                    <Pressable
+                      accessibilityLabel={String(size)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      key={size}
+                      onPress={() => savePreference(update, { editorFontSize: size })}
+                      style={({ pressed }) => [
+                        styles.segment,
+                        selected && styles.segmentSelected,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+                        {size}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+            <View style={styles.separator} />
+            <Pressable
+              accessibilityLabel="Show line numbers"
+              accessibilityRole="button"
+              accessibilityState={{ checked: settings.showEditorLineNumbers }}
+              onPress={() =>
+                savePreference(update, {
+                  showEditorLineNumbers: !settings.showEditorLineNumbers,
+                })
+              }
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            >
+              <View style={styles.rowCopy}>
+                <Text style={styles.rowLabel}>Show line numbers</Text>
+                <Text style={styles.rowDetail}>
+                  {settings.showEditorLineNumbers
+                    ? "Visible in editable GLSL editors."
+                    : "Hidden in editable GLSL editors."}
+                </Text>
+              </View>
+              <Text style={styles.toggleValue}>
+                {settings.showEditorLineNumbers ? "On" : "Off"}
+              </Text>
+            </Pressable>
+            <View style={styles.separator} />
+            <SettingRow
+              detail="Preferences and shader edits are saved as you work."
+              label="Changes save automatically"
+            />
+          </Section>
         </ScrollView>
 
         <BottomNavigation activeItem="settings" />
@@ -250,6 +315,43 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     backgroundColor: Colors.surface,
   },
+  preferenceBlock: {
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+  preferenceLabel: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  segmented: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+  },
+  segment: {
+    alignItems: "center",
+    backgroundColor: Colors.surfaceRaised,
+    borderColor: Colors.border,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 40,
+  },
+  segmentSelected: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  segmentText: {
+    color: Colors.textMuted,
+    fontFamily: "monospace",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  segmentTextSelected: {
+    color: Colors.background,
+  },
   row: {
     minHeight: 58,
     paddingHorizontal: Spacing.lg,
@@ -271,6 +373,12 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
+  },
+  toggleValue: {
+    color: Colors.accent,
+    fontFamily: "monospace",
+    fontSize: 12,
+    fontWeight: "800",
   },
   accountSummary: {
     padding: Spacing.lg,

@@ -11,10 +11,10 @@ import { GlslInput } from "../components/glsl-input";
 import { PreviewControls } from "../components/preview-controls";
 import { ShaderFileDrawer } from "../components/shader-file-drawer";
 import { clampPreviewHeight } from "../components/editor-layout";
-import { loadPreviewMode, savePreviewMode, type PreviewMode } from '../data/preview-preferences';
 import { ShaderParametersPanel } from "../components/shader-parameters-panel";
 import { ShaderSandbox } from "../components/shader-sandbox";
 import { Colors, Radius, Spacing } from "../constants/theme";
+import { useSettings } from "../context/settings-context";
 import { useAuth } from "../context/auth-context";
 import { useData } from "../context/data-context";
 import type {
@@ -23,6 +23,7 @@ import type {
 } from "../data/sketches/sketch-metadata";
 import type { Sketch, SketchRepository } from "../data/sketches/sketch-repository";
 import { STARTER_SKETCH_SOURCE, STARTER_SKETCH_TITLE } from "../data/sketches/starter-sketch";
+import type { PreviewMode } from "../data/settings/device-settings";
 import type { HostCompileResult } from "../shaders/shader-program-host";
 import type { CompileError } from "../shaders/shader-source";
 
@@ -91,6 +92,7 @@ export default function EditorScreen() {
     ? routeSketchIdValue[0]
     : routeSketchIdValue;
   const data = useData();
+  const { settings, update: updateSettings } = useSettings();
   const { profileId } = useAuth();
   const sketchRepository = data.status === "ready" ? data.sketchRepository : null;
   const scopeRegistryRef = useRef(
@@ -118,7 +120,7 @@ export default function EditorScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const [workspaceHeight, setWorkspaceHeight] = useState(0);
   const [workspaceWidth, setWorkspaceWidth] = useState(0);
-  const [previewMode, setPreviewMode] = useState<PreviewMode>("responsive");
+  const [previewMode, setPreviewMode] = useState<PreviewMode>(settings.editorPreviewMode);
   const previewModeChangedRef = useRef(false);
   const [previewHeight, setPreviewHeight] = useState(PREVIEW_HEIGHT);
   const maxPreviewHeight = Math.max(120, workspaceHeight - 180);
@@ -127,16 +129,15 @@ export default function EditorScreen() {
   const previewWasDraggedRef = useRef(false);
   const workspaceSizeRef = useRef({ height: 0, width: 0 });
   useEffect(() => {
-    void loadPreviewMode().then((mode) => {
-      if (previewModeChangedRef.current) return;
+    if (previewModeChangedRef.current) return;
 
-      setPreviewMode(mode);
-      const { height, width } = workspaceSizeRef.current;
-      if (height > 0 && width > 0 && !previewWasDraggedRef.current) {
-        setPreviewHeight(previewHeightForMode(mode, width, height));
-      }
-    });
-  }, []);
+    const mode = settings.editorPreviewMode;
+    setPreviewMode(mode);
+    const { height, width } = workspaceSizeRef.current;
+    if (height > 0 && width > 0 && !previewWasDraggedRef.current) {
+      setPreviewHeight(previewHeightForMode(mode, width, height));
+    }
+  }, [settings.editorPreviewMode]);
   const dividerPanResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
@@ -1328,7 +1329,9 @@ export default function EditorScreen() {
               errors={errors}
               initialValue={sketch.source}
               key={sketch.id}
+              fontSize={settings.editorFontSize}
               onChange={handleSourceChange}
+              showLineNumbers={settings.showEditorLineNumbers}
             />
 
             {parametersOpen && (
@@ -1366,7 +1369,7 @@ export default function EditorScreen() {
           workspaceHeight || windowHeight,
         ),
       );
-            void savePreviewMode(mode);
+            void updateSettings({ editorPreviewMode: mode });
           }}
         />
       </View>

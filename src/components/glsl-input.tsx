@@ -11,6 +11,7 @@ import {
 } from "react-native";
 
 import { Colors, Radius, Spacing } from "../constants/theme";
+import type { EditorFontSize } from "../data/settings/device-settings";
 import type { CompileError } from "../shaders/shader-source";
 import { tokenizeGlsl } from "./glsl-highlight";
 
@@ -49,6 +50,8 @@ type GlslInputProps = {
   editable?: boolean;
   initialValue: string;
   errors: CompileError[];
+  fontSize?: EditorFontSize;
+  showLineNumbers?: boolean;
   onChange: (source: string) => void;
 };
 
@@ -66,6 +69,8 @@ export function GlslInput({
   editable = true,
   initialValue,
   errors,
+  fontSize = 14,
+  showLineNumbers = true,
   onChange,
 }: GlslInputProps) {
   const [value, setValue] = useState(initialValue);
@@ -83,6 +88,8 @@ export function GlslInput({
   );
 
   const lineCount = useMemo(() => value.split("\n").length, [value]);
+  const lineHeight = Math.round(fontSize * 1.55);
+  const editorTextStyle = useMemo(() => ({ fontSize, lineHeight }), [fontSize, lineHeight]);
   const highlightedTokens = useMemo(() => tokenizeGlsl(value), [value]);
 
   const handleChangeText = useCallback(
@@ -124,19 +131,21 @@ export function GlslInput({
   return (
     <View style={styles.container}>
       <View style={styles.editorRow}>
-        <View style={styles.gutter} testID="glsl-gutter">
-          {Array.from({ length: lineCount }, (_unused, index) => index + 1).map((line) => (
-            <Text
-              key={line}
-              style={[styles.gutterLine, errorLines.has(line) && styles.gutterLineError]}
-              testID={`glsl-gutter-line-${line}`}
-            >
-              {line}
-            </Text>
-          ))}
-        </View>
+        {showLineNumbers && (
+          <View style={styles.gutter} testID="glsl-gutter">
+            {Array.from({ length: lineCount }, (_unused, index) => index + 1).map((line) => (
+              <Text
+                key={line}
+                style={[styles.gutterLine, editorTextStyle, errorLines.has(line) && styles.gutterLineError]}
+                testID={`glsl-gutter-line-${line}`}
+              >
+                {line}
+              </Text>
+            ))}
+          </View>
+        )}
         <View style={styles.inputLayer}>
-          <Text pointerEvents="none" style={styles.highlight} testID="glsl-highlight">
+          <Text pointerEvents="none" style={[styles.highlight, editorTextStyle]} testID="glsl-highlight">
             {highlightedTokens.map((token, index) => (
               <Text key={`${token.text}-${index}`} style={tokenStyles[token.kind]} testID={`glsl-highlight-${token.kind}`}>
                 {token.text}
@@ -155,7 +164,7 @@ export function GlslInput({
             scrollEnabled
             selection={caretOverride ?? undefined}
             spellCheck={false}
-            style={styles.input}
+            style={[styles.input, editorTextStyle]}
             testID="glsl-input"
             textAlignVertical="top"
             value={value}

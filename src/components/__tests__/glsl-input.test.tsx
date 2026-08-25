@@ -95,6 +95,24 @@ describe("GlslInput", () => {
     expect(onChange).toHaveBeenCalledWith("vec2 p = vec3;");
   });
 
+  it("hides the line-number gutter without hiding editor affordances", async () => {
+    await render(
+      <GlslInput
+        errors={[{ line: 1, message: "syntax error", raw: "ERROR: 0:1: syntax error" }]}
+        initialValue="vec3 color = 1.0;"
+        onChange={noop}
+        showLineNumbers={false}
+      />,
+    );
+
+    expect(screen.queryByTestId("glsl-gutter")).toBeNull();
+    expect(screen.getByTestId("glsl-input")).toBeTruthy();
+    expect(screen.getByTestId("glsl-highlight")).toBeTruthy();
+    expect(screen.getByTestId("glsl-highlight-type")).toHaveTextContent("vec3");
+    expect(screen.getByTestId("glsl-errors")).toBeTruthy();
+    expect(screen.getByText("syntax error")).toBeTruthy();
+    expect(screen.getByTestId("glsl-symbol-vec3")).toBeTruthy();
+  });
   it("lists errors with their line numbers", async () => {
     await render(
       <GlslInput

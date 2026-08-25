@@ -9,6 +9,7 @@ import { Colors, Radius, Spacing } from "../constants/theme";
 import { useAuth } from "../context/auth-context";
 import { useCourse } from "../context/course-context";
 import { useData } from "../context/data-context";
+import { useSettings } from "../context/settings-context";
 import type { Tutorial, TutorialStep } from "../data/course/types";
 import type { CompileError } from "../shaders/shader-source";
 
@@ -31,6 +32,7 @@ export default function TutorialScreen() {
   const params = useLocalSearchParams<{ tutorialId?: string; stepId?: string }>();
   const { modules } = useCourse();
   const data = useData();
+  const { settings } = useSettings();
   const { profileId } = useAuth();
   const repository = data.status === "ready" ? data.tutorialProgressRepository : null;
 
@@ -190,9 +192,11 @@ export default function TutorialScreen() {
 
         <GlslInput
           errors={errors}
+          fontSize={settings.editorFontSize}
           initialValue={source}
           key={`${step.id}-${editorSeed}`}
           onChange={onChangeSource}
+          showLineNumbers={settings.showEditorLineNumbers}
         />
 
         <View style={styles.actions}>
