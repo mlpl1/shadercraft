@@ -206,4 +206,61 @@ describe("SettingsProvider", () => {
       { ...DEFAULT_DEVICE_SETTINGS, editorFontSize: 16, editorPreviewMode: "square" },
     ]);
   });
+  test("rolls back a queued startup update when loading settings fails", async () => {
+    const repository = createRepository();
+    const loading = createDeferred<DeviceSettings>();
+    repository.load.mockReturnValue(loading.promise);
+
+    await renderProvider(repository);
+
+    let startupUpdate: Promise<void>;
+    await act(() => {
+      startupUpdate = latestSettings!.update({ editorFontSize: 16 });
+    });
+    expect(screen.getByTestId("font-size")).toHaveTextContent("16");
+
+    await act(async () => {
+      loading.reject(new Error("load failed"));
+      await expect(startupUpdate).rejects.toThrow("load failed");
+    });
+
+    expect(screen.getByTestId("font-size")).toHaveTextContent("14");
+    expect(screen.getByTestId("error")).toHaveTextContent("load failed");
+  });
+
+  test("retries a queued startup patch against authoritative settings after load failure", async () => {
+    const repository = createRepository();
+    const firstLoad = createDeferred<DeviceSettings>();
+    const authoritative: DeviceSettings = {
+      ...DEFAULT_DEVICE_SETTINGS,
+      showEditorLineNumbers: false,
+      previewPerformance: "battery-saver",
+      editorPreviewMode: "wide",
+    };
+    repository.load.mockReturnValueOnce(firstLoad.promise).mockResolvedValueOnce(authoritative);
+    repository.save.mockResolvedValue(undefined);
+
+    await renderProvider(repository);
+
+    let startupUpdate: Promise<void>;
+    await act(() => {
+      startupUpdate = latestSettings!.update({ editorFontSize: 16 });
+    });
+    await act(async () => {
+      firstLoad.reject(new Error("load failed"));
+      await expect(startupUpdate).rejects.toThrow("load failed");
+    });
+
+    let retry: Promise<void>;
+    await act(() => {
+      retry = latestSettings!.retry();
+    });
+    await act(async () => {
+      await retry;
+    });
+
+    expect(repository.load).toHaveBeenCalledTimes(2);
+    expect(repository.save).toHaveBeenCalledWith({ ...authoritative, editorFontSize: 16 });
+    expect(screen.getByTestId("font-size")).toHaveTextContent("16");
+  });
 });

@@ -46,6 +46,7 @@ export function SettingsProvider({
   const durableSettingsRef = useRef<DeviceSettings>(DEFAULT_DEVICE_SETTINGS);
   const optimisticSettingsRef = useRef<DeviceSettings>(DEFAULT_DEVICE_SETTINGS);
   const failedSettingsRef = useRef<DeviceSettings | null>(null);
+  const failedPatchRef = useRef<DeviceSettingsPatch | null>(null);
   const pendingPatchRef = useRef<DeviceSettingsPatch | null>(null);
   const pendingUpdateRef = useRef<{ resolve: () => void; reject: (error: Error) => void }[]>([]);
   const hydratedRef = useRef(false);
@@ -124,9 +125,13 @@ export function SettingsProvider({
       } catch (reason: unknown) {
         if (!cancelled) {
           const loadError = asError(reason);
+          const pendingPatch = pendingPatchRef.current;
           const pendingUpdates = pendingUpdateRef.current;
           pendingPatchRef.current = null;
           pendingUpdateRef.current = [];
+          failedPatchRef.current = pendingPatch;
+          optimisticSettingsRef.current = durableSettingsRef.current;
+          setSettings(durableSettingsRef.current);
           pendingUpdates.forEach(({ reject }) => reject(loadError));
           setError(loadError);
         }
@@ -155,6 +160,7 @@ export function SettingsProvider({
         optimisticSettingsRef.current = desired;
         pendingPatchRef.current = { ...pendingPatchRef.current, ...patch };
         failedSettingsRef.current = null;
+        failedPatchRef.current = null;
         setSettings(desired);
         setError(null);
         return new Promise<void>((resolve, reject) => {
@@ -170,6 +176,19 @@ export function SettingsProvider({
   const retry = useCallback((): Promise<void> => {
     const failed = failedSettingsRef.current;
     if (failed) return startUpdate(failed);
+
+    const failedPatch = failedPatchRef.current;
+    if (failedPatch) {
+      failedPatchRef.current = null;
+      pendingPatchRef.current = failedPatch;
+      hydratedRef.current = false;
+      setHydrated(false);
+      setError(null);
+      setHydrationAttempt((previousAttempt) => previousAttempt + 1);
+      return new Promise<void>((resolve, reject) => {
+        pendingUpdateRef.current.push({ resolve, reject });
+      });
+    }
 
     hydratedRef.current = false;
     setHydrated(false);
