@@ -29,7 +29,8 @@
           "image": "./assets/images/scanline-s.png",
           "imageWidth": 180
         }
-      ]
+      ],
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true,
