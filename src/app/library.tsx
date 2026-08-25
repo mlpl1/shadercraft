@@ -22,6 +22,7 @@ import { STARTER_SKETCH_SOURCE, STARTER_SKETCH_TITLE } from "../data/sketches/st
 
 const ALL_CATEGORY = "All";
 const NEW_SKETCH_TITLE = "Untitled shader";
+const EMPTY_SKETCHES: Sketch[] = [];
 
 type LibraryScope = {
   profileId: string;
@@ -53,7 +54,7 @@ export default function LibraryScreen() {
   const [isFocused, setIsFocused] = useState(false);
 
   const [loadedSketches, setLoadedSketches] = useState<LoadedSketches | null>(null);
-  const sketches = loadedSketches?.scope === scope ? loadedSketches.items : [];
+  const sketches = loadedSketches?.scope === scope ? loadedSketches.items : EMPTY_SKETCHES;
   const [query, setQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(ALL_CATEGORY);
   const [visibleSketchIds, setVisibleSketchIds] = useState<ReadonlySet<string>>(new Set());
