@@ -2,39 +2,17 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { AppIcon } from "../components/app-icon";
 import { BottomNavigation } from "../components/bottom-navigation";
 import { CourseModuleCard } from "../components/course-module-card";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { useCourse } from "../context/course-context";
 import { useProgress } from "../context/progress-context";
 import { buildNavigationModel } from "../data/course/navigation-model";
-import { isCloudSyncEnabled } from "../data/supabase/client";
 
-import { useSyncStatus } from '../context/sync-context';
-
-function AccountButton({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityLabel="Account"
-      accessibilityRole="button"
-      hitSlop={10}
-      onPress={onPress}
-      style={({ pressed }) => [styles.accountButton, pressed && styles.accountButtonPressed]}
-    >
-      <AppIcon
-        color={Colors.textMuted}
-        fallback="@"
-        name={{ android: "person", ios: "person.crop.circle", web: "person" }}
-        size={19}
-      />
-    </Pressable>
-  );
-}
+import { useSyncStatus } from "../context/sync-context";
 
 export default function CourseScreen() {
   const router = useRouter();
-  const showAccountButton = isCloudSyncEnabled();
   const { courseUpdate } = useSyncStatus();
   const { error: courseError, isHydrated: isCourseHydrated, modules, retry: retryCourse } = useCourse();
   const {
@@ -52,12 +30,7 @@ export default function CourseScreen() {
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         <View style={styles.appFrame}>
           <View style={styles.header}>
-            <View style={styles.headerTopRow}>
-              <Text style={styles.wordmark}>Shadercraft</Text>
-              {showAccountButton ? (
-                <AccountButton onPress={() => router.push("/account")} />
-              ) : null}
-            </View>
+            <Text style={styles.wordmark}>Shadercraft</Text>
             <Text style={styles.eyebrow}>Learning path</Text>
             <Text style={styles.title}>Curriculum</Text>
           </View>
@@ -111,10 +84,7 @@ export default function CourseScreen() {
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <View style={styles.appFrame}>
         <View style={styles.header}>
-          <View style={styles.headerTopRow}>
-            <Text style={styles.wordmark}>Shadercraft</Text>
-            {showAccountButton ? <AccountButton onPress={() => router.push("/account")} /> : null}
-          </View>
+          <Text style={styles.wordmark}>Shadercraft</Text>
           <Text style={styles.eyebrow}>Learning path</Text>
           <Text style={styles.title}>Curriculum</Text>
         </View>
@@ -223,23 +193,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.lg,
-  },
-  headerTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  accountButton: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.round,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  accountButtonPressed: {
-    opacity: 0.68,
   },
   wordmark: {
     color: Colors.accent,

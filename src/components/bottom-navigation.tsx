@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppIcon } from "./app-icon";
 import { Colors, Spacing } from "../constants/theme";
 
-export type BottomTab = "home" | "course" | "tutorials" | "editor";
+export type BottomTab = "home" | "course" | "tutorials" | "editor" | "settings";
 
 type BottomNavigationProps = {
   activeItem: BottomTab;
@@ -42,6 +42,12 @@ const items = [
     } as const,
     fallback: "</>",
   },
+  {
+    key: "settings",
+    label: "Settings",
+    icon: { android: "settings", ios: "gearshape.fill", web: "settings" } as const,
+    fallback: "S",
+  },
 ] satisfies readonly {
   key: BottomTab;
   label: string;
@@ -72,7 +78,12 @@ export function BottomNavigation({ activeItem, onBeforeNavigate }: BottomNavigat
       return;
     }
 
-    router.replace("/library");
+    if (destination === "editor") {
+      router.replace("/library");
+      return;
+    }
+
+    router.replace("/settings");
   };
 
   return (
@@ -118,10 +129,11 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     alignSelf: "center",
     flexDirection: "row",
-    justifyContent: "space-around",
+    alignItems: "stretch",
   },
   item: {
-    minWidth: 64,
+    flex: 1,
+    minWidth: 0,
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",

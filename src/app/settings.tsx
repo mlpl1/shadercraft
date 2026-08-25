@@ -1,0 +1,329 @@
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import { AppIcon } from "../components/app-icon";
+import { BottomNavigation } from "../components/bottom-navigation";
+import { Colors, Radius, Spacing } from "../constants/theme";
+import { useAuth } from "../context/auth-context";
+import { useData } from "../context/data-context";
+import { useSettings } from "../context/settings-context";
+import { type SyncStatus, useSyncStatus } from "../context/sync-context";
+import { isCloudSyncEnabled } from "../data/supabase/client";
+
+function describePendingChanges(pending: number): string {
+  return `${pending} ${pending === 1 ? "change" : "changes"} waiting to sync`;
+}
+
+function syncStatusLabel(status: SyncStatus, pending: number): string {
+  switch (status) {
+    case "up-to-date":
+      return pending > 0 ? describePendingChanges(pending) : "Up to date";
+    case "syncing":
+      return "Syncing…";
+    case "retrying":
+      return "Waiting to retry";
+    case "offline":
+      return pending > 0 ? `Offline — ${describePendingChanges(pending)}` : "Offline";
+    case "attention":
+      return "Needs attention";
+    case "signed-out":
+      return "Not signed in";
+  }
+}
+
+function syncStatusDetail(status: SyncStatus): string | null {
+  if (status === "retrying") return "We'll retry automatically when possible.";
+  if (status === "offline") return "Your local changes stay safe on this device.";
+  if (status === "attention") return "Open Account to review sync details.";
+  return null;
+}
+
+type SectionProps = {
+  title: string;
+  children: React.ReactNode;
+};
+
+function Section({ title, children }: SectionProps) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.card}>{children}</View>
+    </View>
+  );
+}
+
+type SettingRowProps = {
+  label: string;
+  detail?: string;
+  onPress?: () => void;
+};
+
+function SettingRow({ label, detail, onPress }: SettingRowProps) {
+  const content = (
+    <>
+      <View style={styles.rowCopy}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
+      </View>
+      {onPress ? (
+        <AppIcon
+          color={Colors.textSubtle}
+          fallback="›"
+          name={{ android: "chevron_right", ios: "chevron.right", web: "chevron_right" }}
+          size={20}
+        />
+      ) : null}
+    </>
+  );
+
+  if (!onPress) return <View style={styles.row}>{content}</View>;
+
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+    >
+      {content}
+    </Pressable>
+  );
+}
+
+function AccountSection() {
+  const router = useRouter();
+  const auth = useAuth();
+  const sync = useSyncStatus();
+
+  if (!isCloudSyncEnabled()) {
+    return (
+      <Section title="Account">
+        <SettingRow
+          detail="Your data stays on this device."
+          label="Local-only mode"
+        />
+      </Section>
+    );
+  }
+
+  if (auth.session === undefined) {
+    return (
+      <Section title="Account">
+        <SettingRow label="Checking account…" />
+      </Section>
+    );
+  }
+
+  if (!auth.session) {
+    return (
+      <Section title="Account">
+        <SettingRow
+          detail="Sync your learning progress across your devices."
+          label="Sign in or create account"
+          onPress={() => router.push("/account")}
+        />
+      </Section>
+    );
+  }
+
+  const status = syncStatusLabel(sync.status, sync.pending);
+  const detail = syncStatusDetail(sync.status);
+
+  return (
+    <Section title="Account">
+      <View style={styles.accountSummary}>
+        <Text style={styles.email}>{auth.session.email}</Text>
+        <Text style={styles.syncStatus}>{status}</Text>
+        {detail ? <Text style={styles.syncDetail}>{detail}</Text> : null}
+      </View>
+      <View style={styles.separator} />
+      <SettingRow label="Manage account" onPress={() => router.push("/account")} />
+    </Section>
+  );
+}
+
+export default function SettingsScreen() {
+  const settings = useSettings();
+  const data = useData();
+
+  return (
+    <SafeAreaView edges={["top"]} style={styles.safeArea}>
+      <View style={styles.appFrame}>
+        <View style={styles.header}>
+          <Text style={styles.wordmark}>Shadercraft</Text>
+          <Text style={styles.eyebrow}>App preferences</Text>
+          <Text style={styles.title}>Settings</Text>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={styles.content}
+          overScrollMode="never"
+          showsVerticalScrollIndicator={false}
+        >
+          {settings.error ? (
+            <View accessibilityRole="alert" style={styles.notice}>
+              <Text style={styles.noticeText}>Could not save settings: {settings.error.message}</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void settings.retry()}
+                style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {data.status === "error" ? (
+            <View accessibilityRole="alert" style={styles.notice}>
+              <Text style={styles.noticeText}>Local data needs attention. Retry from the launch screen.</Text>
+            </View>
+          ) : null}
+          <AccountSection />
+        </ScrollView>
+
+        <BottomNavigation activeItem="settings" />
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  appFrame: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+    backgroundColor: Colors.background,
+  },
+  header: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+  },
+  wordmark: {
+    color: Colors.accent,
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: -0.2,
+  },
+  eyebrow: {
+    marginTop: Spacing.xxl,
+    color: Colors.textMuted,
+    fontFamily: "monospace",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  title: {
+    marginTop: 3,
+    color: Colors.text,
+    fontSize: 32,
+    fontWeight: "900",
+    letterSpacing: -1,
+  },
+  content: {
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.xxxl,
+  },
+  section: {
+    marginTop: Spacing.sm,
+  },
+  sectionTitle: {
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    color: Colors.accent,
+    fontFamily: "monospace",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+  },
+  card: {
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+  },
+  row: {
+    minHeight: 58,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  rowCopy: {
+    flex: 1,
+  },
+  rowLabel: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  rowDetail: {
+    marginTop: 3,
+    color: Colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  accountSummary: {
+    padding: Spacing.lg,
+    gap: Spacing.xs,
+  },
+  email: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  syncStatus: {
+    color: Colors.accent,
+    fontFamily: "monospace",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  syncDetail: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+  },
+  notice: {
+    marginBottom: Spacing.lg,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.coral,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surface,
+    gap: Spacing.sm,
+  },
+  noticeText: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  retryButton: {
+    alignSelf: "flex-start",
+    minHeight: 40,
+    paddingHorizontal: Spacing.md,
+    justifyContent: "center",
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.coral,
+  },
+  retryText: {
+    color: Colors.background,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  pressed: {
+    opacity: 0.72,
+  },
+});

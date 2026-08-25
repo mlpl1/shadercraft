@@ -6,6 +6,7 @@ jest.mock("react-native-safe-area-context", () =>
 );
 
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 
 import { BottomNavigation } from "../bottom-navigation";
 
@@ -53,6 +54,35 @@ describe("BottomNavigation", () => {
     await fireEvent.press(screen.getByText("Course"));
 
     expect(mockReplace).toHaveBeenCalledWith("/course");
+  });
+
+  it("shows five equal-sized root tabs and navigates to Settings", async () => {
+    await render(<BottomNavigation activeItem="home" />);
+
+    expect(screen.getAllByRole("tab")).toHaveLength(5);
+    expect(screen.getByText("Home")).toBeTruthy();
+    expect(screen.getByText("Course")).toBeTruthy();
+    expect(screen.getByText("Practice")).toBeTruthy();
+    expect(screen.getByText("Editor")).toBeTruthy();
+    expect(screen.getByText("Settings")).toBeTruthy();
+
+    for (const tab of screen.getAllByRole("tab")) {
+      expect(StyleSheet.flatten(tab.props.style).minHeight).toBeGreaterThanOrEqual(48);
+      expect(StyleSheet.flatten(tab.props.style).minWidth).toBe(0);
+      expect(StyleSheet.flatten(tab.props.style).flex).toBe(1);
+    }
+
+    await fireEvent.press(screen.getByText("Settings"));
+
+    expect(mockReplace).toHaveBeenCalledWith("/settings");
+  });
+
+  it("marks Settings selected when it is active", async () => {
+    await render(<BottomNavigation activeItem="settings" />);
+
+    expect(screen.getByRole("tab", { name: "Settings" }).props.accessibilityState).toEqual({
+      selected: true,
+    });
   });
 
   it("awaits the pre-navigation hook before changing tabs", async () => {
