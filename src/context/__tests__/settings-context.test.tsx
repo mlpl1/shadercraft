@@ -7,6 +7,7 @@ import { Text } from "react-native";
 
 import {
   DEFAULT_DEVICE_SETTINGS,
+  createDeviceSettingsRepository,
   type DeviceSettings,
   type DeviceSettingsRepository,
 } from "../../data/settings/device-settings";
@@ -42,7 +43,7 @@ function Probe() {
   );
 }
 
-async function renderProvider(repository: jest.Mocked<DeviceSettingsRepository>) {
+async function renderProvider(repository: DeviceSettingsRepository) {
   latestSettings = null;
   return render(
     <SettingsProvider repository={repository}>
@@ -137,5 +138,72 @@ describe("SettingsProvider", () => {
       await firstUpdate;
     });
     expect(screen.getByTestId("font-size")).toHaveTextContent("16");
+  });
+  test("merges a startup patch into every loaded durable field before saving", async () => {
+    const repository = createRepository();
+    const loading = createDeferred<DeviceSettings>();
+    const loaded: DeviceSettings = {
+      ...DEFAULT_DEVICE_SETTINGS,
+      showEditorLineNumbers: false,
+      previewPerformance: "battery-saver",
+      editorPreviewMode: "wide",
+    };
+    repository.load.mockReturnValue(loading.promise);
+    repository.save.mockResolvedValue(undefined);
+
+    await renderProvider(repository);
+
+    let startupUpdate: Promise<void>;
+    await act(() => {
+      startupUpdate = latestSettings!.update({ editorFontSize: 16 });
+    });
+    expect(repository.save).not.toHaveBeenCalled();
+
+    await act(async () => {
+      loading.resolve(loaded);
+      await startupUpdate;
+    });
+
+    expect(repository.save).toHaveBeenCalledWith({ ...loaded, editorFontSize: 16 });
+  });
+
+  test("persists a startup update after the missing-record legacy migration", async () => {
+    const writes: ReturnType<typeof createDeferred<void>>[] = [];
+    const storage = {
+      getItem: jest.fn(async (key: string) =>
+        key === "@shadercraft/preview-mode" ? "square" : null,
+      ),
+      setItem: jest.fn<Promise<void>, [string, string]>(() => {
+        const write = createDeferred<void>();
+        writes.push(write);
+        return write.promise;
+      }),
+      removeItem: jest.fn().mockResolvedValue(undefined),
+    };
+    const repository = createDeviceSettingsRepository(storage);
+
+    await renderProvider(repository);
+    await waitFor(() => expect(writes).toHaveLength(1));
+
+    let startupUpdate: Promise<void>;
+    await act(() => {
+      startupUpdate = latestSettings!.update({ editorFontSize: 16 });
+    });
+    expect(storage.setItem).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      writes[0].resolve();
+    });
+    await waitFor(() => expect(writes).toHaveLength(2));
+
+    await act(async () => {
+      writes[1].resolve();
+      await startupUpdate;
+    });
+
+    expect(storage.setItem.mock.calls.map(([, value]) => JSON.parse(value))).toEqual([
+      { ...DEFAULT_DEVICE_SETTINGS, editorPreviewMode: "square" },
+      { ...DEFAULT_DEVICE_SETTINGS, editorFontSize: 16, editorPreviewMode: "square" },
+    ]);
   });
 });
