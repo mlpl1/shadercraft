@@ -48,8 +48,7 @@ jest.mock("expo-network", () => ({
 }));
 
 import { act, render, screen, waitFor } from "@testing-library/react-native";
-import { Text } from "react-native";
-import { AppState } from "react-native";
+import { AppState, Text } from "react-native";
 
 import * as Network from "expo-network";
 

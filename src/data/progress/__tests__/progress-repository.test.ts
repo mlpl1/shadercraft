@@ -6,10 +6,9 @@ import { createProgressRepositoryTestContext } from "./progress-repository-test-
 describe("SQLite progress repository", () => {
   let driver: NodeSqliteDriver;
   let repository: SqliteProgressRepository;
-  let createRepository: (override?: DatabaseDriver) => SqliteProgressRepository;
 
   beforeEach(async () => {
-    ({ driver, repository, createRepository } = await createProgressRepositoryTestContext());
+    ({ driver, repository } = await createProgressRepositoryTestContext());
   });
 
   afterEach(async () => {
