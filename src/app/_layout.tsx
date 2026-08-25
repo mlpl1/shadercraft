@@ -7,6 +7,7 @@ import { CourseProvider } from "../context/course-context";
 import { DataProvider } from "../context/data-context";
 import { ProgressProvider } from "../context/progress-context";
 import { SyncProvider } from "../context/sync-context";
+import { SettingsProvider } from "../context/settings-context";
 
 const screenOptions = {
   contentStyle: { backgroundColor: Colors.background },
@@ -16,7 +17,8 @@ const screenOptions = {
 export default function RootLayout() {
   return (
     <DataProvider>
-      <AuthProvider>
+      <SettingsProvider>
+        <AuthProvider>
         <SyncProvider>
           <CourseProvider>
             <ProgressProvider>
@@ -25,7 +27,8 @@ export default function RootLayout() {
             </ProgressProvider>
           </CourseProvider>
         </SyncProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </SettingsProvider>
     </DataProvider>
   );
 }

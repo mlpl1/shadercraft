@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { PreviewMode } from "./settings/device-settings";
 
-export type PreviewMode = "responsive" | "square" | "wide";
+export type { PreviewMode } from "./settings/device-settings";
 export const PREVIEW_MODE_KEY = "@shadercraft/preview-mode";
 
 export async function loadPreviewMode(): Promise<PreviewMode> {
