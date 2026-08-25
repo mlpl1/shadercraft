@@ -179,6 +179,66 @@ describe("SettingsScreen", () => {
     expect(update).toHaveBeenCalledWith({ showEditorLineNumbers: false });
   });
 
+  test("marks Full speed selected and updates Battery saver preview performance", async () => {
+    const update = jest.fn(async () => undefined);
+    mockUseSettings.mockReturnValue({
+      settings: {
+        version: 1,
+        editorFontSize: 14,
+        showEditorLineNumbers: true,
+        previewPerformance: "full-speed",
+        editorPreviewMode: "responsive",
+      },
+      hydrated: true,
+      error: null,
+      retry: jest.fn(),
+      update,
+    });
+
+    await render(<SettingsScreen />);
+
+    expect(screen.getByRole("button", { name: "Full speed" }).props.accessibilityState).toEqual({
+      selected: true,
+    });
+    expect(screen.getByRole("button", { name: "Battery saver" }).props.accessibilityState).toEqual({
+      selected: false,
+    });
+
+    await fireEvent.press(screen.getByRole("button", { name: "Battery saver" }));
+
+    expect(update).toHaveBeenCalledWith({ previewPerformance: "battery-saver" });
+  });
+
+  test("marks Battery saver selected and updates Full speed preview performance", async () => {
+    const update = jest.fn(async () => undefined);
+    mockUseSettings.mockReturnValue({
+      settings: {
+        version: 1,
+        editorFontSize: 14,
+        showEditorLineNumbers: true,
+        previewPerformance: "battery-saver",
+        editorPreviewMode: "responsive",
+      },
+      hydrated: true,
+      error: null,
+      retry: jest.fn(),
+      update,
+    });
+
+    await render(<SettingsScreen />);
+
+    expect(screen.getByRole("button", { name: "Battery saver" }).props.accessibilityState).toEqual({
+      selected: true,
+    });
+    expect(screen.getByRole("button", { name: "Full speed" }).props.accessibilityState).toEqual({
+      selected: false,
+    });
+
+    await fireEvent.press(screen.getByRole("button", { name: "Full speed" }));
+
+    expect(update).toHaveBeenCalledWith({ previewPerformance: "full-speed" });
+  });
+
   test("keeps the retryable settings error visible after a preference update rejects", async () => {
     const retry = jest.fn(async () => undefined);
     const update = jest.fn(async () => {

@@ -9,7 +9,7 @@ import { useAuth } from "../context/auth-context";
 import { useData } from "../context/data-context";
 import { type DeviceSettingsPatch, useSettings } from "../context/settings-context";
 import { type SyncStatus, useSyncStatus } from "../context/sync-context";
-import type { EditorFontSize } from "../data/settings/device-settings";
+import type { EditorFontSize, PreviewPerformance } from "../data/settings/device-settings";
 import { isCloudSyncEnabled } from "../data/supabase/client";
 
 function describePendingChanges(pending: number): string {
@@ -21,11 +21,11 @@ function syncStatusLabel(status: SyncStatus, pending: number): string {
     case "up-to-date":
       return pending > 0 ? describePendingChanges(pending) : "Up to date";
     case "syncing":
-      return "Syncing…";
+      return "Syncingâ€¦";
     case "retrying":
       return "Waiting to retry";
     case "offline":
-      return pending > 0 ? `Offline — ${describePendingChanges(pending)}` : "Offline";
+      return pending > 0 ? `Offline â€” ${describePendingChanges(pending)}` : "Offline";
     case "attention":
       return "Needs attention";
     case "signed-out":
@@ -41,6 +41,10 @@ function syncStatusDetail(status: SyncStatus): string | null {
 }
 
 const EDITOR_FONT_SIZES: EditorFontSize[] = [12, 14, 16];
+const PREVIEW_PERFORMANCE_OPTIONS: { label: string; mode: PreviewPerformance }[] = [
+  { label: "Full speed", mode: "full-speed" },
+  { label: "Battery saver", mode: "battery-saver" },
+];
 
 function savePreference(update: (patch: DeviceSettingsPatch) => Promise<void>, patch: DeviceSettingsPatch) {
   void update(patch).catch(() => undefined);
@@ -76,7 +80,7 @@ function SettingRow({ label, detail, onPress }: SettingRowProps) {
       {onPress ? (
         <AppIcon
           color={Colors.textSubtle}
-          fallback="›"
+          fallback="â€º"
           name={{ android: "chevron_right", ios: "chevron.right", web: "chevron_right" }}
           size={20}
         />
@@ -117,7 +121,7 @@ function AccountSection() {
   if (auth.session === undefined) {
     return (
       <Section title="Account">
-        <SettingRow label="Checking account…" />
+        <SettingRow label="Checking accountâ€¦" />
       </Section>
     );
   }
@@ -208,6 +212,34 @@ export default function SettingsScreen() {
                     >
                       <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
                         {size}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+            <View style={styles.separator} />
+            <View style={styles.preferenceBlock}>
+              <Text style={styles.preferenceLabel}>Preview performance</Text>
+              <Text style={styles.preferenceHint}>Choose how hard visible shader previews work while animating.</Text>
+              <View style={styles.segmented}>
+                {PREVIEW_PERFORMANCE_OPTIONS.map(({ label, mode }) => {
+                  const selected = settings.previewPerformance === mode;
+                  return (
+                    <Pressable
+                      accessibilityLabel={label}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      key={mode}
+                      onPress={() => savePreference(update, { previewPerformance: mode })}
+                      style={({ pressed }) => [
+                        styles.segment,
+                        selected && styles.segmentSelected,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+                        {label}
                       </Text>
                     </Pressable>
                   );
@@ -324,6 +356,11 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 15,
     fontWeight: "700",
+  },
+  preferenceHint: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
   },
   segmented: {
     flexDirection: "row",

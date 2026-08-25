@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react-native";
+import { act, render, screen } from "@testing-library/react-native";
 import type { StyleProp, ViewStyle } from "react-native";
 
 import type { ShaderParameterDefinition } from "../../data/sketches/sketch-metadata";
+import { useSettings } from "../../context/settings-context";
 import { ShaderSandbox } from "../shader-sandbox";
 
 const mockHosts: {
@@ -11,6 +12,9 @@ const mockHosts: {
   setBody: jest.Mock;
   setParameterValues: jest.Mock;
 }[] = [];
+const mockGlContexts: { endFrameEXP: jest.Mock }[] = [];
+
+jest.mock("../../context/settings-context", () => ({ useSettings: jest.fn() }));
 
 jest.mock("../../shaders/shader-program-host", () => ({
   ShaderProgramHost: jest.fn().mockImplementation(() => {
@@ -46,7 +50,10 @@ jest.mock("expo-gl", () => {
       style?: StyleProp<ViewStyle>;
     }) => {
       React.useEffect(() => {
-        onContextCreate?.(createFakeGl());
+        const gl = createFakeGl();
+        gl.endFrameEXP = jest.fn(gl.endFrameEXP);
+        mockGlContexts.push(gl as typeof gl & { endFrameEXP: jest.Mock });
+        onContextCreate?.(gl);
       }, [onContextCreate]);
 
       return React.createElement(View, { style, testID: "gl-view" });
@@ -64,8 +71,54 @@ const GAIN_PARAMETER: ShaderParameterDefinition = {
   value: 1,
 };
 
+const mockUseSettings = useSettings as jest.MockedFunction<typeof useSettings>;
+
+function settingsValue(previewPerformance: "battery-saver" | "full-speed" = "full-speed") {
+  return {
+    settings: {
+      version: 1 as const,
+      editorFontSize: 14 as const,
+      showEditorLineNumbers: true,
+      previewPerformance,
+      editorPreviewMode: "responsive" as const,
+    },
+    hydrated: true,
+    error: null,
+    retry: jest.fn(async () => undefined),
+    update: jest.fn(async () => undefined),
+  };
+}
+
+function installAnimationFrameDriver() {
+  const callbacks: FrameRequestCallback[] = [];
+  let now = 0;
+  const nowSpy = jest.spyOn(globalThis.performance, "now").mockImplementation(() => now);
+  jest.spyOn(globalThis, "requestAnimationFrame").mockImplementation((callback) => {
+    callbacks.push(callback);
+    return callbacks.length as never;
+  });
+  jest.spyOn(globalThis, "cancelAnimationFrame").mockImplementation(() => undefined);
+
+  return {
+    pendingCount: () => callbacks.length,
+    async step(timestampMs: number) {
+      const callback = callbacks.shift();
+      expect(callback).toBeDefined();
+      now = timestampMs;
+      await act(async () => {
+        callback?.(timestampMs);
+      });
+    },
+    restore() {
+      nowSpy.mockRestore();
+    },
+  };
+}
+
 beforeEach(() => {
   mockHosts.length = 0;
+  mockGlContexts.length = 0;
+  mockUseSettings.mockReturnValue(settingsValue());
 });
 
 describe("ShaderSandbox", () => {
@@ -188,5 +241,44 @@ describe("ShaderSandbox render loop", () => {
     await view.rerender(<ShaderSandbox active source="fragColor = vec4(1.0);" />);
 
     expect((globalThis.requestAnimationFrame as jest.Mock).mock.calls.length).toBe(afterMount);
+  });
+
+  it("draws battery-saver previews only at presentation boundaries using absolute time", async () => {
+    const driver = installAnimationFrameDriver();
+    mockUseSettings.mockReturnValue(settingsValue("battery-saver"));
+
+    await render(<ShaderSandbox source="fragColor = vec4(1.0);" />);
+    const host = mockHosts[0];
+
+    await driver.step(0);
+    await driver.step(10);
+    await driver.step(20);
+    await driver.step(34);
+    await driver.step(68);
+
+    expect(host.render.mock.calls.map(([timeSeconds]) => timeSeconds)).toEqual([0, 0.034, 0.068]);
+    expect(mockGlContexts[0].endFrameEXP).toHaveBeenCalledTimes(3);
+    expect(driver.pendingCount()).toBe(1);
+
+    driver.restore();
+  });
+
+  it("observes a runtime preview-performance change without recreating the GL context", async () => {
+    const driver = installAnimationFrameDriver();
+    mockUseSettings.mockReturnValue(settingsValue("battery-saver"));
+    const view = await render(<ShaderSandbox source="fragColor = vec4(1.0);" />);
+    const host = mockHosts[0];
+
+    await driver.step(0);
+    await driver.step(10);
+    mockUseSettings.mockReturnValue(settingsValue("full-speed"));
+    await view.rerender(<ShaderSandbox source="fragColor = vec4(1.0);" />);
+    await driver.step(20);
+
+    expect(mockHosts).toHaveLength(1);
+    expect(mockGlContexts).toHaveLength(1);
+    expect(host.render.mock.calls.map(([timeSeconds]) => timeSeconds)).toEqual([0, 0.02]);
+
+    driver.restore();
   });
 });

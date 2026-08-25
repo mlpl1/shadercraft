@@ -3,6 +3,8 @@ import { StyleSheet, Text, View } from "react-native";
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 
 import { Colors, Spacing } from "../constants/theme";
+import { useSettings } from "../context/settings-context";
+import { shouldPresentFrame } from "../data/settings/frame-scheduler";
 import type { ShaderParameterDefinition } from "../data/sketches/sketch-metadata";
 import { ShaderProgramHost, type HostCompileResult } from "../shaders/shader-program-host";
 
@@ -40,6 +42,7 @@ export function ShaderSandbox({
   height = DEFAULT_HEIGHT,
   onCompileResult,
 }: ShaderSandboxProps) {
+  const { settings } = useSettings();
   const parameterValues = useMemo(
     () => Object.fromEntries(parameters.map(({ key, value }) => [key, value])),
     [parameters],
@@ -62,8 +65,10 @@ export function ShaderSandbox({
   const frameRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
   const startedAtRef = useRef(0);
+  const lastPresentedAtRef = useRef(Number.NEGATIVE_INFINITY);
   const pausedRef = useRef(paused);
   const activeRef = useRef(active);
+  const previewPerformanceRef = useRef(settings.previewPerformance);
   /** Set once the context exists, so the effect below can restart a loop that stopped itself. */
   const renderRef = useRef<(() => void) | null>(null);
   const sourceRef = useRef(source);
@@ -85,6 +90,10 @@ export function ShaderSandbox({
   }, [paused]);
 
   useEffect(() => {
+    previewPerformanceRef.current = settings.previewPerformance;
+  }, [settings.previewPerformance]);
+
+  useEffect(() => {
     const wasActive = activeRef.current;
     activeRef.current = active;
 
@@ -101,6 +110,7 @@ export function ShaderSandbox({
 
   useEffect(() => {
     startedAtRef.current = globalThis.performance.now();
+    lastPresentedAtRef.current = Number.NEGATIVE_INFINITY;
   }, [restartToken]);
 
   useEffect(() => {
@@ -148,6 +158,7 @@ export function ShaderSandbox({
     const host = new ShaderProgramHost(gl);
     hostRef.current = host;
     startedAtRef.current = globalThis.performance.now();
+    lastPresentedAtRef.current = Number.NEGATIVE_INFINITY;
 
     const result = host.setBody(sourceRef.current, helpersRef.current, parametersRef.current);
     compiledParameterDefinitionSignatureRef.current = parameterDefinitionSignatureRef.current;
@@ -159,7 +170,7 @@ export function ShaderSandbox({
     // stays on screen rather than the preview going blank.
     let frozenSeconds = 0;
 
-    const render = () => {
+    const render = (timestampMs: number) => {
       if (!mountedRef.current) return;
 
       if (!activeRef.current) {
@@ -168,18 +179,25 @@ export function ShaderSandbox({
         return;
       }
 
-      if (!pausedRef.current) {
-        frozenSeconds = (globalThis.performance.now() - startedAtRef.current) / 1000;
-      }
+      if (shouldPresentFrame(previewPerformanceRef.current, timestampMs, lastPresentedAtRef.current)) {
+        lastPresentedAtRef.current = timestampMs;
+        if (!pausedRef.current) {
+          frozenSeconds = (globalThis.performance.now() - startedAtRef.current) / 1000;
+        }
 
-      host.render(frozenSeconds, gl.drawingBufferWidth, gl.drawingBufferHeight);
-      gl.endFrameEXP();
+        host.render(frozenSeconds, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        gl.endFrameEXP();
+      }
 
       frameRef.current = requestAnimationFrame(render);
     };
 
-    renderRef.current = render;
-    if (activeRef.current) render();
+    const requestNextFrame = () => {
+      frameRef.current = requestAnimationFrame(render);
+    };
+
+    renderRef.current = requestNextFrame;
+    if (activeRef.current) requestNextFrame();
   }, []);
 
   return (
