@@ -570,7 +570,7 @@ describe("SettingsScreen", () => {
     expect(mockSetStringAsync).not.toHaveBeenCalled();
     expect(screen.getByText("Review diagnostics")).toBeTruthy();
     const preview = screen.getByTestId("diagnostics-preview");
-    expect(preview).toHaveTextContent(/App version: 1\\.2\\.3/);
+    expect(preview).toHaveTextContent(/App version: 1\.2\.3/);
     expect(preview).toHaveTextContent(/Build version: 45/);
     expect(preview).toHaveTextContent(/Device model: Test phone/);
     expect(preview).toHaveTextContent(/Curriculum release: active-2026-08/);
@@ -629,4 +629,5 @@ describe("SettingsScreen", () => {
     expect(mockBottomNavigation).toHaveBeenCalledWith(expect.objectContaining({ activeItem: "settings" }));
   });
 });
+
 
