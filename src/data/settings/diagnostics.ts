@@ -12,7 +12,7 @@ export type DiagnosticFacts = Readonly<{
   glVersion?: string;
 }>;
 
-const fields: Array<[keyof DiagnosticFacts, string]> = [
+const fields: [keyof DiagnosticFacts, string][] = [
   ["appVersion", "App version"],
   ["buildVersion", "Build version"],
   ["platform", "Platform"],

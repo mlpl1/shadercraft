@@ -19,7 +19,7 @@ describe("buildDiagnostics", () => {
       source: "void mainImage() { leak(); }",
       path: "C:/Users/mlp/dev/shadercraft/.env.local",
       supabaseUrl: "https://secret.supabase.co",
-    } as DiagnosticFacts & Record<string, string>;
+    } as unknown as DiagnosticFacts & Record<string, string>;
 
     expect(buildDiagnostics(facts)).toBe(
       [
