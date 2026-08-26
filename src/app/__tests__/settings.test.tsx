@@ -117,6 +117,59 @@ describe("SettingsScreen", () => {
     expect(mockRouter.push).toHaveBeenCalledWith("/account");
   });
 
+  test("shows readable ASCII account loading copy", async () => {
+    mockUseAuth.mockReturnValue({
+      session: undefined,
+      profileId: null,
+      isHydrated: false,
+      error: null,
+      signInWithPassword: jest.fn(),
+      signOut: jest.fn(),
+      signUpWithPassword: jest.fn(),
+    });
+
+    await render(<SettingsScreen />);
+
+    expect(screen.getByText("Checking account...")).toBeTruthy();
+    expect(screen.queryByText("Checking accountâ€¦")).toBeNull();
+  });
+
+  test("shows readable ASCII syncing copy", async () => {
+    mockUseAuth.mockReturnValue({
+      session: { userId: "user-1", email: "learner@example.com" },
+      profileId: "profile-1",
+      isHydrated: true,
+      error: null,
+      signInWithPassword: jest.fn(),
+      signOut: jest.fn(),
+      signUpWithPassword: jest.fn(),
+    });
+    mockUseSyncStatus.mockReturnValue(buildSyncStatus({ status: "syncing" }));
+
+    await render(<SettingsScreen />);
+
+    expect(screen.getByText("Syncing...")).toBeTruthy();
+    expect(screen.queryByText("Syncingâ€¦")).toBeNull();
+  });
+
+  test("shows readable ASCII offline copy", async () => {
+    mockUseAuth.mockReturnValue({
+      session: { userId: "user-1", email: "learner@example.com" },
+      profileId: "profile-1",
+      isHydrated: true,
+      error: null,
+      signInWithPassword: jest.fn(),
+      signOut: jest.fn(),
+      signUpWithPassword: jest.fn(),
+    });
+    mockUseSyncStatus.mockReturnValue(buildSyncStatus({ status: "offline", pending: 2 }));
+
+    await render(<SettingsScreen />);
+
+    expect(screen.getByText("Offline - 2 changes waiting to sync")).toBeTruthy();
+    expect(screen.queryByText("Offline â€” 2 changes waiting to sync")).toBeNull();
+  });
+
   test("shows automatic retry status for a temporary sync failure", async () => {
     mockUseAuth.mockReturnValue({
       session: { userId: "user-1", email: "learner@example.com" },

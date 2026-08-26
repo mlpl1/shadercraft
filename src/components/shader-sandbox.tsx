@@ -179,9 +179,13 @@ export function ShaderSandbox({
         return;
       }
 
-      if (shouldPresentFrame(previewPerformanceRef.current, timestampMs, lastPresentedAtRef.current)) {
-        lastPresentedAtRef.current = timestampMs;
+      const shouldDrawFrame =
+        pausedRef.current ||
+        shouldPresentFrame(previewPerformanceRef.current, timestampMs, lastPresentedAtRef.current);
+
+      if (shouldDrawFrame) {
         if (!pausedRef.current) {
+          lastPresentedAtRef.current = timestampMs;
           frozenSeconds = (globalThis.performance.now() - startedAtRef.current) / 1000;
         }
 

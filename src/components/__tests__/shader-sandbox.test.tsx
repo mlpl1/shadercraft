@@ -243,6 +243,26 @@ describe("ShaderSandbox render loop", () => {
     expect((globalThis.requestAnimationFrame as jest.Mock).mock.calls.length).toBe(afterMount);
   });
 
+  it("draws every paused battery-saver callback with frozen time", async () => {
+    const driver = installAnimationFrameDriver();
+    mockUseSettings.mockReturnValue(settingsValue("battery-saver"));
+
+    await render(<ShaderSandbox paused source="fragColor = vec4(1.0);" />);
+    const host = mockHosts[0];
+
+    await driver.step(0);
+    await driver.step(10);
+    await driver.step(20);
+    await driver.step(34);
+    await driver.step(68);
+
+    expect(host.render.mock.calls.map(([timeSeconds]) => timeSeconds)).toEqual([0, 0, 0, 0, 0]);
+    expect(mockGlContexts[0].endFrameEXP).toHaveBeenCalledTimes(5);
+    expect(driver.pendingCount()).toBe(1);
+
+    driver.restore();
+  });
+
   it("draws battery-saver previews only at presentation boundaries using absolute time", async () => {
     const driver = installAnimationFrameDriver();
     mockUseSettings.mockReturnValue(settingsValue("battery-saver"));

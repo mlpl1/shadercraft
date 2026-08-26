@@ -21,11 +21,11 @@ function syncStatusLabel(status: SyncStatus, pending: number): string {
     case "up-to-date":
       return pending > 0 ? describePendingChanges(pending) : "Up to date";
     case "syncing":
-      return "Syncing…";
+      return "Syncing...";
     case "retrying":
       return "Waiting to retry";
     case "offline":
-      return pending > 0 ? `Offline — ${describePendingChanges(pending)}` : "Offline";
+      return pending > 0 ? `Offline - ${describePendingChanges(pending)}` : "Offline";
     case "attention":
       return "Needs attention";
     case "signed-out":
@@ -80,7 +80,7 @@ function SettingRow({ label, detail, onPress }: SettingRowProps) {
       {onPress ? (
         <AppIcon
           color={Colors.textSubtle}
-          fallback="›"
+          fallback=">"
           name={{ android: "chevron_right", ios: "chevron.right", web: "chevron_right" }}
           size={20}
         />
@@ -121,7 +121,7 @@ function AccountSection() {
   if (auth.session === undefined) {
     return (
       <Section title="Account">
-        <SettingRow label="Checking account…" />
+        <SettingRow label="Checking account..." />
       </Section>
     );
   }
