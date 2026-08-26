@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -9,6 +10,8 @@ import { useAuth } from "../context/auth-context";
 import { useData } from "../context/data-context";
 import { type DeviceSettingsPatch, useSettings } from "../context/settings-context";
 import { type SyncStatus, useSyncStatus } from "../context/sync-context";
+import type { Sketch } from "../data/sketches/sketch-repository";
+import { exportSketch, sketchExportAdapter } from "../data/settings/sketch-export";
 import type { EditorFontSize, PreviewPerformance } from "../data/settings/device-settings";
 import { isCloudSyncEnabled } from "../data/supabase/client";
 
@@ -40,6 +43,10 @@ function syncStatusDetail(status: SyncStatus): string | null {
   return null;
 }
 
+function describeExportError(error: unknown): string {
+  return error instanceof Error ? error.message : "Try exporting the shader again.";
+}
+
 const EDITOR_FONT_SIZES: EditorFontSize[] = [12, 14, 16];
 const PREVIEW_PERFORMANCE_OPTIONS: { label: string; mode: PreviewPerformance }[] = [
   { label: "Full speed", mode: "full-speed" },
@@ -67,19 +74,20 @@ function Section({ title, children }: SectionProps) {
 type SettingRowProps = {
   label: string;
   detail?: string;
+  disabled?: boolean;
   onPress?: () => void;
 };
 
-function SettingRow({ label, detail, onPress }: SettingRowProps) {
+function SettingRow({ label, detail, disabled = false, onPress }: SettingRowProps) {
   const content = (
     <>
       <View style={styles.rowCopy}>
-        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={[styles.rowLabel, disabled && styles.disabledText]}>{label}</Text>
         {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
       </View>
       {onPress ? (
         <AppIcon
-          color={Colors.textSubtle}
+          color={disabled ? Colors.textSubtle : Colors.textSubtle}
           fallback=">"
           name={{ android: "chevron_right", ios: "chevron.right", web: "chevron_right" }}
           size={20}
@@ -94,8 +102,10 @@ function SettingRow({ label, detail, onPress }: SettingRowProps) {
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.row, disabled && styles.disabledRow, pressed && styles.pressed]}
     >
       {content}
     </Pressable>
@@ -154,6 +164,145 @@ function AccountSection() {
   );
 }
 
+function DataStorageSection() {
+  const auth = useAuth();
+  const data = useData();
+  const [chooserVisible, setChooserVisible] = useState(false);
+  const [sketches, setSketches] = useState<Sketch[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
+  const canExport = data.status === "ready" && auth.isHydrated && auth.profileId !== null;
+
+  const closeChooser = () => {
+    setChooserVisible(false);
+    setExportingId(null);
+  };
+
+  const openChooser = async () => {
+    if (data.status !== "ready" || !auth.profileId) return;
+
+    setChooserVisible(true);
+    setLoading(true);
+    setSketches(null);
+
+    try {
+      setSketches(await data.sketchRepository.list(auth.profileId));
+    } catch (error) {
+      setChooserVisible(false);
+      Alert.alert("Export failed", describeExportError(error), [
+        { text: "Cancel", style: "cancel" },
+        { text: "Retry", onPress: () => void openChooser() },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportSelectedSketch = async (sketch: Sketch) => {
+    if (exportingId) return;
+
+    setExportingId(sketch.id);
+    try {
+      await exportSketch(sketch, sketchExportAdapter);
+      closeChooser();
+    } catch (error) {
+      Alert.alert("Export failed", describeExportError(error), [
+        { text: "Cancel", style: "cancel" },
+        { text: "Retry", onPress: () => void exportSelectedSketch(sketch) },
+      ]);
+    } finally {
+      setExportingId(null);
+    }
+  };
+
+  return (
+    <>
+      <Section title="Data & storage">
+        <SettingRow
+          detail={
+            canExport
+              ? "Choose one saved shader and export its exact GLSL source."
+              : "Available after your local profile is ready."
+          }
+          disabled={!canExport}
+          label="Export saved sketch"
+          onPress={() => void openChooser()}
+        />
+        <View style={styles.separator} />
+        <SettingRow
+          detail="Sketches and tutorials remain local-only. Lesson progress can sync when you sign in."
+          label="Local shader data"
+        />
+      </Section>
+      <Modal
+        animationType="fade"
+        onRequestClose={closeChooser}
+        transparent
+        visible={chooserVisible}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={styles.rowCopy}>
+                <Text style={styles.modalTitle}>Export saved sketch</Text>
+                <Text style={styles.modalDetail}>Pick one shader to save as a .frag file.</Text>
+              </View>
+              <Pressable
+                accessibilityLabel="Close export chooser"
+                accessibilityRole="button"
+                onPress={closeChooser}
+                style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
+              >
+                <AppIcon
+                  color={Colors.text}
+                  fallback="x"
+                  name={{ android: "close", ios: "xmark", web: "close" }}
+                  size={18}
+                />
+              </Pressable>
+            </View>
+            <View style={styles.separator} />
+            {loading ? <Text style={styles.emptyText}>Loading saved sketches...</Text> : null}
+            {!loading && sketches?.length === 0 ? (
+              <Text style={styles.emptyText}>No sketches to export</Text>
+            ) : null}
+            {!loading && sketches
+              ? sketches.map((sketch, index) => (
+                  <View key={sketch.id}>
+                    {index > 0 ? <View style={styles.separator} /> : null}
+                    <Pressable
+                      accessibilityLabel={sketch.title}
+                      accessibilityRole="button"
+                      disabled={exportingId !== null}
+                      onPress={() => void exportSelectedSketch(sketch)}
+                      style={({ pressed }) => [
+                        styles.sketchRow,
+                        exportingId !== null && styles.disabledRow,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <View style={styles.rowCopy}>
+                        <Text style={styles.rowLabel}>{sketch.title}</Text>
+                        <Text style={styles.rowDetail}>{new Date(sketch.updatedAt).toLocaleString()}</Text>
+                      </View>
+                      <AppIcon
+                        color={Colors.accent}
+                        fallback=">"
+                        name={{ android: "ios_share", ios: "square.and.arrow.up", web: "download" }}
+                        size={20}
+                      />
+                    </Pressable>
+                  </View>
+                ))
+              : null}
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 export default function SettingsScreen() {
   const settingsContext = useSettings();
   const data = useData();
@@ -191,6 +340,7 @@ export default function SettingsScreen() {
             </View>
           ) : null}
           <AccountSection />
+          <DataStorageSection />
           <Section title="Editor">
             <View style={styles.preferenceBlock}>
               <Text style={styles.preferenceLabel}>Editor font size</Text>
@@ -397,6 +547,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.md,
   },
+  sketchRow: {
+    minHeight: 62,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
   rowCopy: {
     flex: 1,
   },
@@ -410,6 +568,12 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
+  },
+  disabledRow: {
+    opacity: 0.52,
+  },
+  disabledText: {
+    color: Colors.textMuted,
   },
   toggleValue: {
     color: Colors.accent,
@@ -467,6 +631,55 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: 13,
     fontWeight: "800",
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.62)",
+  },
+  modalSheet: {
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+    overflow: "hidden",
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+  },
+  modalTitle: {
+    color: Colors.text,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  modalDetail: {
+    marginTop: 4,
+    color: Colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surfaceRaised,
+  },
+  emptyText: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.xl,
+    color: Colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
   },
   pressed: {
     opacity: 0.72,
