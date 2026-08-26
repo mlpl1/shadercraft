@@ -1,15 +1,30 @@
 import { useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import * as Application from "expo-application";
+import * as Clipboard from "expo-clipboard";
+import * as Device from "expo-device";
 import { useRouter } from "expo-router";
+import {
+  Alert,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppIcon } from "../components/app-icon";
 import { BottomNavigation } from "../components/bottom-navigation";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { useAuth } from "../context/auth-context";
+import { useCourse } from "../context/course-context";
 import { useData } from "../context/data-context";
 import { type DeviceSettingsPatch, useSettings } from "../context/settings-context";
 import { type SyncStatus, useSyncStatus } from "../context/sync-context";
+import { buildDiagnostics } from "../data/settings/diagnostics";
 import type { Sketch } from "../data/sketches/sketch-repository";
 import { exportSketch, sketchExportAdapter } from "../data/settings/sketch-export";
 import type { EditorFontSize, PreviewPerformance } from "../data/settings/device-settings";
@@ -310,6 +325,151 @@ function DataStorageSection() {
   );
 }
 
+function HelpAndSupportSection() {
+  const auth = useAuth();
+  const course = useCourse();
+  const [diagnosticsVisible, setDiagnosticsVisible] = useState(false);
+
+  const diagnostics = buildDiagnostics({
+    appVersion: Application.nativeApplicationVersion ?? undefined,
+    buildVersion: Application.nativeBuildVersion ?? undefined,
+    platform: Device.osName ?? Platform.OS,
+    osVersion: String(Device.osVersion ?? Platform.Version ?? "unknown"),
+    deviceModel: Device.modelName ?? undefined,
+    curriculumRelease: course.activeRelease?.id ?? "unknown",
+    contentSchemaVersion: course.activeRelease?.schemaVersion ?? 0,
+    cloudSync: isCloudSyncEnabled() ? "enabled" : "disabled",
+    session: auth.session ? "signed-in" : "signed-out",
+  });
+
+  const openSupportLink = async (destination: string, url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(
+        `Could not open ${destination}`,
+        `Check your connection and try opening ${destination} again.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Retry", onPress: () => void openSupportLink(destination, url) },
+        ],
+      );
+    }
+  };
+
+  const copyDiagnostics = async () => {
+    await Clipboard.setStringAsync(diagnostics);
+    setDiagnosticsVisible(false);
+    Alert.alert("Diagnostics copied", "The diagnostics report is ready in your clipboard.");
+  };
+
+  return (
+    <>
+      <Section title="Help & support">
+        <SettingRow
+          detail="Preview an allowlisted report before copying it."
+          label="Copy diagnostics"
+          onPress={() => setDiagnosticsVisible(true)}
+        />
+        <View style={styles.separator} />
+        <SettingRow
+          label="Documentation"
+          onPress={() => void openSupportLink("Documentation", "https://github.com/mlpl1/shadercraft#readme")}
+        />
+        <View style={styles.separator} />
+        <SettingRow
+          detail="GitHub issues are public, so do not include personal information or private shader code."
+          label="Report issue"
+          onPress={() =>
+            void openSupportLink("Report issue", "https://github.com/mlpl1/shadercraft/issues/new/choose")
+          }
+        />
+        <View style={styles.separator} />
+        <SettingRow
+          label="Repository"
+          onPress={() => void openSupportLink("Repository", "https://github.com/mlpl1/shadercraft")}
+        />
+        <View style={styles.separator} />
+        <SettingRow
+          label="License"
+          onPress={() =>
+            void openSupportLink("License", "https://github.com/mlpl1/shadercraft/blob/main/LICENSE")
+          }
+        />
+      </Section>
+
+      <Section title="About">
+        <SettingRow
+          detail={`Version ${Application.nativeApplicationVersion ?? "Unknown"} (${Application.nativeBuildVersion ?? "?"})`}
+          label="App version"
+        />
+        <View style={styles.separator} />
+        <SettingRow
+          detail={`Active curriculum: ${course.activeRelease?.id ?? "Unknown"}`}
+          label="Curriculum release"
+        />
+        <View style={styles.separator} />
+        <SettingRow
+          detail={`Content schema: ${course.activeRelease?.schemaVersion ?? "Unknown"}`}
+          label="Content schema"
+        />
+      </Section>
+
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setDiagnosticsVisible(false)}
+        transparent
+        visible={diagnosticsVisible}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={styles.rowCopy}>
+                <Text style={styles.modalTitle}>Review diagnostics</Text>
+                <Text style={styles.modalDetail}>Only app and device facts needed for support are included.</Text>
+              </View>
+              <Pressable
+                accessibilityLabel="Close diagnostics preview"
+                accessibilityRole="button"
+                onPress={() => setDiagnosticsVisible(false)}
+                style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
+              >
+                <AppIcon
+                  color={Colors.text}
+                  fallback="x"
+                  name={{ android: "close", ios: "xmark", web: "close" }}
+                  size={18}
+                />
+              </Pressable>
+            </View>
+            <View style={styles.separator} />
+            <Text selectable style={styles.diagnosticsPreview} testID="diagnostics-preview">
+              {diagnostics}
+            </Text>
+            <View style={styles.separator} />
+            <View style={styles.diagnosticsActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setDiagnosticsVisible(false)}
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void copyDiagnostics()}
+                style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.primaryButtonText}>Copy to clipboard</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 export default function SettingsScreen() {
   const settingsContext = useSettings();
   const data = useData();
@@ -348,6 +508,7 @@ export default function SettingsScreen() {
           ) : null}
           <AccountSection />
           <DataStorageSection />
+          <HelpAndSupportSection />
           <Section title="Editor">
             <View style={styles.preferenceBlock}>
               <Text style={styles.preferenceLabel}>Editor font size</Text>
@@ -692,6 +853,47 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
+  },
+  diagnosticsPreview: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+    color: Colors.text,
+    fontFamily: "monospace",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  diagnosticsActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+  },
+  secondaryButton: {
+    minHeight: 40,
+    justifyContent: "center",
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.surfaceRaised,
+  },
+  secondaryButtonText: {
+    color: Colors.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  primaryButton: {
+    minHeight: 40,
+    justifyContent: "center",
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.accent,
+  },
+  primaryButtonText: {
+    color: Colors.background,
+    fontSize: 13,
+    fontWeight: "800",
   },
   pressed: {
     opacity: 0.72,

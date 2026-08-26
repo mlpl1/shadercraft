@@ -570,13 +570,13 @@ describe("SettingsScreen", () => {
     expect(mockSetStringAsync).not.toHaveBeenCalled();
     expect(screen.getByText("Review diagnostics")).toBeTruthy();
     const preview = screen.getByTestId("diagnostics-preview");
-    expect(preview).toHaveTextContent("App version: 1.2.3");
-    expect(preview).toHaveTextContent("Build version: 45");
-    expect(preview).toHaveTextContent("Device model: Test phone");
-    expect(preview).toHaveTextContent("Curriculum release: active-2026-08");
-    expect(preview).toHaveTextContent("Content schema version: 1");
-    expect(preview).toHaveTextContent("Cloud sync: enabled");
-    expect(preview).toHaveTextContent("Session: signed-in");
+    expect(preview).toHaveTextContent(/App version: 1\\.2\\.3/);
+    expect(preview).toHaveTextContent(/Build version: 45/);
+    expect(preview).toHaveTextContent(/Device model: Test phone/);
+    expect(preview).toHaveTextContent(/Curriculum release: active-2026-08/);
+    expect(preview).toHaveTextContent(/Content schema version: 1/);
+    expect(preview).toHaveTextContent(/Cloud sync: enabled/);
+    expect(preview).toHaveTextContent(/Session: signed-in/);
     expect(preview).not.toHaveTextContent("learner@example.com");
     expect(preview).not.toHaveTextContent("user-secret");
 
@@ -629,3 +629,4 @@ describe("SettingsScreen", () => {
     expect(mockBottomNavigation).toHaveBeenCalledWith(expect.objectContaining({ activeItem: "settings" }));
   });
 });
+
