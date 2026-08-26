@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest an improvement to Shadercraft.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the friction or missing capability.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-outcome
+    attributes:
+      label: What outcome would help?
+      description: Describe the behavior or workflow you would like instead.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Share any workarounds or different approaches you considered.
+    validations:
+      required: true
+  - type: checkboxes
+    id: public-information
+    attributes:
+      label: Public information check
+      description: GitHub issues are public.
+      options:
+        - label: I removed personal information, auth tokens, private shader source, and Supabase keys before submitting.
+    validations:
+      required: true

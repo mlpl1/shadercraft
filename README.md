@@ -23,10 +23,12 @@ The project is currently an early working prototype built with Expo and React Na
 - Shader editor: write GLSL, watch it compile and render live, and keep sketches per profile — with
   per-line compile errors, and the last working version staying on screen while you type (see
   [`docs/data/shader-sandbox.md`](docs/data/shader-sandbox.md))
+- A fifth Settings tab for device-only editor preferences, preview performance, account status,
+  one-sketch export, diagnostics preview, and public support links
 - Fully offline curriculum and progress, backed by an on-device SQLite database seeded from a
   checksummed, version-controlled content release
 - Optional Supabase accounts and background cross-device progress synchronization, reachable from
-  an account icon on the Course screen; disabled by default and entirely inert until configured
+  the Settings tab; disabled by default and entirely inert until configured
 - Remote curriculum publishing: an immutable, checksummed course release can be published to
   Supabase and picked up by installed apps in the background, without an app-store update.
   Publishing reads the release back and verifies its checksum before reporting success.
@@ -45,10 +47,11 @@ for the full eleven-module arc.
   [`docs/data/shader-sandbox.md`](docs/data/shader-sandbox.md); note that `expo-gl` does not work with
   remote debugging enabled)
 - [`expo-sqlite`](https://docs.expo.dev/versions/v57.0.0/sdk/sqlite/) for the local curriculum
-  and progress database, the only runtime data source screens read from
+  and learner-data database
 - Zod-validated JSON content, compiled into a checksummed bundled release (see
   [`docs/data/local-curriculum.md`](docs/data/local-curriculum.md))
-- AsyncStorage, only to migrate a device's pre-SQLite legacy completions on first launch
+- AsyncStorage for lightweight device preferences and the one-time migration of pre-SQLite legacy
+  completions on first launch; it is not the curriculum or progress database
 - [Supabase](https://supabase.com) for optional accounts and progress sync (see
   [`docs/data/progress-sync.md`](docs/data/progress-sync.md)); off by default, and never reached
   by any screen unless explicitly enabled
@@ -139,18 +142,26 @@ Progress syncs between a learner's own devices only when they explicitly sign in
 builds with cloud sync configured — see [Optional accounts and sync](#optional-accounts-and-sync)
 below. Without an account, progress stays local to the device, exactly as above.
 
+Tutorial step completion, tutorial drafts, and saved shader sketches remain local-only even when
+lesson progress sync is enabled. Settings can export one saved sketch's exact GLSL source, but the
+export is still a device-local action rather than a cloud backup.
+
 ## Optional accounts and sync
 
 Signing in is entirely optional and off by default. With `EXPO_PUBLIC_SUPABASE_ENABLED` unset (a
-fresh checkout), the account entry point on Course is hidden and nothing in the app ever talks to
-Supabase — every feature above works exactly as if accounts did not exist.
+fresh checkout), Settings shows local-only account messaging and nothing in the app ever talks to
+Supabase -- every feature above works exactly as if accounts did not exist.
 
-When configured, an account icon appears on Course, leading to a screen where a learner can create
-an account or sign in with email and password, see their signed-in email, the number of pending
-local changes still waiting to reach the server, and — for a temporary sync problem — a way to
-retry it. Signing in merges progress made anonymously on that device into the account; signing out
-returns the device to local-only progress without losing it. Cross-device conflicts are resolved
-by the most recent action the server actually accepted, not by comparing device clocks.
+When configured, the Settings tab exposes an Account section where a learner can create an account
+or sign in with email and password, see their signed-in email, inspect the number of pending local
+changes still waiting to reach the server, and -- for a temporary sync problem -- retry it.
+Signing in merges progress made anonymously on that device into the account; signing out returns
+the device to local-only progress without losing it. Cross-device conflicts are resolved by the
+most recent action the server actually accepted, not by comparing device clocks.
+
+The same Settings tab also holds editor font-size and line-number preferences, the Full speed /
+Battery saver preview toggle, one-sketch export, a diagnostics preview that copies only
+allowlisted app/device facts, and links to the public GitHub issue tracker and repository docs.
 
 See [`docs/data/progress-sync.md`](docs/data/progress-sync.md) for how to configure a local
 Supabase stack, the account/profile merge rules, the conflict policy, and how to inspect pending

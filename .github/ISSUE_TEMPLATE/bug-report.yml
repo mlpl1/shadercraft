@@ -1,0 +1,53 @@
+name: Bug report
+description: Report a reproducible problem in Shadercraft.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: A short description of the problem.
+      placeholder: Settings closes after I tap Copy diagnostics
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Reproduction steps
+      description: List the exact steps someone else can follow.
+      placeholder: |
+        1. Open Settings
+        2. Tap Copy diagnostics
+        3. Observe the app closes
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Optional diagnostics
+      description: Paste copied diagnostics here if they help. Remove anything you do not want public before posting.
+      render: text
+  - type: checkboxes
+    id: public-information
+    attributes:
+      label: Public information check
+      description: GitHub issues are public.
+      options:
+        - label: I removed personal information, auth tokens, private shader source, and Supabase keys before submitting.
+    validations:
+      required: true

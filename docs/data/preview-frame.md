@@ -134,3 +134,14 @@ them at all. Meanwhile seven of eight "corner" hits in the noise module turned o
 corners and were correct.
 
 If a sentence counts something across the frame, it is frame-dependent whether or not it says so.
+
+## Battery saver does not change the frame
+
+The Settings tab now lets a learner choose Full speed or Battery saver for live previews.
+That toggle changes presentation cadence, not geometry: Full speed presents every animation frame,
+while Battery saver skips callbacks until roughly every 33.3 ms. When Battery saver does present,
+the shader still receives the real elapsed timestamp rather than a slowed synthetic clock.
+
+That means every claim in this document stays exactly the same in either mode. The rectangle,
+aspect ratio, coordinate systems, and any measurement derived from them do not change; only the
+number of intermediate animation frames shown to the learner changes.

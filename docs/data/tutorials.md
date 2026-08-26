@@ -86,3 +86,8 @@ write.
 Both are **local only**. `lesson_progress` syncs through the outbox; steps do not, because the outbox
 and the remote schema know only about lessons. A reinstall loses which exercises were finished.
 Teaching the sync path about steps is a separate change and has not been made.
+
+Saved shader sketches follow the same rule: they are profile-scoped device data, not synced course
+state. The Settings export action can write one sketch's exact GLSL source out as a `.frag` file,
+but it does not make sketches, tutorial drafts, or tutorial completion part of the remote account
+model.
