@@ -267,8 +267,14 @@ function DataStorageSection() {
             {!loading && sketches?.length === 0 ? (
               <Text style={styles.emptyText}>No sketches to export</Text>
             ) : null}
-            {!loading && sketches
-              ? sketches.map((sketch, index) => (
+            {!loading && sketches && sketches.length > 0 ? (
+              <ScrollView
+                accessibilityLabel="Saved sketches to export"
+                nestedScrollEnabled
+                style={styles.sketchScroll}
+                testID="sketch-export-scroll"
+              >
+                {sketches.map((sketch, index) => (
                   <View key={sketch.id}>
                     {index > 0 ? <View style={styles.separator} /> : null}
                     <Pressable
@@ -294,8 +300,9 @@ function DataStorageSection() {
                       />
                     </Pressable>
                   </View>
-                ))
-              : null}
+                ))}
+              </ScrollView>
+            ) : null}
           </View>
         </View>
       </Modal>
@@ -640,6 +647,7 @@ const styles = StyleSheet.create({
   modalSheet: {
     width: "100%",
     maxWidth: 520,
+    maxHeight: "82%",
     alignSelf: "center",
     overflow: "hidden",
     borderTopLeftRadius: Radius.lg,
@@ -647,6 +655,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
+  },
+  sketchScroll: {
+    flexGrow: 0,
+    maxHeight: 360,
   },
   modalHeader: {
     flexDirection: "row",

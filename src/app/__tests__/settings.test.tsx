@@ -476,6 +476,33 @@ describe("SettingsScreen", () => {
     alertSpy.mockRestore();
   });
 
+  test("renders many export choices inside a scrollable chooser surface", async () => {
+    const sketches = Array.from({ length: 24 }, (_unused, index) =>
+      buildSketch({
+        id: `sketch-${index + 1}`,
+        title: `Sketch ${index + 1}`,
+        updatedAt: `2026-08-25T10:${String(index).padStart(2, "0")}:00.000Z`,
+      }),
+    );
+    mockUseData.mockReturnValue(buildReadyData(sketches));
+    mockUseAuth.mockReturnValue({
+      session: null,
+      profileId: "profile-1",
+      isHydrated: true,
+      error: null,
+      signInWithPassword: jest.fn(),
+      signOut: jest.fn(),
+      signUpWithPassword: jest.fn(),
+    });
+
+    await render(<SettingsScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "Export saved sketch" }));
+
+    expect(await screen.findByTestId("sketch-export-scroll")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close export chooser" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sketch 24" })).toBeTruthy();
+  });
+
   test("disables sketch export until profile hydration provides a profile id", async () => {
     mockUseAuth.mockReturnValue({
       session: undefined,
