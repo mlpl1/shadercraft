@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   Pressable,
   ScrollView,
@@ -17,12 +18,17 @@ import { ShaderLibraryCard } from "../components/shader-library-card";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { useAuth } from "../context/auth-context";
 import { useData } from "../context/data-context";
+import { exportSketch, sketchExportAdapter } from "../data/settings/sketch-export";
 import type { Sketch, SketchRepository } from "../data/sketches/sketch-repository";
 import { STARTER_SKETCH_SOURCE, STARTER_SKETCH_TITLE } from "../data/sketches/starter-sketch";
 
 const ALL_CATEGORY = "All";
 const NEW_SKETCH_TITLE = "Untitled shader";
 const EMPTY_SKETCHES: Sketch[] = [];
+
+function describeExportError(error: unknown): string {
+  return error instanceof Error ? error.message : "Try exporting the shader again.";
+}
 
 type LibraryScope = {
   profileId: string;
@@ -60,6 +66,7 @@ export default function LibraryScreen() {
   const [visibleSketchIds, setVisibleSketchIds] = useState<ReadonlySet<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -129,6 +136,7 @@ export default function LibraryScreen() {
     setCreateError(null);
     setIsLoading(true);
     setIsCreating(false);
+    setExportingId(null);
   }, [scope]);
 
   const categories = useMemo(() => {
@@ -181,6 +189,22 @@ export default function LibraryScreen() {
       if (isCurrent()) setIsCreating(false);
     }
   }, [isCreating, openSketch, scope]);
+
+  const exportSelectedSketch = useCallback(async (sketch: Sketch) => {
+    if (exportingId) return;
+
+    setExportingId(sketch.id);
+    try {
+      await exportSketch(sketch, sketchExportAdapter);
+    } catch (error) {
+      Alert.alert("Export failed", describeExportError(error), [
+        { text: "Cancel", style: "cancel" },
+        { text: "Retry", onPress: () => void exportSelectedSketch(sketch) },
+      ]);
+    } finally {
+      setExportingId(null);
+    }
+  }, [exportingId]);
 
   const clearFilters = useCallback(() => {
     setQuery("");
@@ -283,7 +307,7 @@ export default function LibraryScreen() {
             filteredSketches.length === 0 && styles.emptyListContent,
           ]}
           data={filteredSketches}
-          extraData={isFocused ? visibleSketchIds : null}
+          extraData={{ exportingId, isFocused, visibleSketchIds }}
           initialNumToRender={3}
           keyExtractor={(sketch) => sketch.id}
           keyboardShouldPersistTaps="handled"
@@ -314,13 +338,37 @@ export default function LibraryScreen() {
           }
           onViewableItemsChanged={onViewableItemsChanged}
           overScrollMode="never"
-          renderItem={({ item }) => (
-            <ShaderLibraryCard
-              active={isFocused && visibleSketchIds.has(item.id)}
-              onPress={() => openSketch(item.id)}
-              sketch={item}
-            />
-          )}
+          renderItem={({ item }) => {
+            const isExporting = exportingId === item.id;
+
+            return (
+              <View style={styles.cardShell}>
+                <ShaderLibraryCard
+                  active={isFocused && visibleSketchIds.has(item.id)}
+                  onPress={() => openSketch(item.id)}
+                  sketch={item}
+                />
+                <View style={styles.cardActions}>
+                  <Text numberOfLines={1} style={styles.cardTimestamp}>
+                    Saved {new Date(item.updatedAt).toLocaleString()}
+                  </Text>
+                  <Pressable
+                    accessibilityLabel={`Export ${item.title}`}
+                    accessibilityRole="button"
+                    disabled={exportingId !== null}
+                    onPress={() => void exportSelectedSketch(item)}
+                    style={({ pressed }) => [
+                      styles.exportButton,
+                      exportingId !== null && styles.exportButtonDisabled,
+                      pressed && styles.exportButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.exportButtonText}>{isExporting ? "Exporting..." : "Export .frag"}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          }}
           showsVerticalScrollIndicator={false}
           updateCellsBatchingPeriod={50}
           viewabilityConfig={viewabilityConfig}
@@ -482,6 +530,44 @@ const styles = StyleSheet.create({
   },
   emptyListContent: {
     flexGrow: 1,
+  },
+  cardShell: {
+    gap: Spacing.sm,
+  },
+  cardActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Spacing.md,
+  },
+  cardTimestamp: {
+    flex: 1,
+    color: Colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  exportButton: {
+    minHeight: 34,
+    paddingHorizontal: Spacing.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: Radius.round,
+    borderWidth: 1,
+    borderColor: Colors.electricBlue,
+    backgroundColor: "rgba(108, 182, 255, 0.08)",
+  },
+  exportButtonDisabled: {
+    opacity: 0.52,
+  },
+  exportButtonPressed: {
+    opacity: 0.72,
+  },
+  exportButtonText: {
+    color: Colors.electricBlue,
+    fontFamily: "monospace",
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
   },
   emptyState: {
     flex: 1,

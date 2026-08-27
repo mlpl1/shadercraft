@@ -51,6 +51,16 @@ jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn() }),
 }));
 
+jest.mock("../../data/settings/sketch-export", () => ({
+  sketchExportAdapter: { share: jest.fn(async () => undefined) },
+  exportSketch: jest.fn(
+    (
+      sketch: { title: string; source: string },
+      adapter: { share(filename: string, source: string): Promise<void> },
+    ) => adapter.share(`${sketch.title}.frag`, sketch.source),
+  ),
+}));
+
 const mockSandbox = jest.fn();
 
 jest.mock("../../components/shader-sandbox", () => ({
@@ -74,9 +84,11 @@ jest.mock("../../context/auth-context", () => ({
 }));
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { Alert } from "react-native";
 
 import LibraryScreen from "../library";
 import { DEFAULT_SKETCH_METADATA } from "../../data/sketches/sketch-metadata";
+import { sketchExportAdapter } from "../../data/settings/sketch-export";
 import type { Sketch, SketchRepository } from "../../data/sketches/sketch-repository";
 import { STARTER_SKETCH_SOURCE, STARTER_SKETCH_TITLE } from "../../data/sketches/starter-sketch";
 
@@ -122,6 +134,9 @@ const repository: jest.Mocked<SketchRepository> = {
 
 const mockRepositoryRef = { current: repository };
 const mockProfileRef = { current: "profile-a" };
+const mockSketchExportAdapter = sketchExportAdapter as {
+  share: jest.Mock<Promise<void>, [string, string]>;
+};
 
 describe("LibraryScreen", () => {
   beforeEach(() => {
@@ -130,6 +145,8 @@ describe("LibraryScreen", () => {
     mockProfileRef.current = "profile-a";
     jest.clearAllMocks();
     mockFocusRef.current = { callback: null, cleanup: null };
+    mockSketchExportAdapter.share.mockReset();
+    mockSketchExportAdapter.share.mockResolvedValue(undefined);
     repository.list.mockImplementation(async (_profileId: string) => sketches);
     repository.create.mockImplementation(async (_profileId: string, title: string, source: string) => {
       nextId += 1;
@@ -234,6 +251,33 @@ describe("LibraryScreen", () => {
       pathname: "/editor",
       params: { sketchId: "open-me" },
     });
+  });
+
+  it("exports a sketch's exact source from its library action", async () => {
+    const exactSource = "void mainImage() {\n  fragColor = vec4(0.25);\n}\n";
+    sketches = [makeSketch("glow", "Glow", "Drafts", exactSource)];
+    await render(<LibraryScreen />);
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Export Glow" }));
+
+    await waitFor(() =>
+      expect(mockSketchExportAdapter.share).toHaveBeenCalledWith("Glow.frag", exactSource),
+    );
+  });
+
+  it("surfaces export failures as a retryable alert", async () => {
+    const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
+    mockSketchExportAdapter.share.mockRejectedValueOnce(new Error("disk full"));
+    sketches = [makeSketch("glow", "Glow")];
+    await render(<LibraryScreen />);
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Export Glow" }));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy.mock.calls[0][0]).toBe("Export failed");
+    expect(alertSpy.mock.calls[0][1]).toContain("disk full");
+    expect(alertSpy.mock.calls[0][2]?.some((button) => button.text === "Retry")).toBe(true);
+    alertSpy.mockRestore();
   });
 
   it("surfaces a failed create without navigating", async () => {

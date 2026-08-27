@@ -25,8 +25,6 @@ import { useData } from "../context/data-context";
 import { type DeviceSettingsPatch, useSettings } from "../context/settings-context";
 import { type SyncStatus, useSyncStatus } from "../context/sync-context";
 import { buildDiagnostics } from "../data/settings/diagnostics";
-import type { Sketch } from "../data/sketches/sketch-repository";
-import { exportSketch, sketchExportAdapter } from "../data/settings/sketch-export";
 import type { EditorFontSize, PreviewPerformance } from "../data/settings/device-settings";
 import { isCloudSyncEnabled } from "../data/supabase/client";
 
@@ -56,10 +54,6 @@ function syncStatusDetail(status: SyncStatus): string | null {
   if (status === "offline") return "Your local changes stay safe on this device.";
   if (status === "attention") return "Open Account to review sync details.";
   return null;
-}
-
-function describeExportError(error: unknown): string {
-  return error instanceof Error ? error.message : "Try exporting the shader again.";
 }
 
 const EDITOR_FONT_SIZES: EditorFontSize[] = [12, 14, 16];
@@ -180,148 +174,13 @@ function AccountSection() {
 }
 
 function DataStorageSection() {
-  const auth = useAuth();
-  const data = useData();
-  const [chooserVisible, setChooserVisible] = useState(false);
-  const [sketches, setSketches] = useState<Sketch[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [exportingId, setExportingId] = useState<string | null>(null);
-
-  const canExport = data.status === "ready" && auth.isHydrated && auth.profileId !== null;
-
-  const closeChooser = () => {
-    setChooserVisible(false);
-    setExportingId(null);
-  };
-
-  const openChooser = async () => {
-    if (data.status !== "ready" || !auth.profileId) return;
-
-    setChooserVisible(true);
-    setLoading(true);
-    setSketches(null);
-
-    try {
-      setSketches(await data.sketchRepository.list(auth.profileId));
-    } catch (error) {
-      setChooserVisible(false);
-      Alert.alert("Export failed", describeExportError(error), [
-        { text: "Cancel", style: "cancel" },
-        { text: "Retry", onPress: () => void openChooser() },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const exportSelectedSketch = async (sketch: Sketch) => {
-    if (exportingId) return;
-
-    setExportingId(sketch.id);
-    try {
-      await exportSketch(sketch, sketchExportAdapter);
-      closeChooser();
-    } catch (error) {
-      Alert.alert("Export failed", describeExportError(error), [
-        { text: "Cancel", style: "cancel" },
-        { text: "Retry", onPress: () => void exportSelectedSketch(sketch) },
-      ]);
-    } finally {
-      setExportingId(null);
-    }
-  };
-
   return (
-    <>
-      <Section title="Data & storage">
-        <SettingRow
-          detail={
-            canExport
-              ? "Choose one saved shader and export its exact GLSL source."
-              : "Available after your local profile is ready."
-          }
-          disabled={!canExport}
-          label="Export saved sketch"
-          onPress={() => void openChooser()}
-        />
-        <View style={styles.separator} />
-        <SettingRow
-          detail="Sketches and tutorials remain local-only. Lesson progress can sync when you sign in."
-          label="Local shader data"
-        />
-      </Section>
-      <Modal
-        animationType="fade"
-        onRequestClose={closeChooser}
-        transparent
-        visible={chooserVisible}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <View style={styles.rowCopy}>
-                <Text style={styles.modalTitle}>Export saved sketch</Text>
-                <Text style={styles.modalDetail}>Pick one shader to save as a .frag file.</Text>
-              </View>
-              <Pressable
-                accessibilityLabel="Close export chooser"
-                accessibilityRole="button"
-                onPress={closeChooser}
-                style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
-              >
-                <AppIcon
-                  color={Colors.text}
-                  fallback="x"
-                  name={{ android: "close", ios: "xmark", web: "close" }}
-                  size={18}
-                />
-              </Pressable>
-            </View>
-            <View style={styles.separator} />
-            {loading ? <Text style={styles.emptyText}>Loading saved sketches...</Text> : null}
-            {!loading && sketches?.length === 0 ? (
-              <Text style={styles.emptyText}>No sketches to export</Text>
-            ) : null}
-            {!loading && sketches && sketches.length > 0 ? (
-              <ScrollView
-                accessibilityLabel="Saved sketches to export"
-                nestedScrollEnabled
-                style={styles.sketchScroll}
-                testID="sketch-export-scroll"
-              >
-                {sketches.map((sketch, index) => (
-                  <View key={sketch.id}>
-                    {index > 0 ? <View style={styles.separator} /> : null}
-                    <Pressable
-                      accessibilityLabel={sketch.title}
-                      accessibilityRole="button"
-                      disabled={exportingId !== null}
-                      onPress={() => void exportSelectedSketch(sketch)}
-                      style={({ pressed }) => [
-                        styles.sketchRow,
-                        exportingId !== null && styles.disabledRow,
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <View style={styles.rowCopy}>
-                        <Text style={styles.rowLabel}>{sketch.title}</Text>
-                        <Text style={styles.rowDetail}>{new Date(sketch.updatedAt).toLocaleString()}</Text>
-                      </View>
-                      <AppIcon
-                        color={Colors.accent}
-                        fallback=">"
-                        name={{ android: "ios_share", ios: "square.and.arrow.up", web: "download" }}
-                        size={20}
-                      />
-                    </Pressable>
-                  </View>
-                ))}
-              </ScrollView>
-            ) : null}
-          </View>
-        </View>
-      </Modal>
-    </>
+    <Section title="Data & storage">
+      <SettingRow
+        detail="Sketches and tutorials remain local-only. Lesson progress can sync when you sign in."
+        label="Local shader data"
+      />
+    </Section>
   );
 }
 
@@ -715,14 +574,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.md,
   },
-  sketchRow: {
-    minHeight: 62,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
   rowCopy: {
     flex: 1,
   },
@@ -817,10 +668,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
   },
-  sketchScroll: {
-    flexGrow: 0,
-    maxHeight: 360,
-  },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -846,13 +693,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: Radius.sm,
     backgroundColor: Colors.surfaceRaised,
-  },
-  emptyText: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.xl,
-    color: Colors.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
   },
   diagnosticsPreview: {
     paddingHorizontal: Spacing.lg,

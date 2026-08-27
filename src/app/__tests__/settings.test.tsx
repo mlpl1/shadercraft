@@ -7,13 +7,6 @@ jest.mock("../../context/data-context", () => ({ useData: jest.fn() }));
 jest.mock("../../context/settings-context", () => ({ useSettings: jest.fn() }));
 jest.mock("../../context/sync-context", () => ({ useSyncStatus: jest.fn() }));
 jest.mock("../../data/supabase/client", () => ({ isCloudSyncEnabled: jest.fn() }));
-jest.mock("../../data/settings/sketch-export", () => ({
-  sketchExportAdapter: { share: jest.fn(async () => undefined) },
-  exportSketch: jest.fn(
-    (sketch: { title: string; source: string }, adapter: { share(filename: string, source: string): Promise<void> }) =>
-      adapter.share(`${sketch.title}.frag`, sketch.source),
-  ),
-}));
 jest.mock("expo-application", () => ({
   nativeApplicationVersion: "1.2.3",
   nativeBuildVersion: "45",
@@ -32,8 +25,6 @@ import { useData } from "../../context/data-context";
 import { useSettings } from "../../context/settings-context";
 import { useSyncStatus } from "../../context/sync-context";
 import { isCloudSyncEnabled } from "../../data/supabase/client";
-import { sketchExportAdapter } from "../../data/settings/sketch-export";
-import type { Sketch } from "../../data/sketches/sketch-repository";
 
 const mockRouter = { back: jest.fn(), push: jest.fn(), replace: jest.fn() };
 const mockBottomNavigation = jest.fn(({ activeItem }: { activeItem: string }) => {
@@ -54,7 +45,6 @@ const mockUseData = useData as jest.MockedFunction<typeof useData>;
 const mockUseSettings = useSettings as jest.MockedFunction<typeof useSettings>;
 const mockUseSyncStatus = useSyncStatus as jest.MockedFunction<typeof useSyncStatus>;
 const mockIsCloudSyncEnabled = isCloudSyncEnabled as jest.MockedFunction<typeof isCloudSyncEnabled>;
-const mockSketchExportAdapter = sketchExportAdapter as { share: jest.Mock<Promise<void>, [string, string]> };
 const mockSetStringAsync = Clipboard.setStringAsync as jest.MockedFunction<typeof Clipboard.setStringAsync>;
 
 function buildSyncStatus(overrides: Partial<ReturnType<typeof useSyncStatus>> = {}) {
@@ -70,22 +60,8 @@ function buildSyncStatus(overrides: Partial<ReturnType<typeof useSyncStatus>> = 
   };
 }
 
-function buildSketch(overrides: Partial<Sketch> = {}): Sketch {
-  return {
-    id: "sketch-1",
-    title: "Glow",
-    source: "void mainImage() {}",
-    metadata: { version: 1, category: "Drafts", parameters: [] },
-    metadataWarning: null,
-    createdAt: "2026-08-25T10:00:00.000Z",
-    updatedAt: "2026-08-25T10:00:00.000Z",
-    ...overrides,
-  } as Sketch;
-}
-
 function buildReadyData(
-  sketches: Sketch[] = [],
-  list: jest.Mock<Promise<Sketch[]>, [string]> = jest.fn(async (_profileId: string) => sketches),
+  list: jest.Mock<Promise<unknown[]>, [string]> = jest.fn(async () => []),
 ) {
   return {
     status: "ready" as const,
@@ -106,8 +82,6 @@ describe("SettingsScreen", () => {
     mockRouter.push.mockClear();
     mockBottomNavigation.mockClear();
     mockIsCloudSyncEnabled.mockReturnValue(true);
-    mockSketchExportAdapter.share.mockReset();
-    mockSketchExportAdapter.share.mockResolvedValue(undefined);
     mockSetStringAsync.mockClear();
     mockUseData.mockReturnValue(buildReadyData());
     mockUseCourse.mockReturnValue({
@@ -396,160 +370,13 @@ describe("SettingsScreen", () => {
     expect(screen.queryByRole("button", { name: "Changes save automatically" })).toBeNull();
   });
 
-  test("loads export choices from only the active profile", async () => {
-    const list = jest.fn(async (_profileId: string) => [buildSketch({ title: "Glow" })]);
-    mockUseData.mockReturnValue(buildReadyData([], list));
-    mockUseAuth.mockReturnValue({
-      session: null,
-      profileId: "profile-1",
-      isHydrated: true,
-      error: null,
-      signInWithPassword: jest.fn(),
-      signOut: jest.fn(),
-      signUpWithPassword: jest.fn(),
-    });
-
-    await render(<SettingsScreen />);
-    await fireEvent.press(screen.getByRole("button", { name: "Export saved sketch" }));
-
-    await waitFor(() => expect(list).toHaveBeenCalledWith("profile-1"));
-    expect(list).toHaveBeenCalledTimes(1);
-  });
-
-  test("shows an empty export chooser when the active profile has no sketches", async () => {
-    mockUseData.mockReturnValue(buildReadyData([]));
-    mockUseAuth.mockReturnValue({
-      session: null,
-      profileId: "profile-1",
-      isHydrated: true,
-      error: null,
-      signInWithPassword: jest.fn(),
-      signOut: jest.fn(),
-      signUpWithPassword: jest.fn(),
-    });
-
-    await render(<SettingsScreen />);
-    await fireEvent.press(screen.getByRole("button", { name: "Export saved sketch" }));
-
-    expect(await screen.findByText("No sketches to export")).toBeTruthy();
-  });
-
-  test("exports the selected sketch source exactly and closes the chooser", async () => {
-    const exactSource = "void mainImage() {\n  fragColor = vec4(0.25);\n}\n";
-    mockUseData.mockReturnValue(buildReadyData([buildSketch({ title: "Glow", source: exactSource })]));
-    mockUseAuth.mockReturnValue({
-      session: null,
-      profileId: "profile-1",
-      isHydrated: true,
-      error: null,
-      signInWithPassword: jest.fn(),
-      signOut: jest.fn(),
-      signUpWithPassword: jest.fn(),
-    });
-
-    await render(<SettingsScreen />);
-    await fireEvent.press(screen.getByRole("button", { name: "Export saved sketch" }));
-    await fireEvent.press(await screen.findByRole("button", { name: "Glow" }));
-
-    await waitFor(() => expect(mockSketchExportAdapter.share).toHaveBeenCalledWith("Glow.frag", exactSource));
-    expect(screen.queryByRole("button", { name: "Glow" })).toBeNull();
-  });
-
-  test("closes the export chooser without an alert when the learner cancels", async () => {
-    const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
-    mockUseData.mockReturnValue(buildReadyData([buildSketch({ title: "Glow" })]));
-    mockUseAuth.mockReturnValue({
-      session: null,
-      profileId: "profile-1",
-      isHydrated: true,
-      error: null,
-      signInWithPassword: jest.fn(),
-      signOut: jest.fn(),
-      signUpWithPassword: jest.fn(),
-    });
-
-    await render(<SettingsScreen />);
-    await fireEvent.press(screen.getByRole("button", { name: "Export saved sketch" }));
-    await fireEvent.press(await screen.findByRole("button", { name: "Close export chooser" }));
-
-    expect(alertSpy).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: "Glow" })).toBeNull();
-    alertSpy.mockRestore();
-  });
-
-  test("surfaces export failures as a retryable alert", async () => {
-    const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
-    mockSketchExportAdapter.share.mockRejectedValueOnce(new Error("disk full"));
-    mockUseData.mockReturnValue(buildReadyData([buildSketch({ title: "Glow" })]));
-    mockUseAuth.mockReturnValue({
-      session: null,
-      profileId: "profile-1",
-      isHydrated: true,
-      error: null,
-      signInWithPassword: jest.fn(),
-      signOut: jest.fn(),
-      signUpWithPassword: jest.fn(),
-    });
-
-    await render(<SettingsScreen />);
-    await fireEvent.press(screen.getByRole("button", { name: "Export saved sketch" }));
-    await fireEvent.press(await screen.findByRole("button", { name: "Glow" }));
-
-    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
-    expect(alertSpy.mock.calls[0][0]).toBe("Export failed");
-    expect(alertSpy.mock.calls[0][1]).toContain("disk full");
-    expect(alertSpy.mock.calls[0][2]?.some((button) => button.text === "Retry")).toBe(true);
-    alertSpy.mockRestore();
-  });
-
-  test("renders many export choices inside a scrollable chooser surface", async () => {
-    const sketches = Array.from({ length: 24 }, (_unused, index) =>
-      buildSketch({
-        id: `sketch-${index + 1}`,
-        title: `Sketch ${index + 1}`,
-        updatedAt: `2026-08-25T10:${String(index).padStart(2, "0")}:00.000Z`,
-      }),
-    );
-    mockUseData.mockReturnValue(buildReadyData(sketches));
-    mockUseAuth.mockReturnValue({
-      session: null,
-      profileId: "profile-1",
-      isHydrated: true,
-      error: null,
-      signInWithPassword: jest.fn(),
-      signOut: jest.fn(),
-      signUpWithPassword: jest.fn(),
-    });
-
-    await render(<SettingsScreen />);
-    await fireEvent.press(screen.getByRole("button", { name: "Export saved sketch" }));
-
-    expect(await screen.findByTestId("sketch-export-scroll")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Close export chooser" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sketch 24" })).toBeTruthy();
-  });
-
-  test("disables sketch export until profile hydration provides a profile id", async () => {
-    mockUseAuth.mockReturnValue({
-      session: undefined,
-      profileId: null,
-      isHydrated: false,
-      error: null,
-      signInWithPassword: jest.fn(),
-      signOut: jest.fn(),
-      signUpWithPassword: jest.fn(),
-    });
-
+  test("keeps local shader data guidance without offering export from Settings", async () => {
     await render(<SettingsScreen />);
 
-    expect(screen.getByRole("button", { name: "Export saved sketch" })).toBeDisabled();
-  });
-
-  test("explains that sketches and tutorials remain local-only", async () => {
-    await render(<SettingsScreen />);
-
+    expect(screen.getByText("Local shader data")).toBeTruthy();
     expect(screen.getByText("Sketches and tutorials remain local-only. Lesson progress can sync when you sign in."))
       .toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Export saved sketch" })).toBeNull();
   });
 
   test("previews allowlisted diagnostics before copying and announces success", async () => {
@@ -629,5 +456,3 @@ describe("SettingsScreen", () => {
     expect(mockBottomNavigation).toHaveBeenCalledWith(expect.objectContaining({ activeItem: "settings" }));
   });
 });
-
-
