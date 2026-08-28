@@ -18,6 +18,12 @@ import type { Tutorial, TutorialChoice, TutorialStep } from "../data/course/type
 
 const PREVIEW_HEIGHT = 150;
 type Feedback = "idle" | "incorrect" | "correct" | "skipped";
+type CompletionState = {
+  profileId: string | null;
+  stepIdsKey: string;
+  fetchedStepIds: ReadonlySet<string>;
+  optimisticStepIds: ReadonlySet<string>;
+};
 
 function findTutorial(
   modules: ReturnType<typeof useCourse>["modules"],
@@ -43,12 +49,19 @@ export default function TutorialScreen() {
     () => [...(tutorial?.steps ?? [])].sort((left, right) => left.position - right.position),
     [tutorial],
   );
+  const stepIds = useMemo(() => steps.map(({ id }) => id), [steps]);
+  const stepIdsKey = stepIds.join("\u0000");
   const [stepIndex, setStepIndex] = useState(0);
   const step: TutorialStep | undefined = steps[stepIndex];
   const [shuffledChoices, setShuffledChoices] = useState<TutorialChoice[]>([]);
   const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>("idle");
-  const [completedStepIds, setCompletedStepIds] = useState<ReadonlySet<string>>(new Set());
+  const [completionState, setCompletionState] = useState<CompletionState>({
+    profileId: null,
+    stepIdsKey: "",
+    fetchedStepIds: new Set(),
+    optimisticStepIds: new Set(),
+  });
   const stepAnswerChoices = step?.answerChoices;
   const stepId = step?.id;
 
@@ -60,21 +73,29 @@ export default function TutorialScreen() {
   }, [params.stepId, steps]);
 
   useEffect(() => {
-    if (!repository || !profileId || steps.length === 0) return;
+    if (!repository || !profileId || stepIds.length === 0) return;
     let cancelled = false;
-    void repository.getStates(profileId, steps.map(({ id }) => id)).then((states) => {
+    void repository.getStates(profileId, stepIds).then((states) => {
       if (cancelled) return;
-      setCompletedStepIds((current) => {
-        const fetchedCompletedIds = [...states.entries()]
+      const fetchedStepIds = new Set(
+        [...states.entries()]
           .filter(([, state]) => state.completed)
-          .map(([id]) => id);
-        return new Set([...current, ...fetchedCompletedIds]);
-      });
+          .map(([id]) => id),
+      );
+      setCompletionState((current) => ({
+        profileId,
+        stepIdsKey,
+        fetchedStepIds,
+        optimisticStepIds:
+          current.profileId === profileId && current.stepIdsKey === stepIdsKey
+            ? current.optimisticStepIds
+            : new Set(),
+      }));
     });
     return () => {
       cancelled = true;
     };
-  }, [repository, profileId, steps]);
+  }, [repository, profileId, stepIds, stepIdsKey]);
 
   // Choices are stable while a learner retries, but every new step (and every new screen visit)
   // gets its own randomized order.
@@ -101,17 +122,34 @@ export default function TutorialScreen() {
   const learnerSource = selectedChoice
     ? fillTutorialTemplate(step.sourceTemplate, selectedChoice.fragment)
     : null;
+  const completionStateMatchesScreen =
+    completionState.profileId === profileId && completionState.stepIdsKey === stepIdsKey;
+  const completedStepIds = completionStateMatchesScreen
+    ? new Set([...completionState.fetchedStepIds, ...completionState.optimisticStepIds])
+    : new Set<string>();
+  const terminalFeedback = feedback === "correct" || feedback === "skipped";
   const isComplete = completedStepIds.has(step.id);
 
   const completeStep = () => {
-    setCompletedStepIds((current) => new Set(current).add(step.id));
+    setCompletionState((current) => {
+      const carriesCurrentState =
+        current.profileId === profileId && current.stepIdsKey === stepIdsKey;
+      return {
+        profileId,
+        stepIdsKey,
+        fetchedStepIds: carriesCurrentState ? current.fetchedStepIds : new Set(),
+        optimisticStepIds: new Set(
+          carriesCurrentState ? current.optimisticStepIds : [],
+        ).add(step.id),
+      };
+    });
     if (repository && profileId) {
       void repository.setCompleted(profileId, step.id, true);
     }
   };
 
   const checkAnswer = () => {
-    if (!selectedChoice) return;
+    if (terminalFeedback || !selectedChoice) return;
     if (selectedChoice.id === step.correctChoiceId) {
       setFeedback("correct");
       completeStep();
@@ -121,6 +159,7 @@ export default function TutorialScreen() {
   };
 
   const skipAndReveal = () => {
+    if (terminalFeedback) return;
     setSelectedChoiceId(step.correctChoiceId);
     setFeedback("skipped");
     completeStep();
@@ -183,9 +222,11 @@ export default function TutorialScreen() {
               <Pressable
                 accessibilityLabel={choice.fragment}
                 accessibilityRole="button"
-                accessibilityState={{ selected }}
+                accessibilityState={{ disabled: terminalFeedback, selected }}
+                disabled={terminalFeedback}
                 key={choice.id}
                 onPress={() => {
+                  if (terminalFeedback) return;
                   setSelectedChoiceId(choice.id);
                   setFeedback("idle");
                 }}
@@ -213,12 +254,12 @@ export default function TutorialScreen() {
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: !selectedChoice }}
-            disabled={!selectedChoice}
+            accessibilityState={{ disabled: terminalFeedback || !selectedChoice }}
+            disabled={terminalFeedback || !selectedChoice}
             onPress={checkAnswer}
             style={({ pressed }) => [
               styles.primary,
-              !selectedChoice && styles.disabled,
+              (terminalFeedback || !selectedChoice) && styles.disabled,
               pressed && styles.pressed,
             ]}
           >
@@ -226,8 +267,14 @@ export default function TutorialScreen() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: terminalFeedback }}
+            disabled={terminalFeedback}
             onPress={skipAndReveal}
-            style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.secondary,
+              terminalFeedback && styles.disabled,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.secondaryLabel}>Skip and reveal answer</Text>
           </Pressable>

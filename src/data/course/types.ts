@@ -66,8 +66,8 @@ export type TutorialStep = {
  * behind the same gate as their module: a module's tutorial unlocks when that module is complete,
  * which is why they hang off a module rather than sitting in a flat list.
  *
- * Nothing here is checked automatically. The learner sees the target rendering beside their own and
- * decides when it matches — see `docs/data/tutorials.md`.
+ * Each step checks the learner's authored choice against `correctChoiceId`, records completion
+ * locally for the active profile, and keeps the target and learner renderings side by side.
  */
 export type Tutorial = {
   id: string;

@@ -173,6 +173,16 @@ test("completes a step after the correct answer", async () => {
   expect(repository.setCompleted).toHaveBeenCalledWith("profile-a", "pulse-s1", true);
 });
 
+test("keeps the correct answer locked after completion", async () => {
+  await renderScreen();
+
+  await fireEvent.press(screen.getByRole("button", { name: "0.25" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Check answer" }));
+  await fireEvent.press(screen.getByRole("button", { name: "0.5" }));
+
+  expect(screen.getByText("Correct")).toBeTruthy();
+  expect(screen.getAllByTestId("sandbox-source")[1].props.children).toBe(targetSource);
+});
 test("skips by revealing the correct answer and completing the step", async () => {
   await renderScreen();
 
@@ -183,6 +193,15 @@ test("skips by revealing the correct answer and completing the step", async () =
   expect(repository.setCompleted).toHaveBeenCalledWith("profile-a", "pulse-s1", true);
 });
 
+test("keeps the revealed answer locked after skipping", async () => {
+  await renderScreen();
+
+  await fireEvent.press(screen.getByRole("button", { name: "Skip and reveal answer" }));
+  await fireEvent.press(screen.getByRole("button", { name: "0.5" }));
+
+  expect(screen.getByText("Skipped")).toBeTruthy();
+  expect(screen.getAllByTestId("sandbox-source")[1].props.children).toBe(targetSource);
+});
 test("shows persisted completed steps as completed", async () => {
   repository.getStates.mockResolvedValue(
     new Map([["pulse-s1", { completed: true, draft: null }]]),
@@ -193,6 +212,26 @@ test("shows persisted completed steps as completed", async () => {
   expect(screen.getByText("Completed")).toBeTruthy();
 });
 
+test("replaces completed steps when switching profiles", async () => {
+  let activeProfileId = "profile-a";
+  repository.getStates.mockImplementation(async (profileId: string) =>
+    profileId === "profile-a"
+      ? new Map([["pulse-s1", { completed: true, draft: null }]])
+      : new Map(),
+  );
+  mockUseAuth.mockImplementation(
+    () => ({ profileId: activeProfileId }) as ReturnType<typeof useAuth>,
+  );
+
+  const rendered = await render(<TutorialScreen />);
+  await waitFor(() => expect(screen.getByText("Completed")).toBeTruthy());
+
+  activeProfileId = "profile-b";
+  rendered.rerender(<TutorialScreen />);
+
+  await waitFor(() => expect(repository.getStates).toHaveBeenLastCalledWith("profile-b", ["pulse-s1"]));
+  expect(screen.queryByText("Completed")).toBeNull();
+});
 test("reshuffles choices for a new screen visit", async () => {
   jest
     .spyOn(Math, "random")
