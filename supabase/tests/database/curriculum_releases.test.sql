@@ -11,7 +11,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(54);
+select plan(60);
 
 -- A minimal, schema-valid release payload. Matches `CourseRelease` in
 -- src/data/course/types.ts / schema.ts: camelCase keys, release -> modules -> lessons -> stages.
@@ -147,8 +147,14 @@ as $$
                 'position', 1,
                 'title', 'Drive the radius',
                 'brief', 'brief',
-                'starterSource', 'float d = length(uv) - 0.3;',
-                'solutionSource', 'float d = length(uv) - (0.3 + sin(iTime) * 0.1);',
+                'sourceTemplate', 'float d = length(uv) - (/*__SHADERCRAFT_BLANK__*/);',
+                'answerChoices', jsonb_build_array(
+                  jsonb_build_object('id', 'static', 'fragment', '0.3'),
+                  jsonb_build_object('id', 'pulse', 'fragment', '0.3 + sin(iTime) * 0.1'),
+                  jsonb_build_object('id', 'grow', 'fragment', '0.3 + iTime * 0.1'),
+                  jsonb_build_object('id', 'tiny', 'fragment', '0.1')
+                ),
+                'correctChoiceId', 'pulse',
                 'helpers', 'float unused(float x) {' || chr(10) || '  return x;' || chr(10) || '}',
                 'hint', 'Radius is just a number.'
               ),
@@ -157,8 +163,14 @@ as $$
                 'position', 2,
                 'title', 'Soften the edge',
                 'brief', 'brief',
-                'starterSource', 'fragColor = vec4(vec3(step(d, 0.0)), 1.0);',
-                'solutionSource', 'fragColor = vec4(vec3(smoothstep(0.01, 0.0, d)), 1.0);'
+                'sourceTemplate', 'fragColor = vec4(vec3(/*__SHADERCRAFT_BLANK__*/), 1.0);',
+                'answerChoices', jsonb_build_array(
+                  jsonb_build_object('id', 'hard', 'fragment', 'step(d, 0.0)'),
+                  jsonb_build_object('id', 'soft', 'fragment', 'smoothstep(0.01, 0.0, d)'),
+                  jsonb_build_object('id', 'inverse', 'fragment', 'smoothstep(0.0, 0.01, d)'),
+                  jsonb_build_object('id', 'flat', 'fragment', '0.5')
+                ),
+                'correctChoiceId', 'soft'
               )
             )
           ),
@@ -174,8 +186,14 @@ as $$
                 'position', 1,
                 'title', 'Wear it away',
                 'brief', 'brief',
-                'starterSource', 'fragColor = vec4(1.0);',
-                'solutionSource', 'fragColor = vec4(vec3(0.5), 1.0);'
+                'sourceTemplate', 'fragColor = vec4(vec3(/*__SHADERCRAFT_BLANK__*/), 1.0);',
+                'answerChoices', jsonb_build_array(
+                  jsonb_build_object('id', 'half', 'fragment', '0.5'),
+                  jsonb_build_object('id', 'white', 'fragment', '1.0'),
+                  jsonb_build_object('id', 'black', 'fragment', '0.0'),
+                  jsonb_build_object('id', 'quarter', 'fragment', '0.25')
+                ),
+                'correctChoiceId', 'half'
               )
             )
           )
@@ -357,16 +375,43 @@ select is(
   'publishing inserts every step row across both tutorials'
 );
 select is(
-  (select solution_source from public.content_tutorial_steps
+  (select source_template from public.content_tutorial_steps
     where release_id = 'release-multi' and id = 'pulse-one'),
-  'float d = length(uv) - (0.3 + sin(iTime) * 0.1);',
-  'a step stores the solution source that doubles as its target render'
+  'float d = length(uv) - (/*__SHADERCRAFT_BLANK__*/);',
+  'a step stores its source template verbatim'
+);
+select is(
+  (select answer_choices from public.content_tutorial_steps
+    where release_id = 'release-multi' and id = 'pulse-one'),
+  jsonb_build_array(
+    jsonb_build_object('id', 'static', 'fragment', '0.3'),
+    jsonb_build_object('id', 'pulse', 'fragment', '0.3 + sin(iTime) * 0.1'),
+    jsonb_build_object('id', 'grow', 'fragment', '0.3 + iTime * 0.1'),
+    jsonb_build_object('id', 'tiny', 'fragment', '0.1')
+  ),
+  'a step stores its answer choices as JSON'
+);
+select is(
+  (select correct_choice_id from public.content_tutorial_steps
+    where release_id = 'release-multi' and id = 'pulse-one'),
+  'pulse',
+  'a step stores the id of its correct choice'
 );
 select is(
   (select hint from public.content_tutorial_steps
     where release_id = 'release-multi' and id = 'pulse-two'),
   null,
   'a step with no hint stores NULL rather than an empty string'
+);
+select throws_ok(
+  $q$ select public.publish_course_release(jsonb_set(
+    pg_temp.fixture_payload_multi('release-invalid-choice', repeat('f', 64)),
+    '{modules,0,tutorials,0,steps,0,answerChoices}',
+    jsonb_build_array(jsonb_build_object('id', 'only', 'fragment', '0.3'))
+  )) $q$,
+  '22023',
+  null,
+  'a new tutorial step requires exactly four answer choices'
 );
 select is(
   (select count(*) from public.content_tutorials where release_id = 'release-a')::int,
@@ -433,6 +478,29 @@ select is(
     -> 'modules' -> 0 -> 'tutorials' -> 0 -> 'steps' -> 1 ->> 'id'),
   'pulse-two',
   'tutorial steps come back ordered by position'
+);
+select is(
+  (public.get_course_release('release-multi')
+    -> 'modules' -> 0 -> 'tutorials' -> 0 -> 'steps' -> 0 ->> 'sourceTemplate'),
+  'float d = length(uv) - (/*__SHADERCRAFT_BLANK__*/);',
+  'a source template survives the round trip through the payload'
+);
+select is(
+  (public.get_course_release('release-multi')
+    -> 'modules' -> 0 -> 'tutorials' -> 0 -> 'steps' -> 0 -> 'answerChoices'),
+  jsonb_build_array(
+    jsonb_build_object('id', 'static', 'fragment', '0.3'),
+    jsonb_build_object('id', 'pulse', 'fragment', '0.3 + sin(iTime) * 0.1'),
+    jsonb_build_object('id', 'grow', 'fragment', '0.3 + iTime * 0.1'),
+    jsonb_build_object('id', 'tiny', 'fragment', '0.1')
+  ),
+  'answer choices survive the round trip through the payload'
+);
+select is(
+  (public.get_course_release('release-multi')
+    -> 'modules' -> 0 -> 'tutorials' -> 0 -> 'steps' -> 0 ->> 'correctChoiceId'),
+  'pulse',
+  'the correct choice id survives the round trip through the payload'
 );
 select is(
   (public.get_course_release('release-multi')

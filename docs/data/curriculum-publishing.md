@@ -15,6 +15,13 @@ SQL, and a schema change is exactly when they drift — silently, with the publi
 
 ## The publishing contract
 
+Tutorial steps in newly published releases use `sourceTemplate`, `answerChoices`, and
+`correctChoiceId`. `sourceTemplate` contains the one blank marker; `answerChoices` is the four
+`{ id, fragment }` options; and `correctChoiceId` names the option that produces the reference
+render. The publish RPC rejects an incomplete or malformed choice set. Earlier immutable releases
+retain their historic `starter_source`/`solution_source` data unchanged, but the current RPC never
+writes or returns those fields for a new release.
+
 A published release, and every row nested under it (`content_modules`, `content_lessons`,
 `content_stages`, `content_tutorials`, `content_tutorial_steps`), is **immutable** once it exists
 (`supabase/migrations/202608080001_curriculum_stages.sql` and `202608080002_tutorials.sql`). A trigger
