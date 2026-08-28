@@ -248,23 +248,23 @@
           "position": 2,
           "title": "Both axes at once",
           "brief": "Add the vertical axis to the green channel as well, so the four corners land on four different colours and the picture reads as a two-dimensional field rather than a stripe.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(/*__SHADERCRAFT_BLANK__*/);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(uv.x, /*__SHADERCRAFT_BLANK__*/, 0.25, 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "uv.x, uv.y, 0.25, 1.0"
+              "fragment": "uv.y"
             },
             {
               "id": "swapped-axes",
-              "fragment": "uv.y, uv.x, 0.25, 1.0"
+              "fragment": "uv.x"
             },
             {
               "id": "flat-green",
-              "fragment": "uv.x, 0.25, 0.0, 1.0"
+              "fragment": "0.25"
             },
             {
               "id": "blue-axis",
-              "fragment": "uv.x, 0.0, uv.y, 1.0"
+              "fragment": "1.0 - uv.y"
             }
           ],
           "correctChoiceId": "correct",
@@ -275,23 +275,23 @@
           "position": 3,
           "title": "Distance from the middle",
           "brief": "Centre the coordinate, correct for the aspect ratio, and paint the distance from the middle as a grey — then cut everything past a distance of 0.75 to black with step, so the shape gets a hard edge instead of fading out. Check the silhouette you are left with: it should be a disc exactly as wide as it is tall, reaching three quarters of the way to the top and bottom.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n/*__SHADERCRAFT_BLANK__*/",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\nfloat disc = 1.0 - step(/*__SHADERCRAFT_BLANK__*/, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "vec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\nfloat disc = 1.0 - step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);"
+              "fragment": "0.75"
             },
             {
-              "id": "uncentred",
-              "fragment": "vec2 p = uv;\n\nfloat d = length(p);\nfloat disc = 1.0 - step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);"
+              "id": "half",
+              "fragment": "0.5"
             },
             {
-              "id": "uncorrected-aspect",
-              "fragment": "vec2 p = uv * 2.0 - 1.0;\n\nfloat d = length(p);\nfloat disc = 1.0 - step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);"
+              "id": "full",
+              "fragment": "1.0"
             },
             {
-              "id": "reversed-mask",
-              "fragment": "vec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\nfloat disc = step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);"
+              "id": "quarter",
+              "fragment": "0.25"
             }
           ],
           "correctChoiceId": "correct",

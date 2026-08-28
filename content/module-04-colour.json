@@ -178,23 +178,23 @@
           "position": 1,
           "title": "Two colours, top to bottom",
           "brief": "The screen is a flat grey. Blend a warm horizon colour into a deep blue going upward, so the bottom of the frame is warm and the top is cool.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = /*__SHADERCRAFT_BLANK__*/;\n\nfragColor = vec4(colour, 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = mix(warm, cool, /*__SHADERCRAFT_BLANK__*/);\n\nfragColor = vec4(colour, 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "mix(warm, cool, uv.y)"
+              "fragment": "uv.y"
             },
             {
               "id": "reversed-colours",
-              "fragment": "mix(cool, warm, uv.y)"
+              "fragment": "1.0 - uv.y"
             },
             {
               "id": "horizontal",
-              "fragment": "mix(warm, cool, uv.x)"
+              "fragment": "uv.x"
             },
             {
               "id": "hard-split",
-              "fragment": "mix(warm, cool, step(0.5, uv.y))"
+              "fragment": "step(0.5, uv.y)"
             }
           ],
           "correctChoiceId": "correct",
@@ -205,23 +205,23 @@
           "position": 2,
           "title": "A third stop",
           "brief": "mix only ever takes two colours, so reach a third by mixing again over the result. Put a pale band low in the frame and let the deep blue take over above it.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 pale = vec3(0.99, 0.86, 0.62);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(colour, 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 pale = vec3(0.99, 0.86, 0.62);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = mix(warm, pale, smoothstep(0.0, 0.25, uv.y));\ncolour = mix(colour, cool, /*__SHADERCRAFT_BLANK__*/);\n\nfragColor = vec4(colour, 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "vec3 colour = mix(warm, pale, smoothstep(0.0, 0.25, uv.y));\ncolour = mix(colour, cool, smoothstep(0.25, 0.9, uv.y));"
+              "fragment": "smoothstep(0.25, 0.9, uv.y)"
             },
             {
               "id": "pale-on-top",
-              "fragment": "vec3 colour = mix(warm, cool, smoothstep(0.0, 0.25, uv.y));\ncolour = mix(colour, pale, smoothstep(0.25, 0.9, uv.y));"
+              "fragment": "smoothstep(0.0, 0.25, uv.y)"
             },
             {
               "id": "same-window",
-              "fragment": "vec3 colour = mix(warm, pale, smoothstep(0.0, 0.25, uv.y));\ncolour = mix(colour, cool, smoothstep(0.0, 0.25, uv.y));"
+              "fragment": "smoothstep(0.25, 0.9, uv.x)"
             },
             {
               "id": "hard-stops",
-              "fragment": "vec3 colour = mix(warm, pale, step(0.25, uv.y));\ncolour = mix(colour, cool, step(0.9, uv.y));"
+              "fragment": "step(0.9, uv.y)"
             }
           ],
           "correctChoiceId": "correct",
@@ -232,23 +232,23 @@
           "position": 3,
           "title": "Replace the list with a function",
           "brief": "Three named colours is a list you have to maintain. Swap the whole thing for a cosine palette driven by height, and drift its phase with time so the sky slowly changes.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(colour, 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 a = vec3(0.5);\nvec3 b = vec3(0.45);\nvec3 c = vec3(0.6);\nvec3 phase = /*__SHADERCRAFT_BLANK__*/ + iTime * 0.05;\n\nvec3 colour = a + b * cos(6.28318 * (c * uv.y + phase));\n\nfragColor = vec4(colour, 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "vec3 a = vec3(0.5);\nvec3 b = vec3(0.45);\nvec3 c = vec3(0.6);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.05;\n\nvec3 colour = a + b * cos(6.28318 * (c * uv.y + phase));"
+              "fragment": "vec3(0.0, 0.67, 0.33)"
             },
             {
               "id": "shared-phase",
-              "fragment": "vec3 a = vec3(0.5);\nvec3 b = vec3(0.45);\nvec3 c = vec3(0.6);\nvec3 phase = vec3(0.0) + iTime * 0.05;\n\nvec3 colour = a + b * cos(6.28318 * (c * uv.y + phase));"
+              "fragment": "vec3(0.0)"
             },
             {
               "id": "unscaled-cosine",
-              "fragment": "vec3 a = vec3(0.5);\nvec3 b = vec3(0.45);\nvec3 c = vec3(0.6);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.05;\n\nvec3 colour = a + cos(6.28318 * (c * uv.y + phase));"
+              "fragment": "vec3(0.67, 0.33, 0.0)"
             },
             {
               "id": "phase-outside-wave",
-              "fragment": "vec3 a = vec3(0.5);\nvec3 b = vec3(0.45);\nvec3 c = vec3(0.6);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.05;\n\nvec3 colour = a + b * cos(6.28318 * c * uv.y) + phase;"
+              "fragment": "vec3(0.33, 0.0, 0.67)"
             }
           ],
           "correctChoiceId": "correct",

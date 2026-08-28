@@ -34,12 +34,13 @@ A step carries:
 
 There is no separately authored target source or expected image. The app fills `sourceTemplate`
 with the fragment named by `correctChoiceId`, then compiles that exact source for the reference
-render. Selecting the same fragment therefore produces the same shader by construction.
+render. Confirming the same fragment therefore produces the same shader by construction.
 
-Keep the blank as narrow as the concept permits. A one-expression decision should not hide a whole
-shader, while a coherent multiline move may be one fragment when its declarations and result need
-to stay together. Filling any of the four choices must leave a complete, runnable `mainImage`
-body.
+Keep the blank as narrow as the concept permits. Prefer one expression or literal, including a
+single numeric literal when that value is the decision being taught. Do not package shared
+declarations or result assignments into a multiline answer block; keep that context visible in the
+template. A compound expression is appropriate only when the relationship between its parts is the
+concept. Filling any of the four choices must leave a complete, runnable `mainImage` body.
 
 ## Author all four choices
 
@@ -50,7 +51,8 @@ pixel-scaled width is required. Avoid arbitrary syntax errors and joke answers.
 
 The schema validates the four filled sources against the sandbox contract, and the on-device Shader
 Audit compiles every `choice:<choice-id>` substitution against the real GL driver. A correct target
-that compiles does not excuse a broken distractor; every option can reach the learner preview.
+that compiles does not excuse a broken distractor; every option can reach the learner preview after
+confirmation.
 
 ## Choice order and checking
 
@@ -58,10 +60,13 @@ The app shuffles the four choices once when a step screen is visited. That order
 the learner retries, so a wrong answer does not move underneath them. A later visit shuffles again.
 Authored order must therefore carry no meaning, and logic must use choice ids rather than positions.
 
-Checking a selected correct choice completes the step. An incorrect choice leaves the step available
-for another attempt. "Skip and reveal answer" selects the correct fragment, shows it, and also
-completes the step. There is no pixel comparison or tolerance: correctness is the authored
-`correctChoiceId`.
+Selecting a choice only highlights it. It does not fill the source listing, change the learner
+preview, or reveal whether the choice is right. Confirming applies the selected fragment and then
+evaluates it: a correct fragment completes the step, while an incorrect fragment renders its result,
+shows "Not quite", and leaves the step available for another attempt. A later selection does not
+replace that rendered attempt until it is confirmed. "Skip and reveal answer" applies the correct
+fragment, shows it, and also completes the step. There is no pixel comparison or tolerance:
+correctness is the authored `correctChoiceId`.
 
 ## Authoring rules
 
