@@ -7,6 +7,7 @@ import type {
   CourseRelease,
   ModuleStatus,
   Tutorial,
+  TutorialChoice,
 } from "./types";
 
 type ReleaseRow = {
@@ -51,8 +52,9 @@ type TutorialStepRow = {
   position: number;
   title: string;
   brief: string;
-  starter_source: string;
-  solution_source: string;
+  source_template: string;
+  answer_choices_json: string;
+  correct_choice_id: string;
   helpers: string | null;
   hint: string | null;
 };
@@ -116,8 +118,8 @@ export class SqliteCourseRepository implements CourseRepository {
         [release.id],
       ),
       this.driver.all<TutorialStepRow>(
-        `SELECT id, tutorial_id, position, title, brief, starter_source, solution_source,
-                helpers, hint
+        `SELECT id, tutorial_id, position, title, brief, source_template, answer_choices_json,
+                correct_choice_id, helpers, hint
          FROM tutorial_steps
          WHERE release_id = ?
          ORDER BY tutorial_id, position`,
@@ -219,8 +221,9 @@ function toTutorials(
         position: step.position,
         title: step.title,
         brief: step.brief,
-        starterSource: step.starter_source,
-        solutionSource: step.solution_source,
+        sourceTemplate: step.source_template,
+        answerChoices: JSON.parse(step.answer_choices_json) as TutorialChoice[],
+        correctChoiceId: step.correct_choice_id,
         // Nullable columns; the domain type uses an absent field for the same thing.
         ...(step.helpers === null ? {} : { helpers: step.helpers }),
         ...(step.hint === null ? {} : { hint: step.hint }),

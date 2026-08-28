@@ -74,6 +74,83 @@ describe("database migrations", () => {
     ]);
   });
 
+  test("stores the required answer-choice fields on tutorial steps", async () => {
+    await migrateDatabase(driver);
+
+    const columns = await driver.all<TableInfoRow>("PRAGMA table_info(tutorial_steps)");
+
+    expect(columns.map(({ name }) => name).sort()).toEqual([
+      "answer_choices_json",
+      "brief",
+      "correct_choice_id",
+      "helpers",
+      "hint",
+      "id",
+      "position",
+      "release_id",
+      "source_template",
+      "title",
+      "tutorial_id",
+    ]);
+    expect(
+      columns
+        .filter(({ name }) =>
+          ["source_template", "answer_choices_json", "correct_choice_id"].includes(name),
+        )
+        .every(({ notnull }) => notnull === 1),
+    ).toBe(true);
+  });
+
+  test("replaces legacy released steps while preserving learner progress and drafts", async () => {
+    await driver.exec(`
+      CREATE TABLE learner_profiles (id TEXT PRIMARY KEY NOT NULL);
+      CREATE TABLE tutorial_steps (
+        release_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        tutorial_id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        brief TEXT NOT NULL,
+        starter_source TEXT NOT NULL,
+        solution_source TEXT NOT NULL,
+        helpers TEXT,
+        hint TEXT,
+        PRIMARY KEY (release_id, id)
+      );
+      CREATE TABLE tutorial_step_progress (
+        profile_id TEXT NOT NULL,
+        step_id TEXT NOT NULL,
+        completed INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (profile_id, step_id),
+        FOREIGN KEY (profile_id) REFERENCES learner_profiles(id)
+      );
+      CREATE TABLE tutorial_step_drafts (
+        profile_id TEXT NOT NULL,
+        step_id TEXT NOT NULL,
+        source TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (profile_id, step_id),
+        FOREIGN KEY (profile_id) REFERENCES learner_profiles(id)
+      );
+      INSERT INTO learner_profiles (id) VALUES ('profile-1');
+      INSERT INTO tutorial_steps
+        (release_id, id, tutorial_id, position, title, brief, starter_source, solution_source)
+      VALUES ('release-1', 'step-1', 'tutorial-1', 1, 'Legacy step', 'Legacy brief', 'starter', 'solution');
+      INSERT INTO tutorial_step_progress (profile_id, step_id, completed, updated_at)
+      VALUES ('profile-1', 'step-1', 1, '2026-08-28T00:00:00.000Z');
+      INSERT INTO tutorial_step_drafts (profile_id, step_id, source, updated_at)
+      VALUES ('profile-1', 'step-1', 'learner draft', '2026-08-28T00:00:00.000Z');
+      PRAGMA user_version = 4;
+    `);
+
+    await migrateDatabase(driver);
+
+    await expect(driver.first<{ total: number }>("SELECT COUNT(*) AS total FROM tutorial_steps")).resolves.toEqual({ total: 0 });
+    await expect(driver.first<{ completed: number }>("SELECT completed FROM tutorial_step_progress")).resolves.toEqual({ completed: 1 });
+    await expect(driver.first<{ source: string }>("SELECT source FROM tutorial_step_drafts")).resolves.toEqual({ source: "learner draft" });
+  });
+
   test("lesson_stages cascades from its lesson and carries required source", async () => {
     await migrateDatabase(driver);
 
@@ -146,6 +223,19 @@ describe("database migrations", () => {
       );
       INSERT INTO sketches (id, profile_id, title, source, created_at, updated_at)
       VALUES ('sketch-1', 'profile-1', 'First', 'a', '2026-08-06T00:00:00.000Z', '2026-08-06T00:00:00.000Z');
+      CREATE TABLE tutorial_steps (
+        release_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        tutorial_id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        brief TEXT NOT NULL,
+        starter_source TEXT NOT NULL,
+        solution_source TEXT NOT NULL,
+        helpers TEXT,
+        hint TEXT,
+        PRIMARY KEY (release_id, id)
+      );
       PRAGMA user_version = 3;
     `);
 

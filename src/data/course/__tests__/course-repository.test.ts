@@ -8,7 +8,34 @@ import { parseCourseRelease } from "../schema";
 import { SqliteCourseRepository } from "../sqlite-course-repository";
 import type { CourseRelease } from "../types";
 
-const release = parseCourseRelease(bundledCourse);
+const TEST_TUTORIAL_TEMPLATE = "float value = /*__SHADERCRAFT_BLANK__*/;\nfragColor = vec4(vec3(value), 1.0);";
+const TEST_TUTORIAL_CHOICES = [
+  { id: "answer-15", fragment: "0.15" },
+  { id: "answer-35", fragment: "0.35" },
+  { id: "answer-55", fragment: "0.55" },
+  { id: "answer-75", fragment: "0.75" },
+];
+
+const bundledCourseWithChoiceTutorials = {
+  ...bundledCourse,
+  modules: bundledCourse.modules.map((module) => ({
+    ...module,
+    tutorials: module.tutorials?.map((tutorial) => ({
+      ...tutorial,
+      steps: tutorial.steps.map((step) => {
+        const { starterSource: _starterSource, solutionSource: _solutionSource, ...rest } = step;
+        return {
+          ...rest,
+          sourceTemplate: TEST_TUTORIAL_TEMPLATE,
+          answerChoices: TEST_TUTORIAL_CHOICES,
+          correctChoiceId: "answer-35",
+        };
+      }),
+    })),
+  })),
+};
+
+const release = parseCourseRelease(bundledCourseWithChoiceTutorials);
 
 class FailingInstallDriver extends NodeSqliteDriver {
   override async run(sql: string, params: readonly SqlValue[] = []) {
@@ -26,7 +53,7 @@ describe("SQLite course repository", () => {
   beforeEach(async () => {
     driver = new NodeSqliteDriver(":memory:");
     await migrateDatabase(driver);
-    await installBundledRelease(driver, bundledCourse);
+    await installBundledRelease(driver, bundledCourseWithChoiceTutorials);
     repository = new SqliteCourseRepository(driver);
   });
 
@@ -37,6 +64,22 @@ describe("SQLite course repository", () => {
   test("returns the active release with exact ordered nested records", async () => {
     await expect(repository.getActiveRelease()).resolves.toEqual(release);
     await expect(repository.getModules()).resolves.toEqual(release.modules);
+  });
+
+  test("round-trips an authored answer-choice tutorial step", async () => {
+    const expectedStep = release.modules
+      .flatMap(({ tutorials = [] }) => tutorials)
+      .flatMap(({ steps }) => steps)[0];
+
+    const activeStep = (await repository.getActiveRelease()).modules
+      .flatMap(({ tutorials = [] }) => tutorials)
+      .flatMap(({ steps }) => steps)[0];
+
+    expect(activeStep).toMatchObject({
+      sourceTemplate: expectedStep.sourceTemplate,
+      answerChoices: expectedStep.answerChoices,
+      correctChoiceId: expectedStep.correctChoiceId,
+    });
   });
 
   test("returns a requested lesson and its ordered children", async () => {
@@ -105,7 +148,7 @@ describe("SQLite course repository", () => {
       ["sentinel title", release.id, release.modules[0].id],
     );
 
-    await installBundledRelease(driver, bundledCourse);
+    await installBundledRelease(driver, bundledCourseWithChoiceTutorials);
 
     await expect(
       driver.first<{ title: string }>(
@@ -156,7 +199,7 @@ test("rolls back every row and leaves activation unset when installation fails",
   await migrateDatabase(driver);
 
   try {
-    await expect(installBundledRelease(driver, bundledCourse)).rejects.toThrow(
+    await expect(installBundledRelease(driver, bundledCourseWithChoiceTutorials)).rejects.toThrow(
       "injected lesson insert failure",
     );
     await expect(

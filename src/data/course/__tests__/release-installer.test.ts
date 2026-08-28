@@ -18,6 +18,40 @@ import { parseCourseRelease } from "../schema";
 import { SqliteCourseRepository } from "../sqlite-course-repository";
 import type { CourseRelease } from "../types";
 
+const TEST_TUTORIAL_TEMPLATE = "float value = /*__SHADERCRAFT_BLANK__*/;\nfragColor = vec4(vec3(value), 1.0);";
+const TEST_TUTORIAL_CHOICES = [
+  { id: "answer-15", fragment: "0.15" },
+  { id: "answer-35", fragment: "0.35" },
+  { id: "answer-55", fragment: "0.55" },
+  { id: "answer-75", fragment: "0.75" },
+];
+
+// Task 5 owns the authored asset update. The focused storage suite instead passes the current
+// release through the new schema at this narrow test boundary, keeping its installer assertions
+// executable while never changing the shipped curriculum in this task.
+const bundledCourseWithChoiceTutorialsInput = {
+  ...bundledCourse,
+  modules: bundledCourse.modules.map((module) => ({
+    ...module,
+    tutorials: module.tutorials?.map((tutorial) => ({
+      ...tutorial,
+      steps: tutorial.steps.map((step) => {
+        const { starterSource: _starterSource, solutionSource: _solutionSource, ...rest } = step;
+        return {
+          ...rest,
+          sourceTemplate: TEST_TUTORIAL_TEMPLATE,
+          answerChoices: TEST_TUTORIAL_CHOICES,
+          correctChoiceId: "answer-35",
+        };
+      }),
+    })),
+  })),
+};
+
+const bundledCourseWithChoiceTutorials = {
+  ...bundledCourseWithChoiceTutorialsInput,
+  checksum: calculateNodeReleaseChecksum(bundledCourseWithChoiceTutorialsInput as ReleaseLike),
+};
 /**
  * jest-expo stubs `expo-crypto`'s native module, so `digestStringAsync` resolves to `""` and would
  * make every checksum comparison fail for reasons unrelated to the code under test. Hashing with
@@ -39,7 +73,7 @@ jest.mock("expo-crypto", () => ({
   }),
 }));
 
-const bundledRelease = parseCourseRelease(bundledCourse);
+const bundledRelease = parseCourseRelease(bundledCourseWithChoiceTutorials);
 
 type ReleaseShape = Record<string, unknown> & { checksum?: string };
 
@@ -156,7 +190,7 @@ describe("release installer", () => {
       notifications += 1;
     });
     installer = new ReleaseInstaller(driver, repository);
-    await installer.stageAndActivate(bundledCourse);
+    await installer.stageAndActivate(bundledCourseWithChoiceTutorials);
     notifications = 0;
   });
 
@@ -171,7 +205,7 @@ describe("release installer", () => {
       bundledRelease.modules[0].id,
     ]);
 
-    await expect(installer.stageAndActivate(bundledCourse)).resolves.toEqual({
+    await expect(installer.stageAndActivate(bundledCourseWithChoiceTutorials)).resolves.toEqual({
       status: "unchanged",
       releaseId: bundledRelease.id,
     });
@@ -214,9 +248,9 @@ describe("release installer", () => {
           title: "Drive the radius from time",
           brief:
             "Take the static disc and make its radius breathe, using the same sine you met in Module 1, so the shape changes size without moving.",
-          starterSource: "float d = length(uv) - 0.3;\nfragColor = vec4(vec3(step(d, 0.0)), 1.0);",
-          solutionSource:
-            "float d = length(uv) - (0.3 + sin(iTime) * 0.1);\nfragColor = vec4(vec3(step(d, 0.0)), 1.0);",
+          sourceTemplate: TEST_TUTORIAL_TEMPLATE,
+          answerChoices: TEST_TUTORIAL_CHOICES,
+          correctChoiceId: "answer-35",
           helpers: "float unused(float x) {\n  return x;\n}",
           hint: "Radius is just a number.",
         },
@@ -238,6 +272,22 @@ describe("release installer", () => {
       releaseId: "remote-tutorials",
     });
 
+    await expect(
+      driver.first<{
+        source_template: string;
+        answer_choices_json: string;
+        correct_choice_id: string;
+      }>(
+        `SELECT source_template, answer_choices_json, correct_choice_id
+         FROM tutorial_steps
+         WHERE release_id = ? AND id = ?`,
+        ["remote-tutorials", "pulse-step-one"],
+      ),
+    ).resolves.toEqual({
+      source_template: TEST_TUTORIAL_TEMPLATE,
+      answer_choices_json: JSON.stringify(TEST_TUTORIAL_CHOICES),
+      correct_choice_id: "answer-35",
+    });
     const modules = await new SqliteCourseRepository(driver).getModules();
 
     // Deep equality rather than field-by-field: the optional `helpers`/`hint` come back as absent
@@ -415,7 +465,7 @@ describe("release installer", () => {
   test("writes the active release pointer after every release-scoped row", async () => {
     const recording = new RecordingDriver(":memory:");
     await migrateDatabase(recording);
-    await new ReleaseInstaller(recording).stageAndActivate(bundledCourse, {
+    await new ReleaseInstaller(recording).stageAndActivate(bundledCourseWithChoiceTutorials, {
       verifyChecksum: false,
     });
 
@@ -494,15 +544,15 @@ describe("bundled seed on relaunch", () => {
   });
 
   test("leaves an active downloaded release alone when the bundled release is reinstalled", async () => {
-    await installBundledRelease(driver, bundledCourse);
+    await installBundledRelease(driver, bundledCourseWithChoiceTutorials);
     await installer.stageAndActivate(derivedRelease("remote-1"));
     notifications = 0;
 
     // The production wrapper, and the same install through an observer-carrying installer so the
     // "no notification" assertion below cannot pass merely because nothing was subscribed.
-    await installBundledRelease(driver, bundledCourse);
+    await installBundledRelease(driver, bundledCourseWithChoiceTutorials);
     await expect(
-      installer.stageAndActivate(bundledCourse, {
+      installer.stageAndActivate(bundledCourseWithChoiceTutorials, {
         activation: "only-when-none-active",
         verifyChecksum: false,
       }),
@@ -517,11 +567,11 @@ describe("bundled seed on relaunch", () => {
   });
 
   test("survives repeated relaunches without ever reclaiming the pointer", async () => {
-    await installBundledRelease(driver, bundledCourse);
+    await installBundledRelease(driver, bundledCourseWithChoiceTutorials);
     await installer.stageAndActivate(derivedRelease("remote-1"));
 
     for (let relaunch = 0; relaunch < 3; relaunch += 1) {
-      await installBundledRelease(driver, bundledCourse);
+      await installBundledRelease(driver, bundledCourseWithChoiceTutorials);
     }
 
     await expect(readMetadata(driver, ACTIVE_RELEASE_KEY)).resolves.toBe("remote-1");
@@ -531,7 +581,7 @@ describe("bundled seed on relaunch", () => {
   });
 
   test("activates the bundled release on genuine first launch", async () => {
-    await installBundledRelease(driver, bundledCourse);
+    await installBundledRelease(driver, bundledCourseWithChoiceTutorials);
 
     await expect(readMetadata(driver, ACTIVE_RELEASE_KEY)).resolves.toBe(bundledRelease.id);
     await expect(readMetadata(driver, PREVIOUS_ACTIVE_RELEASE_KEY)).resolves.toBeNull();
@@ -539,12 +589,12 @@ describe("bundled seed on relaunch", () => {
   });
 
   test("repairs a database holding the bundled rows with no active pointer", async () => {
-    await installBundledRelease(driver, bundledCourse);
+    await installBundledRelease(driver, bundledCourseWithChoiceTutorials);
     await driver.run("DELETE FROM app_metadata WHERE key = ?", [ACTIVE_RELEASE_KEY]);
     notifications = 0;
 
     await expect(
-      installer.stageAndActivate(bundledCourse, {
+      installer.stageAndActivate(bundledCourseWithChoiceTutorials, {
         activation: "only-when-none-active",
         verifyChecksum: false,
       }),
@@ -557,13 +607,13 @@ describe("bundled seed on relaunch", () => {
   });
 
   test("repairs an active pointer naming a release that is not installed", async () => {
-    await installBundledRelease(driver, bundledCourse);
+    await installBundledRelease(driver, bundledCourseWithChoiceTutorials);
     await driver.run("UPDATE app_metadata SET value = ? WHERE key = ?", [
       "remote-vanished",
       ACTIVE_RELEASE_KEY,
     ]);
 
-    await installBundledRelease(driver, bundledCourse);
+    await installBundledRelease(driver, bundledCourseWithChoiceTutorials);
 
     await expect(readMetadata(driver, ACTIVE_RELEASE_KEY)).resolves.toBe(bundledRelease.id);
     await expect(repository.getActiveRelease()).resolves.toMatchObject({ id: bundledRelease.id });
@@ -578,7 +628,7 @@ describe("superseded release cleanup", () => {
     driver = new NodeSqliteDriver(":memory:");
     await migrateDatabase(driver);
     installer = new ReleaseInstaller(driver);
-    await installer.stageAndActivate(bundledCourse);
+    await installer.stageAndActivate(bundledCourseWithChoiceTutorials);
   });
 
   afterEach(async () => {
@@ -641,7 +691,7 @@ describe("superseded release cleanup", () => {
 
     // Step 4 — relaunch: the bundled seed must not disturb either pointer, so the retention set is
     // unchanged and cleanup still deletes nothing.
-    await installBundledRelease(driver, bundledCourse);
+    await installBundledRelease(driver, bundledCourseWithChoiceTutorials);
     await expect(readMetadata(driver, ACTIVE_RELEASE_KEY)).resolves.toBe("remote-b");
     await expect(readMetadata(driver, PREVIOUS_ACTIVE_RELEASE_KEY)).resolves.toBe("remote-a");
     await expect(installer.deleteSupersededReleases(bundledRelease.id)).resolves.toEqual([]);

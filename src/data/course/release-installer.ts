@@ -361,9 +361,9 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
       for (const step of tutorial.steps) {
         await driver.run(
           `INSERT INTO tutorial_steps
-            (release_id, id, tutorial_id, position, title, brief, starter_source, solution_source,
-             helpers, hint)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (release_id, id, tutorial_id, position, title, brief, source_template,
+             answer_choices_json, correct_choice_id, helpers, hint)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             release.id,
             step.id,
@@ -371,8 +371,9 @@ async function insertRelease(driver: DatabaseDriver, release: CourseRelease): Pr
             step.position,
             step.title,
             step.brief,
-            step.starterSource,
-            step.solutionSource,
+            step.sourceTemplate,
+            JSON.stringify(step.answerChoices),
+            step.correctChoiceId,
             step.helpers ?? null,
             step.hint ?? null,
           ],

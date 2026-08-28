@@ -230,6 +230,39 @@ const migrations: readonly DatabaseMigration[] = [
       );
     },
   },
+  {
+    // Tutorial steps changed from two whole-source fields to one template plus answer choices.
+    // Released rows are immutable and cannot be transformed safely, so this deliberately replaces
+    // them empty; startup installs a bumped release containing the new authored representation.
+    // Learner-owned progress and drafts are separate tables and remain untouched.
+    version: 5,
+    async migrate(driver) {
+      await driver.exec(`
+        CREATE TABLE tutorial_steps_replacement (
+          release_id TEXT NOT NULL,
+          id TEXT NOT NULL,
+          tutorial_id TEXT NOT NULL,
+          position INTEGER NOT NULL CHECK (position > 0),
+          title TEXT NOT NULL,
+          brief TEXT NOT NULL,
+          source_template TEXT NOT NULL,
+          answer_choices_json TEXT NOT NULL,
+          correct_choice_id TEXT NOT NULL,
+          helpers TEXT,
+          hint TEXT,
+          PRIMARY KEY (release_id, id),
+          FOREIGN KEY (release_id, tutorial_id)
+            REFERENCES tutorials(release_id, id) ON DELETE CASCADE
+        );
+
+        DROP TABLE tutorial_steps;
+        ALTER TABLE tutorial_steps_replacement RENAME TO tutorial_steps;
+
+        CREATE INDEX idx_tutorial_steps_release_tutorial_position
+          ON tutorial_steps(release_id, tutorial_id, position);
+      `);
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;
