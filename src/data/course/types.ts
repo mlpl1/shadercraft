@@ -39,14 +39,9 @@ export type TutorialChoice = {
 };
 
 /**
- * One step of a tutorial: something to build, the code to start from, and the code that does it.
- *
- * `solutionSource` is both the answer and the target the learner compares against — the same string
- * compiles the reference render beside their own, so the picture they are aiming at can never drift
- * from the code Reveal shows them.
- *
- * `starterSource` is what the editor is seeded with. It is a complete runnable body like every other
- * source in this app, so a learner who changes nothing still sees something render.
+ * One multiple-choice tutorial step: sourceTemplate is a complete runnable body with exactly one
+ * blank. Each answer choice supplies a fragment for that blank, and correctChoiceId selects the
+ * fragment that derives the reference target, so the rendered target cannot drift from the answer.
  */
 export type TutorialStep = {
   id: string;
