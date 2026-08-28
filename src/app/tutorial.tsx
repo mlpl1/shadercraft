@@ -55,6 +55,7 @@ export default function TutorialScreen() {
   const step: TutorialStep | undefined = steps[stepIndex];
   const [shuffledChoices, setShuffledChoices] = useState<TutorialChoice[]>([]);
   const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
+  const [confirmedChoiceId, setConfirmedChoiceId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>("idle");
   const [completionState, setCompletionState] = useState<CompletionState>({
     profileId: null,
@@ -103,6 +104,7 @@ export default function TutorialScreen() {
     if (!stepAnswerChoices) return;
     setShuffledChoices(shuffleTutorialChoices(stepAnswerChoices));
     setSelectedChoiceId(null);
+    setConfirmedChoiceId(null);
     setFeedback("idle");
   }, [stepAnswerChoices, stepId]);
 
@@ -118,9 +120,10 @@ export default function TutorialScreen() {
   }
 
   const selectedChoice = shuffledChoices.find((choice) => choice.id === selectedChoiceId);
+  const confirmedChoice = shuffledChoices.find((choice) => choice.id === confirmedChoiceId);
   const targetSource = getCorrectTutorialSource(step);
-  const learnerSource = selectedChoice
-    ? fillTutorialTemplate(step.sourceTemplate, selectedChoice.fragment)
+  const learnerSource = confirmedChoice
+    ? fillTutorialTemplate(step.sourceTemplate, confirmedChoice.fragment)
     : null;
   const completionStateMatchesScreen =
     completionState.profileId === profileId && completionState.stepIdsKey === stepIdsKey;
@@ -150,6 +153,7 @@ export default function TutorialScreen() {
 
   const checkAnswer = () => {
     if (terminalFeedback || !selectedChoice) return;
+    setConfirmedChoiceId(selectedChoice.id);
     if (selectedChoice.id === step.correctChoiceId) {
       setFeedback("correct");
       completeStep();
@@ -161,6 +165,7 @@ export default function TutorialScreen() {
   const skipAndReveal = () => {
     if (terminalFeedback) return;
     setSelectedChoiceId(step.correctChoiceId);
+    setConfirmedChoiceId(step.correctChoiceId);
     setFeedback("skipped");
     completeStep();
   };
@@ -209,7 +214,7 @@ export default function TutorialScreen() {
         </View>
 
         <TutorialSourceTemplate
-          selectedFragment={selectedChoice?.fragment}
+          selectedFragment={confirmedChoice?.fragment}
           template={step.sourceTemplate}
         />
 
@@ -263,7 +268,7 @@ export default function TutorialScreen() {
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.primaryLabel}>Check answer</Text>
+            <Text style={styles.primaryLabel}>Confirm</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"

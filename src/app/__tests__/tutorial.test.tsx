@@ -129,21 +129,53 @@ test("derives the target preview from the correct choice", async () => {
   expect(screen.getAllByTestId("sandbox-source")[0].props.children).toBe(targetSource);
 });
 
-test("substitutes the selected choice only into the learner preview", async () => {
+test("keeps the learner result hidden when an answer is only selected", async () => {
   await renderScreen();
 
   await fireEvent.press(screen.getByRole("button", { name: "0.5" }));
 
+  expect(screen.getAllByTestId("sandbox-source")).toHaveLength(1);
+  expect(screen.getByLabelText(
+    "Source template: float radius = Choose an answer; fragColor = vec4(radius);",
+  )).toBeTruthy();
+  expect(screen.getByLabelText("Choose an answer to preview your shader")).toBeTruthy();
+  expect(screen.getAllByTestId("sandbox-source")[0].props.children).toBe(targetSource);
+});
+
+test("applies and evaluates a wrong answer only when it is confirmed", async () => {
+  await renderScreen();
+
+  await fireEvent.press(screen.getByRole("button", { name: "0.5" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm" }));
+
+  expect(screen.getByText("Not quite")).toBeTruthy();
   expect(screen.getAllByTestId("sandbox-source")[1].props.children).toBe(
     "float radius = 0.5;\nfragColor = vec4(radius);",
   );
   expect(screen.getAllByTestId("sandbox-source")[0].props.children).toBe(targetSource);
 });
 
-test("disables checking until an answer is selected", async () => {
+test("keeps the last confirmed result until a retry is confirmed", async () => {
   await renderScreen();
 
-  expect(screen.getByRole("button", { name: "Check answer" }).props.accessibilityState).toMatchObject({
+  await fireEvent.press(screen.getByRole("button", { name: "0.5" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm" }));
+  await fireEvent.press(screen.getByRole("button", { name: "0.25" }));
+
+  expect(screen.getAllByTestId("sandbox-source")[1].props.children).toBe(
+    "float radius = 0.5;\nfragColor = vec4(radius);",
+  );
+
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm" }));
+
+  expect(screen.getByText("Correct")).toBeTruthy();
+  expect(screen.getAllByTestId("sandbox-source")[1].props.children).toBe(targetSource);
+});
+
+test("disables confirmation until an answer is selected", async () => {
+  await renderScreen();
+
+  expect(screen.getByRole("button", { name: "Confirm" }).props.accessibilityState).toMatchObject({
     disabled: true,
   });
 });
@@ -153,11 +185,11 @@ test("allows retries without changing option order or writing drafts", async () 
   const orderBeforeChecks = optionOrder();
 
   await fireEvent.press(screen.getByRole("button", { name: "0.5" }));
-  await fireEvent.press(screen.getByRole("button", { name: "Check answer" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm" }));
   expect(screen.getByText("Not quite")).toBeTruthy();
   expect(repository.setCompleted).not.toHaveBeenCalled();
 
-  await fireEvent.press(screen.getByRole("button", { name: "Check answer" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm" }));
   expect(screen.getByText("Not quite")).toBeTruthy();
   expect(optionOrder()).toEqual(orderBeforeChecks);
   expect(repository.saveDraft).not.toHaveBeenCalled();
@@ -167,7 +199,7 @@ test("completes a step after the correct answer", async () => {
   await renderScreen();
 
   await fireEvent.press(screen.getByRole("button", { name: "0.25" }));
-  await fireEvent.press(screen.getByRole("button", { name: "Check answer" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm" }));
 
   expect(screen.getByText("Correct")).toBeTruthy();
   expect(repository.setCompleted).toHaveBeenCalledWith("profile-a", "pulse-s1", true);
@@ -177,7 +209,7 @@ test("keeps the correct answer locked after completion", async () => {
   await renderScreen();
 
   await fireEvent.press(screen.getByRole("button", { name: "0.25" }));
-  await fireEvent.press(screen.getByRole("button", { name: "Check answer" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm" }));
   await fireEvent.press(screen.getByRole("button", { name: "0.5" }));
 
   expect(screen.getByText("Correct")).toBeTruthy();
@@ -266,7 +298,7 @@ test.each(["correct answer", "skip"])(
 
     if (completionMethod === "correct answer") {
       await fireEvent.press(screen.getByRole("button", { name: "0.25" }));
-      await fireEvent.press(screen.getByRole("button", { name: "Check answer" }));
+      await fireEvent.press(screen.getByRole("button", { name: "Confirm" }));
     } else {
       await fireEvent.press(screen.getByRole("button", { name: "Skip and reveal answer" }));
     }
