@@ -11,7 +11,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(60);
+select plan(67);
 
 -- A minimal, schema-valid release payload. Matches `CourseRelease` in
 -- src/data/course/types.ts / schema.ts: camelCase keys, release -> modules -> lessons -> stages.
@@ -413,7 +413,75 @@ select throws_ok(
   null,
   'a new tutorial step requires exactly four answer choices'
 );
-select is(
+select throws_ok(
+  $q$ select public.publish_course_release(jsonb_set(
+    pg_temp.fixture_payload_multi('release-no-marker', repeat('0', 64)),
+    '{modules,0,tutorials,0,steps,0,sourceTemplate}',
+    to_jsonb('fragColor = vec4(1.0);'::text)
+  )) $q$,
+  '22023',
+  null,
+  'a tutorial step rejects a template with no blank marker'
+);
+select throws_ok(
+  $q$ select public.publish_course_release(jsonb_set(
+    pg_temp.fixture_payload_multi('release-two-markers', repeat('1', 64)),
+    '{modules,0,tutorials,0,steps,0,sourceTemplate}',
+    to_jsonb('fragColor = vec4(/*__SHADERCRAFT_BLANK__*/ + /*__SHADERCRAFT_BLANK__*/);'::text)
+  )) $q$,
+  '22023',
+  null,
+  'a tutorial step rejects a template with two blank markers'
+);
+select throws_ok(
+  $q$ select public.publish_course_release(jsonb_set(
+    pg_temp.fixture_payload_multi('release-duplicate-choice-id', repeat('2', 64)),
+    '{modules,0,tutorials,0,steps,0,answerChoices,1,id}',
+    to_jsonb('static'::text)
+  )) $q$,
+  '22023',
+  null,
+  'a tutorial step rejects duplicate answer choice ids'
+);
+select throws_ok(
+  $q$ select public.publish_course_release(jsonb_set(
+    pg_temp.fixture_payload_multi('release-duplicate-render', repeat('3', 64)),
+    '{modules,0,tutorials,0,steps,0,answerChoices,1,fragment}',
+    to_jsonb('0.3'::text)
+  )) $q$,
+  '22023',
+  null,
+  'a tutorial step rejects duplicate rendered sources'
+);
+select throws_ok(
+  $q$ select public.publish_course_release(jsonb_set(
+    pg_temp.fixture_payload_multi('release-forbidden-render', repeat('4', 64)),
+    '{modules,0,tutorials,0,steps,0,answerChoices,1,fragment}',
+    to_jsonb('gl_FragColor = vec4(1.0);'::text)
+  )) $q$,
+  '22023',
+  null,
+  'a tutorial step rejects a forbidden token after substitution'
+);
+select throws_ok(
+  $q$ select public.publish_course_release(jsonb_set(
+    pg_temp.fixture_payload_multi('release-non-array-choices', repeat('5', 64)),
+    '{modules,0,tutorials,0,steps,0,answerChoices}',
+    to_jsonb('not-an-array'::text)
+  )) $q$,
+  '22023',
+  null,
+  'a tutorial step rejects a non-array choice payload with the contract error'
+);select throws_ok(
+  $q$ select public.publish_course_release(jsonb_set(
+    pg_temp.fixture_payload_multi('release-missing-correct-choice', repeat('6', 64)),
+    '{modules,0,tutorials,0,steps,0,correctChoiceId}',
+    to_jsonb('missing'::text)
+  )) $q$,
+  '22023',
+  null,
+  'a tutorial step requires correctChoiceId to resolve to exactly one answer choice'
+);select is(
   (select count(*) from public.content_tutorials where release_id = 'release-a')::int,
   0,
   'a release whose modules carry no tutorials publishes fine with none'

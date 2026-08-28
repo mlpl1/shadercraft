@@ -153,6 +153,15 @@ declare
   v_stage jsonb;
   v_tutorial jsonb;
   v_step jsonb;
+  v_choice jsonb;
+  v_template text;
+  v_correct_choice_id text;
+  v_choice_id text;
+  v_fragment text;
+  v_rendered_source text;
+  v_choice_ids text[];
+  v_rendered_sources text[];
+  v_correct_choice_matches integer;
   v_expected_modules integer := jsonb_array_length(coalesce(p_payload -> 'modules', '[]'::jsonb));
   v_expected_lessons integer;
   v_expected_stages integer;
@@ -276,27 +285,99 @@ begin
       for v_step in select * from jsonb_array_elements(coalesce(v_tutorial -> 'steps', '[]'::jsonb))
       loop
         if coalesce(jsonb_typeof(v_step -> 'sourceTemplate'), '') <> 'string'
-          or btrim(coalesce(v_step ->> 'sourceTemplate', '')) = ''
-          or coalesce(jsonb_typeof(v_step -> 'answerChoices'), '') <> 'array'
-          or jsonb_array_length(v_step -> 'answerChoices') <> 4
           or coalesce(jsonb_typeof(v_step -> 'correctChoiceId'), '') <> 'string'
-          or btrim(coalesce(v_step ->> 'correctChoiceId', '')) = ''
-          or exists (
-            select 1
-            from jsonb_array_elements(v_step -> 'answerChoices') as choice
-            where coalesce(jsonb_typeof(choice), '') <> 'object'
-              or coalesce(jsonb_typeof(choice -> 'id'), '') <> 'string'
-              or btrim(coalesce(choice ->> 'id', '')) = ''
-              or coalesce(jsonb_typeof(choice -> 'fragment'), '') <> 'string'
-              or btrim(coalesce(choice ->> 'fragment', '')) = ''
-          )
-          or not exists (
-            select 1
-            from jsonb_array_elements(v_step -> 'answerChoices') as choice
-            where choice ->> 'id' = v_step ->> 'correctChoiceId'
-          )
         then
-          raise exception 'tutorial step % must carry a valid four-choice exercise', v_step ->> 'id'
+          raise exception 'tutorial step % must carry string sourceTemplate and correctChoiceId fields', v_step ->> 'id'
+            using errcode = '22023';
+        end if;
+
+        if coalesce(jsonb_typeof(v_step -> 'answerChoices'), '') <> 'array' then
+          raise exception 'tutorial step % answerChoices must be an array', v_step ->> 'id'
+            using errcode = '22023';
+        end if;
+
+        v_template := v_step ->> 'sourceTemplate';
+        v_correct_choice_id := v_step ->> 'correctChoiceId';
+
+        if btrim(v_template) = ''
+          or (length(v_template) - length(replace(v_template, '/*__SHADERCRAFT_BLANK__*/', '')))
+            / length('/*__SHADERCRAFT_BLANK__*/') <> 1
+        then
+          raise exception 'tutorial step % sourceTemplate must contain exactly one blank marker', v_step ->> 'id'
+            using errcode = '22023';
+        end if;
+
+        if jsonb_array_length(v_step -> 'answerChoices') <> 4 then
+          raise exception 'tutorial step % must carry exactly four answer choices', v_step ->> 'id'
+            using errcode = '22023';
+        end if;
+
+        if btrim(v_correct_choice_id) = '' then
+          raise exception 'tutorial step % correctChoiceId must not be blank', v_step ->> 'id'
+            using errcode = '22023';
+        end if;
+
+        v_choice_ids := array[]::text[];
+        v_rendered_sources := array[]::text[];
+        v_correct_choice_matches := 0;
+
+        for v_choice in select * from jsonb_array_elements(v_step -> 'answerChoices')
+        loop
+          if coalesce(jsonb_typeof(v_choice), '') <> 'object'
+            or coalesce(jsonb_typeof(v_choice -> 'id'), '') <> 'string'
+            or coalesce(jsonb_typeof(v_choice -> 'fragment'), '') <> 'string'
+          then
+            raise exception 'tutorial step % answer choices must have string id and fragment fields', v_step ->> 'id'
+              using errcode = '22023';
+          end if;
+
+          v_choice_id := v_choice ->> 'id';
+          v_fragment := v_choice ->> 'fragment';
+
+          if btrim(v_choice_id) = ''
+            or v_choice_id !~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+            or btrim(v_fragment) = ''
+          then
+            raise exception 'tutorial step % has an invalid answer choice', v_step ->> 'id'
+              using errcode = '22023';
+          end if;
+
+          if v_choice_id = any(v_choice_ids) then
+            raise exception 'tutorial step % has duplicate answer choice ids', v_step ->> 'id'
+              using errcode = '22023';
+          end if;
+
+          v_rendered_source := replace(v_template, '/*__SHADERCRAFT_BLANK__*/', v_fragment);
+
+          if btrim(v_rendered_source) = ''
+            or strpos(v_rendered_source, '#version') > 0
+            or strpos(v_rendered_source, '#extension') > 0
+            or strpos(v_rendered_source, 'precision') > 0
+            or strpos(v_rendered_source, 'void main(') > 0
+            or strpos(v_rendered_source, 'gl_FragColor') > 0
+            or strpos(v_rendered_source, 'texture(') > 0
+            or strpos(v_rendered_source, 'iMouse') > 0
+            or strpos(v_rendered_source, 'iFrame') > 0
+            or strpos(v_rendered_source, 'iTimeDelta') > 0
+          then
+            raise exception 'tutorial step % has a rendered source with forbidden content', v_step ->> 'id'
+              using errcode = '22023';
+          end if;
+
+          if v_rendered_source = any(v_rendered_sources) then
+            raise exception 'tutorial step % has duplicate rendered sources', v_step ->> 'id'
+              using errcode = '22023';
+          end if;
+
+          v_choice_ids := array_append(v_choice_ids, v_choice_id);
+          v_rendered_sources := array_append(v_rendered_sources, v_rendered_source);
+          if v_choice_id = v_correct_choice_id then
+            v_correct_choice_matches := v_correct_choice_matches + 1;
+          end if;
+        end loop;
+
+        if v_correct_choice_matches <> 1 then
+          raise exception 'tutorial step % correctChoiceId must resolve to exactly one answer choice', v_step ->> 'id'
             using errcode = '22023';
         end if;
         insert into public.content_tutorial_steps (
