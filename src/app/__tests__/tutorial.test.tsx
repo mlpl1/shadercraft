@@ -2,16 +2,6 @@ jest.mock("react-native-safe-area-context", () =>
   require("react-native-safe-area-context/jest/mock").default,
 );
 
-jest.mock("../../components/glsl-input", () => {
-  const React = require("react") as typeof import("react");
-  const { Text } = require("react-native") as typeof import("react-native");
-  return {
-    GlslInput: jest.fn((props: Record<string, unknown>) =>
-      React.createElement(Text, { testID: "tutorial-glsl-input" }, String(props.initialValue ?? "")),
-    ),
-  };
-});
-
 jest.mock("../../components/shader-sandbox", () => {
   const React = require("react") as typeof import("react");
   const { Text } = require("react-native") as typeof import("react-native");
@@ -32,24 +22,38 @@ jest.mock("expo-router", () => ({
 jest.mock("../../context/auth-context", () => ({ useAuth: jest.fn() }));
 jest.mock("../../context/course-context", () => ({ useCourse: jest.fn() }));
 jest.mock("../../context/data-context", () => ({ useData: jest.fn() }));
-jest.mock("../../context/settings-context", () => ({ useSettings: jest.fn() }));
 
-import { render, screen, waitFor } from "@testing-library/react-native";
+jest.mock("../../context/settings-context", () => ({
+  useSettings: () => ({
+    settings: { editorFontSize: 16, showEditorLineNumbers: false },
+  }),
+}));
+
+jest.mock("../../components/glsl-input", () => ({
+  GlslInput: () => null,
+}));
+
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import TutorialScreen from "../tutorial";
-import { GlslInput } from "../../components/glsl-input";
 import { useAuth } from "../../context/auth-context";
 import { useCourse } from "../../context/course-context";
 import { useData } from "../../context/data-context";
-import { useSettings } from "../../context/settings-context";
+import { SHADERCRAFT_BLANK } from "../../data/course/tutorial-exercise";
 import type { CourseModule } from "../../data/course/types";
 
-const mockGlslInput = GlslInput as jest.MockedFunction<typeof GlslInput>;
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockUseCourse = useCourse as jest.MockedFunction<typeof useCourse>;
 const mockUseData = useData as jest.MockedFunction<typeof useData>;
-const mockUseSettings = useSettings as jest.MockedFunction<typeof useSettings>;
-const mockUpdateSettings = jest.fn(async () => undefined);
+
+const template = `float radius = ${SHADERCRAFT_BLANK};\nfragColor = vec4(radius);`;
+const targetSource = "float radius = 0.25;\nfragColor = vec4(radius);";
+const choices = [
+  { id: "quarter", fragment: "0.25" },
+  { id: "half", fragment: "0.5" },
+  { id: "three-quarters", fragment: "0.75" },
+  { id: "one", fragment: "1.0" },
+];
 
 const modules: CourseModule[] = [
   {
@@ -73,9 +77,10 @@ const modules: CourseModule[] = [
             id: "pulse-s1",
             position: 1,
             title: "Step one",
-            brief: "Change the shader.",
-            starterSource: "fragColor = vec4(0.0);",
-            solutionSource: "fragColor = vec4(1.0);",
+            brief: "Choose the target radius.",
+            sourceTemplate: template,
+            answerChoices: choices,
+            correctChoiceId: "quarter",
           },
         ],
       },
@@ -83,40 +88,127 @@ const modules: CourseModule[] = [
   },
 ];
 
+let repository: {
+  getStates: jest.Mock;
+  saveDraft: jest.Mock;
+  setCompleted: jest.Mock;
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.restoreAllMocks();
   mockRouteParams.current = { tutorialId: "pulse", stepId: "pulse-s1" };
+  repository = {
+    getStates: jest.fn(async () => new Map()),
+    saveDraft: jest.fn(async () => undefined),
+    setCompleted: jest.fn(async () => undefined),
+  };
   mockUseAuth.mockReturnValue({ profileId: "profile-a" } as ReturnType<typeof useAuth>);
   mockUseCourse.mockReturnValue({ modules } as ReturnType<typeof useCourse>);
   mockUseData.mockReturnValue({
     status: "ready",
-    tutorialProgressRepository: {
-      getStates: jest.fn(async () => new Map()),
-      saveDraft: jest.fn(async () => undefined),
-      setCompleted: jest.fn(async () => undefined),
-    },
+    tutorialProgressRepository: repository,
   } as unknown as ReturnType<typeof useData>);
-  mockUseSettings.mockReturnValue({
-    settings: {
-      version: 1,
-      editorFontSize: 16,
-      showEditorLineNumbers: false,
-      previewPerformance: "full-speed",
-      editorPreviewMode: "responsive",
-    },
-    hydrated: true,
-    error: null,
-    retry: jest.fn(),
-    update: mockUpdateSettings,
+});
+
+async function renderScreen() {
+  await render(<TutorialScreen />);
+  await waitFor(() => expect(screen.getByText("Step one")).toBeTruthy());
+}
+
+function optionOrder() {
+  return screen
+    .getAllByRole("button")
+    .map((button) => button.props.accessibilityLabel)
+    .filter((label): label is string => choices.some((choice) => choice.fragment === label));
+}
+
+test("derives the target preview from the correct choice", async () => {
+  await renderScreen();
+
+  expect(screen.getAllByTestId("sandbox-source")[0].props.children).toBe(targetSource);
+});
+
+test("substitutes the selected choice only into the learner preview", async () => {
+  await renderScreen();
+
+  await fireEvent.press(screen.getByRole("button", { name: "0.5" }));
+
+  expect(screen.getAllByTestId("sandbox-source")[1].props.children).toBe(
+    "float radius = 0.5;\nfragColor = vec4(radius);",
+  );
+  expect(screen.getAllByTestId("sandbox-source")[0].props.children).toBe(targetSource);
+});
+
+test("disables checking until an answer is selected", async () => {
+  await renderScreen();
+
+  expect(screen.getByRole("button", { name: "Check answer" }).props.accessibilityState).toMatchObject({
+    disabled: true,
   });
 });
 
-test("passes editor typography preferences to the tutorial GLSL input", async () => {
-  await render(<TutorialScreen />);
+test("allows retries without changing option order or writing drafts", async () => {
+  await renderScreen();
+  const orderBeforeChecks = optionOrder();
 
-  await waitFor(() => expect(screen.getByText("Step one")).toBeTruthy());
-  expect(mockGlslInput).toHaveBeenCalledWith(
-    expect.objectContaining({ fontSize: 16, showLineNumbers: false }),
-    undefined,
+  await fireEvent.press(screen.getByRole("button", { name: "0.5" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Check answer" }));
+  expect(screen.getByText("Not quite")).toBeTruthy();
+  expect(repository.setCompleted).not.toHaveBeenCalled();
+
+  await fireEvent.press(screen.getByRole("button", { name: "Check answer" }));
+  expect(screen.getByText("Not quite")).toBeTruthy();
+  expect(optionOrder()).toEqual(orderBeforeChecks);
+  expect(repository.saveDraft).not.toHaveBeenCalled();
+});
+
+test("completes a step after the correct answer", async () => {
+  await renderScreen();
+
+  await fireEvent.press(screen.getByRole("button", { name: "0.25" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Check answer" }));
+
+  expect(screen.getByText("Correct")).toBeTruthy();
+  expect(repository.setCompleted).toHaveBeenCalledWith("profile-a", "pulse-s1", true);
+});
+
+test("skips by revealing the correct answer and completing the step", async () => {
+  await renderScreen();
+
+  await fireEvent.press(screen.getByRole("button", { name: "Skip and reveal answer" }));
+
+  expect(screen.getByText("Skipped")).toBeTruthy();
+  expect(screen.getAllByText("0.25").length).toBeGreaterThan(0);
+  expect(repository.setCompleted).toHaveBeenCalledWith("profile-a", "pulse-s1", true);
+});
+
+test("shows persisted completed steps as completed", async () => {
+  repository.getStates.mockResolvedValue(
+    new Map([["pulse-s1", { completed: true, draft: null }]]),
   );
+
+  await renderScreen();
+
+  expect(screen.getByText("Completed")).toBeTruthy();
+});
+
+test("reshuffles choices for a new screen visit", async () => {
+  jest
+    .spyOn(Math, "random")
+    .mockReturnValueOnce(0)
+    .mockReturnValueOnce(0)
+    .mockReturnValueOnce(0)
+    .mockReturnValueOnce(0.999)
+    .mockReturnValueOnce(0.999)
+    .mockReturnValueOnce(0.999);
+
+  const first = await render(<TutorialScreen />);
+  await waitFor(() => expect(screen.getByText("Step one")).toBeTruthy());
+  const firstOrder = optionOrder();
+  await first.unmount();
+
+  await renderScreen();
+
+  expect(optionOrder()).not.toEqual(firstOrder);
 });
