@@ -24,7 +24,7 @@ A step carries:
 | --- | --- | --- |
 | `title` | yes | Names the move, not the result. "Drive the radius from time", not "Step 2". |
 | `brief` | yes | What to do and why. 25 words minimum. |
-| `sourceTemplate` | yes | A complete runnable body containing exactly one `/*__SHADERCRAFT_BLANK__*/` marker. |
+| `sourceTemplate` | yes | A shader body with exactly one `/*__SHADERCRAFT_BLANK__*/` marker; replacing it with any answer fragment produces a complete runnable body. |
 | `answerChoices` | yes | Exactly four authored fragments: one correct answer and three unique, plausible mistakes. |
 | `correctChoiceId` | yes | The id of the choice that reconstructs the target shader. |
 | `helpers` | no | GLSL declared above `mainImage`, shared by every filled choice. |
