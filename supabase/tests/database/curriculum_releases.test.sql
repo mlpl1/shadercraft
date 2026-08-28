@@ -470,9 +470,10 @@ select throws_ok(
     to_jsonb('not-an-array'::text)
   )) $q$,
   '22023',
-  null,
+  'tutorial step pulse-one answerChoices must be an array',
   'a tutorial step rejects a non-array choice payload with the contract error'
-);select throws_ok(
+);
+select throws_ok(
   $q$ select public.publish_course_release(jsonb_set(
     pg_temp.fixture_payload_multi('release-missing-correct-choice', repeat('6', 64)),
     '{modules,0,tutorials,0,steps,0,correctChoiceId}',
@@ -481,7 +482,8 @@ select throws_ok(
   '22023',
   null,
   'a tutorial step requires correctChoiceId to resolve to exactly one answer choice'
-);select is(
+);
+select is(
   (select count(*) from public.content_tutorials where release_id = 'release-a')::int,
   0,
   'a release whose modules carry no tutorials publishes fine with none'
