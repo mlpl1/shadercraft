@@ -62,9 +62,12 @@ export default function TutorialScreen() {
     let cancelled = false;
     void repository.getStates(profileId, steps.map(({ id }) => id)).then((states) => {
       if (cancelled) return;
-      setCompletedStepIds(
-        new Set([...states.entries()].filter(([, state]) => state.completed).map(([id]) => id)),
-      );
+      setCompletedStepIds((current) => {
+        const fetchedCompletedIds = [...states.entries()]
+          .filter(([, state]) => state.completed)
+          .map(([id]) => id);
+        return new Set([...current, ...fetchedCompletedIds]);
+      });
     });
     return () => {
       cancelled = true;
@@ -125,7 +128,7 @@ export default function TutorialScreen() {
     <SafeAreaView edges={["top"]} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.back()}>
-          <Text style={styles.back}>Ã¢â‚¬Â¹ {tutorial.title}</Text>
+          <Text style={styles.back}>{"<"} {tutorial.title}</Text>
         </Pressable>
 
         <Text style={styles.stepCount}>

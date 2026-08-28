@@ -33,7 +33,7 @@ jest.mock("../../components/glsl-input", () => ({
   GlslInput: () => null,
 }));
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import TutorialScreen from "../tutorial";
 import { useAuth } from "../../context/auth-context";
@@ -211,4 +211,39 @@ test("reshuffles choices for a new screen visit", async () => {
   await renderScreen();
 
   expect(optionOrder()).not.toEqual(firstOrder);
+});
+test.each(["correct answer", "skip"])(
+  "retains optimistic completion when initial progress resolves after a %s",
+  async (completionMethod) => {
+    let resolveStates: (states: Map<string, { completed: boolean; draft: null }>) => void = () => undefined;
+    repository.getStates.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveStates = resolve;
+        }),
+    );
+
+    await renderScreen();
+
+    if (completionMethod === "correct answer") {
+      await fireEvent.press(screen.getByRole("button", { name: "0.25" }));
+      await fireEvent.press(screen.getByRole("button", { name: "Check answer" }));
+    } else {
+      await fireEvent.press(screen.getByRole("button", { name: "Skip and reveal answer" }));
+    }
+
+    expect(screen.getByText("Completed")).toBeTruthy();
+    expect(repository.setCompleted).toHaveBeenCalledWith("profile-a", "pulse-s1", true);
+
+    await act(async () => {
+      resolveStates(new Map());
+    });
+
+    expect(screen.getByText("Completed")).toBeTruthy();
+  },
+);
+test("uses an ASCII single-chevron back label", async () => {
+  await renderScreen();
+
+  expect(screen.getByRole("button", { name: "< Make it pulse" })).toBeTruthy();
 });
