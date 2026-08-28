@@ -218,11 +218,9 @@ function validateStageHelpers(stageId: string, helpers: string): void {
 }
 
 /**
- * A tutorial's two sources both compile through the same sandbox wrapper a stage's does, so both
- * carry the same contract — including `solutionSource`, which is easy to overlook because it is not
- * what the editor seeds. It is compiled every time the target renders, so a forbidden token there
- * breaks the reference image rather than the learner's attempt, which is worse: it looks like their
- * fault.
+ * Every authored answer fragment is compiled after substitution through the same sandbox wrapper a
+ * stage uses. Checking all rendered variants keeps the target and every choice preview inside the
+ * GLSL subset the app actually supports.
  */
 function validateTutorials(
   tutorials: Tutorial[],

@@ -49,6 +49,8 @@ export default function TutorialScreen() {
   const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>("idle");
   const [completedStepIds, setCompletedStepIds] = useState<ReadonlySet<string>>(new Set());
+  const stepAnswerChoices = step?.answerChoices;
+  const stepId = step?.id;
 
   // Land on the step the list asked for, once, rather than resetting every render.
   useEffect(() => {
@@ -77,11 +79,11 @@ export default function TutorialScreen() {
   // Choices are stable while a learner retries, but every new step (and every new screen visit)
   // gets its own randomized order.
   useEffect(() => {
-    if (!step) return;
-    setShuffledChoices(shuffleTutorialChoices(step.answerChoices));
+    if (!stepAnswerChoices) return;
+    setShuffledChoices(shuffleTutorialChoices(stepAnswerChoices));
     setSelectedChoiceId(null);
     setFeedback("idle");
-  }, [step?.id]);
+  }, [stepAnswerChoices, stepId]);
 
   if (!tutorial || !step) {
     return (
