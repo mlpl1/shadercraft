@@ -1,4 +1,5 @@
 import { parseAuthoredModules } from "../schema";
+import { SHADERCRAFT_BLANK } from "../tutorial-exercise";
 
 const stage = (position: number, overrides: Record<string, unknown> = {}) => ({
   id: `stage-${position}`,
@@ -215,8 +216,14 @@ describe("tutorials", () => {
     title: `Step ${position}`,
     brief:
       "A brief long enough to clear the twenty-five word floor, which exists so a step cannot ship as a single terse imperative telling the learner to go and do something unexplained.",
-    starterSource: "fragColor = vec4(0.0, 0.0, 0.0, 1.0);",
-    solutionSource: "fragColor = vec4(1.0, 0.0, 0.0, 1.0);",
+    sourceTemplate: `fragColor = vec4(${SHADERCRAFT_BLANK});`,
+    answerChoices: [
+      { id: "white", fragment: "1.0" },
+      { id: "black", fragment: "0.0" },
+      { id: "half", fragment: "0.5" },
+      { id: "quarter", fragment: "0.25" },
+    ],
+    correctChoiceId: "white",
     ...overrides,
   });
 
@@ -267,25 +274,112 @@ describe("tutorials", () => {
     ).toThrow(/cannot carry tutorials/i);
   });
 
-  it("rejects a step whose starter already contains the solution", () => {
-    // The likeliest authoring slip, because steps get written by copying the one before.
+  it.each([
+    ["no marker", "fragColor = vec4(1.0);"],
+    ["two markers", `fragColor = vec4(${SHADERCRAFT_BLANK}, ${SHADERCRAFT_BLANK});`],
+  ])("rejects a source template with %s", (_label, sourceTemplate) => {
+    expect(() =>
+      withTutorials([tutorial({ steps: [step(1, { sourceTemplate })] })]),
+    ).toThrow(/exactly one blank/i);
+  });
+
+  it.each([
+    ["three", ["white", "black", "half"]],
+    ["five", ["white", "black", "half", "quarter", "extra"]],
+  ])("rejects %s choices", (_label, ids) => {
     expect(() =>
       withTutorials([
         tutorial({
-          steps: [step(1, { starterSource: "fragColor = vec4(1.0);", solutionSource: "fragColor = vec4(1.0);" })],
+          steps: [
+            step(1, {
+              answerChoices: ids.map((id, index) => ({ id, fragment: `${index}.0` })),
+            }),
+          ],
         }),
       ]),
-    ).toThrow(/identical/i);
+    ).toThrow(/4/i);
   });
 
-  it("applies the sandbox contract to the solution source, not only the starter", () => {
-    // The solution compiles every time the target renders, so a forbidden token there breaks the
-    // reference image and reads to the learner as their own mistake.
+  it("rejects duplicate choice ids", () => {
     expect(() =>
       withTutorials([
-        tutorial({ steps: [step(1, { solutionSource: "gl_FragColor = vec4(1.0);" })] }),
+        tutorial({
+          steps: [
+            step(1, {
+              answerChoices: [
+                { id: "white", fragment: "1.0" },
+                { id: "white", fragment: "0.0" },
+                { id: "half", fragment: "0.5" },
+                { id: "quarter", fragment: "0.25" },
+              ],
+            }),
+          ],
+        }),
+      ]),
+    ).toThrow(/duplicate tutorial choice id/i);
+  });
+
+  it("rejects blank choice fragments", () => {
+    expect(() =>
+      withTutorials([
+        tutorial({
+          steps: [
+            step(1, {
+              answerChoices: [
+                { id: "white", fragment: " " },
+                { id: "black", fragment: "0.0" },
+                { id: "half", fragment: "0.5" },
+                { id: "quarter", fragment: "0.25" },
+              ],
+            }),
+          ],
+        }),
+      ]),
+    ).toThrow(/fragment must not be blank/i);
+  });
+
+  it("rejects an unknown correct choice id", () => {
+    expect(() =>
+      withTutorials([tutorial({ steps: [step(1, { correctChoiceId: "missing" })] })]),
+    ).toThrow(/correct choice/i);
+  });
+
+  it("applies the sandbox contract after every substitution", () => {
+    expect(() =>
+      withTutorials([
+        tutorial({
+          steps: [
+            step(1, {
+              answerChoices: [
+                { id: "white", fragment: "1.0" },
+                { id: "black", fragment: "gl_FragColor = vec4(0.0);" },
+                { id: "half", fragment: "0.5" },
+                { id: "quarter", fragment: "0.25" },
+              ],
+            }),
+          ],
+        }),
       ]),
     ).toThrow(/gl_FragColor/);
+  });
+
+  it("rejects choices that render the same source", () => {
+    expect(() =>
+      withTutorials([
+        tutorial({
+          steps: [
+            step(1, {
+              answerChoices: [
+                { id: "white", fragment: "1.0" },
+                { id: "black", fragment: "1.0" },
+                { id: "half", fragment: "0.5" },
+                { id: "quarter", fragment: "0.25" },
+              ],
+            }),
+          ],
+        }),
+      ]),
+    ).toThrow(/duplicate rendered source/i);
   });
 
   it("rejects a tutorial belonging to a different module", () => {

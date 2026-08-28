@@ -6,8 +6,14 @@ const step = (id: string, position: number) => ({
   position,
   title: `Step ${position}`,
   brief: "brief",
-  starterSource: "a",
-  solutionSource: "b",
+  sourceTemplate: "fragColor = vec4(/*__SHADERCRAFT_BLANK__*/);",
+  answerChoices: [
+    { id: "white", fragment: "1.0" },
+    { id: "black", fragment: "0.0" },
+    { id: "half", fragment: "0.5" },
+    { id: "quarter", fragment: "0.25" },
+  ],
+  correctChoiceId: "white",
 });
 
 const tutorial = (id: string, moduleId: string, position: number, stepIds: string[]): Tutorial => ({

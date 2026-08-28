@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { CourseModule, CourseRelease, Tutorial } from "./types";
+import { fillTutorialTemplate, SHADERCRAFT_BLANK } from "./tutorial-exercise";
 
 const idPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -29,14 +30,22 @@ const courseLessonSchema = z
   })
   .strict();
 
+const tutorialChoiceSchema = z
+  .object({
+    id: z.string(),
+    fragment: z.string(),
+  })
+  .strict();
+
 const tutorialStepSchema = z
   .object({
     id: z.string(),
     position: z.number().int().positive(),
     title: z.string(),
     brief: z.string(),
-    starterSource: z.string(),
-    solutionSource: z.string(),
+    sourceTemplate: z.string(),
+    answerChoices: z.array(tutorialChoiceSchema).length(4),
+    correctChoiceId: z.string(),
     helpers: z.string().optional(),
     hint: z.string().optional(),
   })
@@ -247,15 +256,34 @@ function validateTutorials(
     for (const step of tutorial.steps) {
       validateUniqueId(stepIds, step.id, "tutorial step");
       validateWordCount(step.brief, MIN_STEP_BRIEF_WORDS, `Tutorial step ${step.id} brief`);
-      validateStageSource(step.id, step.starterSource);
-      validateStageSource(step.id, step.solutionSource);
+
+      const markerCount = step.sourceTemplate.split(SHADERCRAFT_BLANK).length - 1;
+      if (markerCount !== 1) {
+        fail(`Tutorial step ${step.id} source template must contain exactly one blank marker`);
+      }
+
+      const choiceIds = new Set<string>();
+      const renderedSources = new Set<string>();
+      for (const choice of step.answerChoices) {
+        validateUniqueId(choiceIds, choice.id, "tutorial choice");
+        if (choice.fragment.trim().length === 0) {
+          fail(`Tutorial step ${step.id} choice ${choice.id} fragment must not be blank`);
+        }
+
+        const source = fillTutorialTemplate(step.sourceTemplate, choice.fragment);
+        validateStageSource(step.id, source);
+        if (renderedSources.has(source)) {
+          fail(`Tutorial step ${step.id} has duplicate rendered source`);
+        }
+        renderedSources.add(source);
+      }
+
+      if (!choiceIds.has(step.correctChoiceId)) {
+        fail(`Tutorial step ${step.id} correct choice id must resolve to an answer choice`);
+      }
+
       if (step.helpers !== undefined) {
         validateStageHelpers(step.id, step.helpers);
-      }
-      // A step whose answer is what it hands you teaches nothing, and this is an easy authoring slip
-      // when a step is written by copying the one before it.
-      if (step.starterSource.trim() === step.solutionSource.trim()) {
-        fail(`Tutorial step ${step.id} starter and solution source are identical`);
       }
     }
   }

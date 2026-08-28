@@ -33,6 +33,11 @@ export type CourseLesson = {
   stages: LessonStage[];
 };
 
+export type TutorialChoice = {
+  id: string;
+  fragment: string;
+};
+
 /**
  * One step of a tutorial: something to build, the code to start from, and the code that does it.
  *
@@ -49,8 +54,12 @@ export type TutorialStep = {
   title: string;
   /** What to do, and why. Prose, not instructions to copy. */
   brief: string;
-  starterSource: string;
-  solutionSource: string;
+  /** Complete runnable shader body with exactly one `SHADERCRAFT_BLANK` marker. */
+  sourceTemplate: string;
+  /** Exactly four authored fragments the learner may choose from. */
+  answerChoices: TutorialChoice[];
+  /** The authored choice that renders the reference target. */
+  correctChoiceId: string;
   /** Declared above `mainImage` for both renders, so target and attempt share the same functions. */
   helpers?: string;
   /** Shown on request, before the learner gives up and reveals the whole answer. */
