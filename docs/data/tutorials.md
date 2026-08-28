@@ -1,21 +1,21 @@
 # Tutorials
 
-Lessons teach and grade nothing. Tutorials are where a learner is asked to build something, and
-where they can get stuck. This document is the contract for authoring them.
+Lessons teach and grade nothing. Tutorials ask the learner to complete a shader by choosing one of
+four authored source fragments. This document is the contract for authoring them.
 
-If you are writing shader source for a tutorial step, read `shader-sandbox.md` first — every rule
-there applies here too, to both of a step's two sources.
+If you are writing shader source for a tutorial step, read `shader-sandbox.md` first. Every rule
+there applies to the source produced by every answer choice, not only the correct one.
 
 ## The shape
 
-A tutorial hangs off a module rather than sitting in a flat list, because it unlocks when **that
-module** is complete. Modules carry an optional `tutorials` array; a module with no exercises omits
-the key entirely rather than carrying an empty one, so "none" has exactly one representation.
+A tutorial hangs off a module because it unlocks when that module is complete. Modules carry an
+optional `tutorials` array; a module with no exercises omits the key rather than carrying an empty
+array.
 
 ```
 CourseModule
-└── tutorials?: Tutorial[]
-    └── steps: TutorialStep[]
++-- tutorials?: Tutorial[]
+    +-- steps: TutorialStep[]
 ```
 
 A step carries:
@@ -24,70 +24,81 @@ A step carries:
 | --- | --- | --- |
 | `title` | yes | Names the move, not the result. "Drive the radius from time", not "Step 2". |
 | `brief` | yes | What to do and why. 25 words minimum. |
-| `starterSource` | yes | What the editor is seeded with. A complete runnable body. |
-| `solutionSource` | yes | The answer — **and the target render**. |
-| `helpers` | no | GLSL declared above `mainImage`, shared by both sources. |
-| `hint` | no | Offered before the learner gives up and reveals. |
+| `sourceTemplate` | yes | A complete runnable body containing exactly one `/*__SHADERCRAFT_BLANK__*/` marker. |
+| `answerChoices` | yes | Exactly four authored fragments: one correct answer and three unique, plausible mistakes. |
+| `correctChoiceId` | yes | The id of the choice that reconstructs the target shader. |
+| `helpers` | no | GLSL declared above `mainImage`, shared by every filled choice. |
+| `hint` | no | Offered before the learner skips and reveals the correct answer. |
 
-## The solution is the target
+## The correct choice is the target
 
-There is no separate "expected image". The step's `solutionSource` compiles the reference render the
-learner compares against **and** is what the Reveal control hands them. That is deliberate: a target
-stored separately from the answer can drift from it, and the first anyone would know is a learner
-chasing a picture the given solution does not produce.
+There is no separately authored target source or expected image. The app fills `sourceTemplate`
+with the fragment named by `correctChoiceId`, then compiles that exact source for the reference
+render. Selecting the same fragment therefore produces the same shader by construction.
 
-Both previews compile through the same wrapper and share the step's `helpers`, so the only
-difference between the two shaders is the body — which is exactly what the learner is changing.
+Keep the blank as narrow as the concept permits. A one-expression decision should not hide a whole
+shader, while a coherent multiline move may be one fragment when its declarations and result need
+to stay together. Filling any of the four choices must leave a complete, runnable `mainImage`
+body.
 
-## Nothing is checked
+## Author all four choices
 
-The learner decides when their render matches and marks the step done. There is no pixel comparison,
-no tolerance, and no pass condition anywhere in the code.
+Choices are content, never runtime-generated variants. Give each one a stable id and a distinct GLSL
+fragment. The three distractors should be mistakes a learner could reasonably make after the module:
+swapped arguments, a missing coordinate transform, an inverted mask, or a fixed width where a
+pixel-scaled width is required. Avoid arbitrary syntax errors and joke answers.
 
-This is a deliberate choice rather than a missing feature. Comparing renders automatically means
-reading pixels back and picking a tolerance, and both are device-specific: too tight and correct
-answers fail on some GPUs, too loose and wrong ones pass. Self-assessment costs the learner nothing
-and cannot be wrong in a way they will not notice.
+The schema validates the four filled sources against the sandbox contract, and the on-device Shader
+Audit compiles every `choice:<choice-id>` substitution against the real GL driver. A correct target
+that compiles does not excuse a broken distractor; every option can reach the learner preview.
 
-The consequence for authoring: **a step must be visually unambiguous**. If a learner cannot tell at a
-glance whether their render matches, the step is badly specified, because nothing else will tell
-them.
+## Choice order and checking
+
+The app shuffles the four choices once when a step screen is visited. That order remains fixed while
+the learner retries, so a wrong answer does not move underneath them. A later visit shuffles again.
+Authored order must therefore carry no meaning, and logic must use choice ids rather than positions.
+
+Checking a selected correct choice completes the step. An incorrect choice leaves the step available
+for another attempt. "Skip and reveal answer" selects the correct fragment, shows it, and also
+completes the step. There is no pixel comparison or tolerance: correctness is the authored
+`correctChoiceId`.
 
 ## Authoring rules
 
-Enforced by `parseCourseRelease`, so a violation fails `content:build` rather than reaching a device:
+Enforced by `parseCourseRelease`, so a violation fails `content:build` rather than reaching a
+device:
 
-- **Both sources obey the sandbox contract.** `solutionSource` is the easy one to forget — it is
-  compiled every time the target renders, so a forbidden token there breaks the *reference* image
-  and reads to the learner as their own mistake.
-- **`starterSource` may not equal `solutionSource`.** A step whose answer is what it hands you
-  teaches nothing, and this is the likeliest slip when a step is written by copying the one before.
-- **No tutorials on a planned module.** It would be permanently unreachable rather than merely early,
-  since a planned module can never be completed.
-- **Ids are globally unique** across tutorials and steps, and positions are contiguous from 1.
-- **`brief` is 25+ words, `summary` is 20+.** Lower than a stage body's 60 on purpose: a brief sets a
-  task rather than explaining a shader, and padding it buries the ask. What it cannot be is a bare
-  imperative.
+- `sourceTemplate` contains exactly one blank marker.
+- `answerChoices` contains exactly four entries with unique ids, non-blank fragments, and distinct
+  rendered sources.
+- `correctChoiceId` resolves to one of those four entries.
+- Every filled source and optional helper obeys the shader sandbox contract.
+- Planned modules do not carry tutorials.
+- Tutorial and step ids are globally unique, and positions are contiguous from 1.
+- A `brief` has at least 25 words and a tutorial `summary` has at least 20.
 
 Not enforced, and still required:
 
-- **Stay inside the module's vocabulary.** A tutorial may use anything its own module or an earlier
-  one introduced, and nothing later. Nothing checks this; the authoring pass for the existing seven
-  verified it with a script that walks every call in every source against a cumulative allow-list.
-- **Chain the steps.** Each step's `starterSource` should be the previous step's `solutionSource`, so
-  a learner who reveals one still begins the next from working code.
+- Stay inside the module's vocabulary. A tutorial may use anything its own module or an earlier one
+  introduced, and nothing later.
+- Keep the target visually unambiguous so a learner can understand what the correct fragment changes.
+- Preserve existing tutorial and step ids when revising content; progress is keyed by step id.
+- When converting an older target, verify that filling the correct fragment reproduces the former
+  shader byte-for-byte. Narrow the blank if it does not.
 
 ## Progress
 
-Completion is a per-step toggle the learner sets, stored in `tutorial_step_progress`. Drafts live in
-`tutorial_step_drafts`, keyed by profile and step, and autosave debounced so a keystroke is not a
-write.
+Completion is stored locally per profile and step in `tutorial_step_progress`. Tutorial exercises
+have no editable draft, autosave, or persisted source: the learner selects from the authored choices
+and retries in place. Lesson progress syncs remotely; tutorial-step completion remains device-local.
 
-Both are **local only**. `lesson_progress` syncs through the outbox; steps do not, because the outbox
-and the remote schema know only about lessons. A reinstall loses which exercises were finished.
-Teaching the sync path about steps is a separate change and has not been made.
+Saved shader sketches are separate profile-scoped device data. The Settings export action can write
+one sketch's exact GLSL source to a `.frag` file, but sketches and tutorial completion are not part
+of the remote account model.
 
-Saved shader sketches follow the same rule: they are profile-scoped device data, not synced course
-state. The Settings export action can write one sketch's exact GLSL source out as a `.frag` file,
-but it does not make sketches, tutorial drafts, or tutorial completion part of the remote account
-model.
+## Release workflow
+
+Authored tutorial changes are immutable course-content changes. Bump `BUNDLED_RELEASE_ID` once,
+run `npm run content:build`, and commit the regenerated
+`assets/course/bundled-course.json`. Finish with `npm run content:check` so the checked-in bundle
+is proven current.

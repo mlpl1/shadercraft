@@ -217,8 +217,26 @@
           "position": 1,
           "title": "Start with a disc",
           "brief": "The screen is empty. Fill a disc of radius 0.3 at the centre, using a signed field and a narrow smoothstep rather than a hard step, so the edge does not stair-step.",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(0.05, 0.05, 0.08, 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.3;\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = /*__SHADERCRAFT_BLANK__*/;\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "length(p) - 0.3"
+            },
+            {
+              "id": "added-radius",
+              "fragment": "length(p) + 0.3"
+            },
+            {
+              "id": "scaled-field",
+              "fragment": "length(p) * 0.3"
+            },
+            {
+              "id": "offset-centre",
+              "fragment": "length(p - vec2(0.3)) - 0.3"
+            }
+          ],
+          "correctChoiceId": "correct",
           "hint": "The field is small inside the shape, so the fill is one minus the ramp."
         },
         {
@@ -226,8 +244,26 @@
           "position": 2,
           "title": "Join a rounded box to it",
           "brief": "Add a rounded box beneath the disc and combine the two into a single shape, so where they overlap there is one continuous outline rather than two shapes drawn on top of each other.",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.3;\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat ball = length(p - vec2(0.0, 0.16)) - 0.24;\n\nfloat rounding = 0.08;\nvec2 q = abs(p - vec2(0.0, -0.16)) - (vec2(0.3, 0.16) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat d = min(ball, box);\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat ball = length(p - vec2(0.0, 0.16)) - 0.24;\n\nfloat rounding = 0.08;\nvec2 q = abs(p - vec2(0.0, -0.16)) - (vec2(0.3, 0.16) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat d = /*__SHADERCRAFT_BLANK__*/;\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "min(ball, box)"
+            },
+            {
+              "id": "intersection",
+              "fragment": "max(ball, box)"
+            },
+            {
+              "id": "sum",
+              "fragment": "ball + box"
+            },
+            {
+              "id": "difference",
+              "fragment": "max(ball, -box)"
+            }
+          ],
+          "correctChoiceId": "correct",
           "hint": "min keeps whichever surface is nearer."
         },
         {
@@ -235,8 +271,26 @@
           "position": 3,
           "title": "An outline that survives scaling",
           "brief": "Zoom the whole thing with time and give it an outline. The hand-picked edge width will not survive that, so measure a pixel instead and let the outline size itself from the field.",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat ball = length(p - vec2(0.0, 0.16)) - 0.24;\n\nfloat rounding = 0.08;\nvec2 q = abs(p - vec2(0.0, -0.16)) - (vec2(0.3, 0.16) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat d = min(ball, box);\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nfloat zoom = 1.4 + sin(iTime * 0.6) * 0.6;\nvec2 p = (uv * 2.0 - 1.0) * zoom;\np.x *= iResolution.x / iResolution.y;\n\nfloat ball = length(p - vec2(0.0, 0.16)) - 0.24;\n\nfloat rounding = 0.08;\nvec2 q = abs(p - vec2(0.0, -0.16)) - (vec2(0.3, 0.16) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat d = min(ball, box);\nfloat w = fwidth(d);\n\nfloat fill = 1.0 - smoothstep(-w, w, d);\nfloat outline = 1.0 - smoothstep(w, w * 3.0, abs(d + 0.02));\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.16, 0.34, 0.5), fill);\ncolour = mix(colour, vec3(0.55, 0.86, 1.0), outline);\n\nfragColor = vec4(colour, 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nfloat zoom = 1.4 + sin(iTime * 0.6) * 0.6;\nvec2 p = (uv * 2.0 - 1.0) * zoom;\np.x *= iResolution.x / iResolution.y;\n\nfloat ball = length(p - vec2(0.0, 0.16)) - 0.24;\n\nfloat rounding = 0.08;\nvec2 q = abs(p - vec2(0.0, -0.16)) - (vec2(0.3, 0.16) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat d = min(ball, box);\nfloat w = /*__SHADERCRAFT_BLANK__*/;\n\nfloat fill = 1.0 - smoothstep(-w, w, d);\nfloat outline = 1.0 - smoothstep(w, w * 3.0, abs(d + 0.02));\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.16, 0.34, 0.5), fill);\ncolour = mix(colour, vec3(0.55, 0.86, 1.0), outline);\n\nfragColor = vec4(colour, 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "fwidth(d)"
+            },
+            {
+              "id": "fixed-width",
+              "fragment": "0.01"
+            },
+            {
+              "id": "zoom-derivative",
+              "fragment": "fwidth(zoom)"
+            },
+            {
+              "id": "scaled-gradient",
+              "fragment": "length(vec2(dFdx(d), dFdy(d))) * zoom"
+            }
+          ],
+          "correctChoiceId": "correct",
           "hint": "fwidth answers how far one pixel is, in the field's own units."
         }
       ]

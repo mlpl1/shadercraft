@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import bundledCourse from "../../assets/course/bundled-course.json";
 import { Colors, Spacing } from "../constants/theme";
+import { fillTutorialTemplate } from "../data/course/tutorial-exercise";
 import type { CourseModule } from "../data/course/types";
 import { ShaderProgramHost } from "../shaders/shader-program-host";
 
@@ -13,7 +14,7 @@ import { ShaderProgramHost } from "../shaders/shader-program-host";
  *
  * This exists because a lesson stage that fails to compile is invisible: `LessonStageBlock` passes
  * no `onCompileResult`, so a broken stage renders as an empty preview and logs nothing — identical
- * to one that simply has not drawn yet. Checking 149 sources by eye is both slow and unreliable, and
+ * to one that simply has not drawn yet. Checking every release source by eye is slow and unreliable, and
  * nothing before this ever compiled a single one of them outside a device.
  *
  * One context and one `ShaderProgramHost` for the whole sweep, reused across every source. Nothing
@@ -23,7 +24,7 @@ type Failure = { id: string; kind: string; line: number | null; message: string 
 
 type Source = { id: string; kind: string; source: string; helpers?: string };
 
-function collectSources(modules: CourseModule[]): Source[] {
+export function collectSources(modules: CourseModule[]): Source[] {
   const sources: Source[] = [];
 
   for (const module of modules) {
@@ -34,20 +35,15 @@ function collectSources(modules: CourseModule[]): Source[] {
     }
     for (const tutorial of module.tutorials ?? []) {
       for (const step of tutorial.steps) {
-        // Both sources compile on device: the starter seeds the editor, and the solution is what
-        // draws the target preview beside it.
-        sources.push({
-          id: step.id,
-          kind: "starter",
-          source: step.starterSource,
-          helpers: step.helpers,
-        });
-        sources.push({
-          id: step.id,
-          kind: "solution",
-          source: step.solutionSource,
-          helpers: step.helpers,
-        });
+        // Every authored option can reach the learner preview, so audit all four substitutions.
+        for (const choice of step.answerChoices) {
+          sources.push({
+            id: step.id,
+            kind: `choice:${choice.id}`,
+            source: fillTutorialTemplate(step.sourceTemplate, choice.fragment),
+            helpers: step.helpers,
+          });
+        }
       }
     }
   }

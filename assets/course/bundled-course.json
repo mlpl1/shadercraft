@@ -1,6 +1,6 @@
 {
-  "checksum": "366224ec77902da0e4a23d4b94254639843a6166d59d8102f8a8287068a216c9",
-  "id": "bundled-2026-08-11-20",
+  "checksum": "ed89cd19431c23ca3378b5fd2ba1a9472b736b2e32bc2c23e3e5a35e02b68758",
+  "id": "bundled-2026-08-28-21",
   "minimumAppVersion": "1.0.0",
   "modules": [
     {
@@ -220,30 +220,84 @@
           "position": 1,
           "steps": [
             {
+              "answerChoices": [
+                {
+                  "fragment": "uv.x",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "uv.y",
+                  "id": "vertical"
+                },
+                {
+                  "fragment": "1.0 - uv.x",
+                  "id": "reversed"
+                },
+                {
+                  "fragment": "0.5",
+                  "id": "constant"
+                }
+              ],
               "brief": "The screen is one flat red. Make the red channel follow uv.x instead of sitting at a constant, so the left edge comes out black and the right edge full red.",
+              "correctChoiceId": "correct",
               "hint": "uv.x already runs 0 to 1 across the width.",
               "id": "paint-by-position-ramp",
               "position": 1,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(uv.x, 0.0, 0.0, 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(1.0, 0.0, 0.0, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(/*__SHADERCRAFT_BLANK__*/, 0.0, 0.0, 1.0);",
               "title": "A horizontal ramp"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "uv.x, uv.y, 0.25, 1.0",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "uv.y, uv.x, 0.25, 1.0",
+                  "id": "swapped-axes"
+                },
+                {
+                  "fragment": "uv.x, 0.25, 0.0, 1.0",
+                  "id": "flat-green"
+                },
+                {
+                  "fragment": "uv.x, 0.0, uv.y, 1.0",
+                  "id": "blue-axis"
+                }
+              ],
               "brief": "Add the vertical axis to the green channel as well, so the four corners land on four different colours and the picture reads as a two-dimensional field rather than a stripe.",
+              "correctChoiceId": "correct",
               "hint": "The blue channel can stay a constant.",
               "id": "paint-by-position-both",
               "position": 2,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(uv.x, uv.y, 0.25, 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(uv.x, 0.0, 0.0, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(/*__SHADERCRAFT_BLANK__*/);",
               "title": "Both axes at once"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "vec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\nfloat disc = 1.0 - step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "vec2 p = uv;\n\nfloat d = length(p);\nfloat disc = 1.0 - step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);",
+                  "id": "uncentred"
+                },
+                {
+                  "fragment": "vec2 p = uv * 2.0 - 1.0;\n\nfloat d = length(p);\nfloat disc = 1.0 - step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);",
+                  "id": "uncorrected-aspect"
+                },
+                {
+                  "fragment": "vec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\nfloat disc = step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);",
+                  "id": "reversed-mask"
+                }
+              ],
               "brief": "Centre the coordinate, correct for the aspect ratio, and paint the distance from the middle as a grey — then cut everything past a distance of 0.75 to black with step, so the shape gets a hard edge instead of fading out. Check the silhouette you are left with: it should be a disc exactly as wide as it is tall, reaching three quarters of the way to the top and bottom.",
+              "correctChoiceId": "correct",
               "hint": "step(0.75, d) is 1 past that distance and 0 inside it, so 1.0 - step(0.75, d) is the mask you want. Leave the aspect line out and the disc comes out stretched sideways on a wide preview — and unchanged on one that happens to be square, which is why the correction is written from iResolution rather than from a number.",
               "id": "paint-by-position-radial",
               "position": 3,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\nfloat disc = 1.0 - step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(uv.x, uv.y, 0.25, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n/*__SHADERCRAFT_BLANK__*/",
               "title": "Distance from the middle"
             }
           ],
@@ -469,30 +523,84 @@
           "position": 1,
           "steps": [
             {
+              "answerChoices": [
+                {
+                  "fragment": "step(0.5, uv.x)",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "step(uv.x, 0.5)",
+                  "id": "reversed-arguments"
+                },
+                {
+                  "fragment": "step(0.5, uv.y)",
+                  "id": "vertical"
+                },
+                {
+                  "fragment": "1.0 - step(0.5, uv.x)",
+                  "id": "inverted"
+                }
+              ],
               "brief": "A plain horizontal ramp is on screen. Replace it with a hard split at the halfway point, black on the left and white on the right, using the function that has exactly one threshold.",
+              "correctChoiceId": "correct",
               "hint": "step takes the threshold first and the value second.",
               "id": "a-travelling-band-hard",
               "position": 1,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = step(0.5, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(vec3(uv.x), 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = /*__SHADERCRAFT_BLANK__*/;\n\nfragColor = vec4(vec3(band), 1.0);",
               "title": "Cut it in two"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "smoothstep(0.38, 0.42, uv.x) - smoothstep(0.58, 0.62, uv.x)",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "smoothstep(0.38, 0.42, uv.x) + smoothstep(0.58, 0.62, uv.x)",
+                  "id": "added-ramps"
+                },
+                {
+                  "fragment": "smoothstep(0.58, 0.62, uv.x) - smoothstep(0.38, 0.42, uv.x)",
+                  "id": "reversed-subtraction"
+                },
+                {
+                  "fragment": "step(0.38, uv.x) - step(0.62, uv.x)",
+                  "id": "hard-edges"
+                }
+              ],
               "brief": "One threshold makes an edge; two make a band. Build a stripe roughly a fifth of the screen wide by subtracting one soft ramp from another, so the band has a soft edge on each side.",
+              "correctChoiceId": "correct",
               "hint": "Subtracting a later ramp from an earlier one leaves the gap between them.",
               "id": "a-travelling-band-soft",
               "position": 2,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = smoothstep(0.38, 0.42, uv.x) - smoothstep(0.58, 0.62, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = step(0.5, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = /*__SHADERCRAFT_BLANK__*/;\n\nfragColor = vec4(vec3(band), 1.0);",
               "title": "Give it two edges"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "float centre = 0.5 + sin(iTime) * 0.3;\nfloat band = smoothstep(centre - 0.12, centre - 0.08, uv.x)\n           - smoothstep(centre + 0.08, centre + 0.12, uv.x);",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "float centre = sin(iTime) * 0.3;\nfloat band = smoothstep(centre - 0.12, centre - 0.08, uv.x)\n           - smoothstep(centre + 0.08, centre + 0.12, uv.x);",
+                  "id": "off-centre"
+                },
+                {
+                  "fragment": "float centre = 0.5 + sin(iTime * 0.3);\nfloat band = smoothstep(centre - 0.12, centre - 0.08, uv.x)\n           - smoothstep(centre + 0.08, centre + 0.12, uv.x);",
+                  "id": "overshoots"
+                },
+                {
+                  "fragment": "float centre = 0.5;\nfloat width = 0.12 + sin(iTime) * 0.3;\nfloat band = smoothstep(centre - width, centre - 0.08, uv.x)\n           - smoothstep(centre + 0.08, centre + width, uv.x);",
+                  "id": "moving-width"
+                }
+              ],
               "brief": "Slide the band from side to side by driving its centre from time, keeping its width fixed. Write the centre once and build both thresholds from it rather than animating four numbers.",
+              "correctChoiceId": "correct",
               "hint": "sin(iTime) runs between minus one and one.",
               "id": "a-travelling-band-moving",
               "position": 3,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat centre = 0.5 + sin(iTime) * 0.3;\nfloat band = smoothstep(centre - 0.12, centre - 0.08, uv.x)\n           - smoothstep(centre + 0.08, centre + 0.12, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = smoothstep(0.38, 0.42, uv.x) - smoothstep(0.58, 0.62, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(vec3(band), 1.0);",
               "title": "Set it moving"
             }
           ],
@@ -714,30 +822,84 @@
           "position": 1,
           "steps": [
             {
+              "answerChoices": [
+                {
+                  "fragment": "length(p) - 0.3",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "length(p) + 0.3",
+                  "id": "added-radius"
+                },
+                {
+                  "fragment": "length(p) * 0.3",
+                  "id": "scaled-field"
+                },
+                {
+                  "fragment": "length(p - vec2(0.3)) - 0.3",
+                  "id": "offset-centre"
+                }
+              ],
               "brief": "The screen is empty. Fill a disc of radius 0.3 at the centre, using a signed field and a narrow smoothstep rather than a hard step, so the edge does not stair-step.",
+              "correctChoiceId": "correct",
               "hint": "The field is small inside the shape, so the fill is one minus the ramp.",
               "id": "a-rounded-badge-circle",
               "position": 1,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.3;\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(0.05, 0.05, 0.08, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = /*__SHADERCRAFT_BLANK__*/;\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
               "title": "Start with a disc"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "min(ball, box)",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "max(ball, box)",
+                  "id": "intersection"
+                },
+                {
+                  "fragment": "ball + box",
+                  "id": "sum"
+                },
+                {
+                  "fragment": "max(ball, -box)",
+                  "id": "difference"
+                }
+              ],
               "brief": "Add a rounded box beneath the disc and combine the two into a single shape, so where they overlap there is one continuous outline rather than two shapes drawn on top of each other.",
+              "correctChoiceId": "correct",
               "hint": "min keeps whichever surface is nearer.",
               "id": "a-rounded-badge-union",
               "position": 2,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat ball = length(p - vec2(0.0, 0.16)) - 0.24;\n\nfloat rounding = 0.08;\nvec2 q = abs(p - vec2(0.0, -0.16)) - (vec2(0.3, 0.16) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat d = min(ball, box);\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - 0.3;\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat ball = length(p - vec2(0.0, 0.16)) - 0.24;\n\nfloat rounding = 0.08;\nvec2 q = abs(p - vec2(0.0, -0.16)) - (vec2(0.3, 0.16) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat d = /*__SHADERCRAFT_BLANK__*/;\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
               "title": "Join a rounded box to it"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "fwidth(d)",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "0.01",
+                  "id": "fixed-width"
+                },
+                {
+                  "fragment": "fwidth(zoom)",
+                  "id": "zoom-derivative"
+                },
+                {
+                  "fragment": "length(vec2(dFdx(d), dFdy(d))) * zoom",
+                  "id": "scaled-gradient"
+                }
+              ],
               "brief": "Zoom the whole thing with time and give it an outline. The hand-picked edge width will not survive that, so measure a pixel instead and let the outline size itself from the field.",
+              "correctChoiceId": "correct",
               "hint": "fwidth answers how far one pixel is, in the field's own units.",
               "id": "a-rounded-badge-outline",
               "position": 3,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nfloat zoom = 1.4 + sin(iTime * 0.6) * 0.6;\nvec2 p = (uv * 2.0 - 1.0) * zoom;\np.x *= iResolution.x / iResolution.y;\n\nfloat ball = length(p - vec2(0.0, 0.16)) - 0.24;\n\nfloat rounding = 0.08;\nvec2 q = abs(p - vec2(0.0, -0.16)) - (vec2(0.3, 0.16) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat d = min(ball, box);\nfloat w = fwidth(d);\n\nfloat fill = 1.0 - smoothstep(-w, w, d);\nfloat outline = 1.0 - smoothstep(w, w * 3.0, abs(d + 0.02));\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.16, 0.34, 0.5), fill);\ncolour = mix(colour, vec3(0.55, 0.86, 1.0), outline);\n\nfragColor = vec4(colour, 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat ball = length(p - vec2(0.0, 0.16)) - 0.24;\n\nfloat rounding = 0.08;\nvec2 q = abs(p - vec2(0.0, -0.16)) - (vec2(0.3, 0.16) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat d = min(ball, box);\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nfloat zoom = 1.4 + sin(iTime * 0.6) * 0.6;\nvec2 p = (uv * 2.0 - 1.0) * zoom;\np.x *= iResolution.x / iResolution.y;\n\nfloat ball = length(p - vec2(0.0, 0.16)) - 0.24;\n\nfloat rounding = 0.08;\nvec2 q = abs(p - vec2(0.0, -0.16)) - (vec2(0.3, 0.16) - rounding);\nfloat box = length(max(q, 0.0)) - rounding;\n\nfloat d = min(ball, box);\nfloat w = /*__SHADERCRAFT_BLANK__*/;\n\nfloat fill = 1.0 - smoothstep(-w, w, d);\nfloat outline = 1.0 - smoothstep(w, w * 3.0, abs(d + 0.02));\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.16, 0.34, 0.5), fill);\ncolour = mix(colour, vec3(0.55, 0.86, 1.0), outline);\n\nfragColor = vec4(colour, 1.0);",
               "title": "An outline that survives scaling"
             }
           ],
@@ -920,30 +1082,84 @@
           "position": 1,
           "steps": [
             {
+              "answerChoices": [
+                {
+                  "fragment": "mix(warm, cool, uv.y)",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "mix(cool, warm, uv.y)",
+                  "id": "reversed-colours"
+                },
+                {
+                  "fragment": "mix(warm, cool, uv.x)",
+                  "id": "horizontal"
+                },
+                {
+                  "fragment": "mix(warm, cool, step(0.5, uv.y))",
+                  "id": "hard-split"
+                }
+              ],
               "brief": "The screen is a flat grey. Blend a warm horizon colour into a deep blue going upward, so the bottom of the frame is warm and the top is cool.",
+              "correctChoiceId": "correct",
               "hint": "uv.y is zero at the bottom of the screen.",
               "id": "a-sky-gradient-two",
               "position": 1,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = mix(warm, cool, uv.y);\n\nfragColor = vec4(colour, 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(0.5, 0.5, 0.5, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = /*__SHADERCRAFT_BLANK__*/;\n\nfragColor = vec4(colour, 1.0);",
               "title": "Two colours, top to bottom"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "vec3 colour = mix(warm, pale, smoothstep(0.0, 0.25, uv.y));\ncolour = mix(colour, cool, smoothstep(0.25, 0.9, uv.y));",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "vec3 colour = mix(warm, cool, smoothstep(0.0, 0.25, uv.y));\ncolour = mix(colour, pale, smoothstep(0.25, 0.9, uv.y));",
+                  "id": "pale-on-top"
+                },
+                {
+                  "fragment": "vec3 colour = mix(warm, pale, smoothstep(0.0, 0.25, uv.y));\ncolour = mix(colour, cool, smoothstep(0.0, 0.25, uv.y));",
+                  "id": "same-window"
+                },
+                {
+                  "fragment": "vec3 colour = mix(warm, pale, step(0.25, uv.y));\ncolour = mix(colour, cool, step(0.9, uv.y));",
+                  "id": "hard-stops"
+                }
+              ],
               "brief": "mix only ever takes two colours, so reach a third by mixing again over the result. Put a pale band low in the frame and let the deep blue take over above it.",
+              "correctChoiceId": "correct",
               "hint": "Each smoothstep is flat outside its own window, so the two never fight.",
               "id": "a-sky-gradient-three",
               "position": 2,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 pale = vec3(0.99, 0.86, 0.62);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = mix(warm, pale, smoothstep(0.0, 0.25, uv.y));\ncolour = mix(colour, cool, smoothstep(0.25, 0.9, uv.y));\n\nfragColor = vec4(colour, 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = mix(warm, cool, uv.y);\n\nfragColor = vec4(colour, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 pale = vec3(0.99, 0.86, 0.62);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(colour, 1.0);",
               "title": "A third stop"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "vec3 a = vec3(0.5);\nvec3 b = vec3(0.45);\nvec3 c = vec3(0.6);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.05;\n\nvec3 colour = a + b * cos(6.28318 * (c * uv.y + phase));",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "vec3 a = vec3(0.5);\nvec3 b = vec3(0.45);\nvec3 c = vec3(0.6);\nvec3 phase = vec3(0.0) + iTime * 0.05;\n\nvec3 colour = a + b * cos(6.28318 * (c * uv.y + phase));",
+                  "id": "shared-phase"
+                },
+                {
+                  "fragment": "vec3 a = vec3(0.5);\nvec3 b = vec3(0.45);\nvec3 c = vec3(0.6);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.05;\n\nvec3 colour = a + cos(6.28318 * (c * uv.y + phase));",
+                  "id": "unscaled-cosine"
+                },
+                {
+                  "fragment": "vec3 a = vec3(0.5);\nvec3 b = vec3(0.45);\nvec3 c = vec3(0.6);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.05;\n\nvec3 colour = a + b * cos(6.28318 * c * uv.y) + phase;",
+                  "id": "phase-outside-wave"
+                }
+              ],
               "brief": "Three named colours is a list you have to maintain. Swap the whole thing for a cosine palette driven by height, and drift its phase with time so the sky slowly changes.",
+              "correctChoiceId": "correct",
               "hint": "The phase vector is what turns three identical waves into a spectrum.",
               "id": "a-sky-gradient-palette",
               "position": 3,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 a = vec3(0.5);\nvec3 b = vec3(0.45);\nvec3 c = vec3(0.6);\nvec3 phase = vec3(0.0, 0.67, 0.33) + iTime * 0.05;\n\nvec3 colour = a + b * cos(6.28318 * (c * uv.y + phase));\n\nfragColor = vec4(colour, 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nvec3 warm = vec3(0.85, 0.52, 0.38);\nvec3 pale = vec3(0.99, 0.86, 0.62);\nvec3 cool = vec3(0.09, 0.13, 0.32);\n\nvec3 colour = mix(warm, pale, smoothstep(0.0, 0.25, uv.y));\ncolour = mix(colour, cool, smoothstep(0.25, 0.9, uv.y));\n\nfragColor = vec4(colour, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(colour, 1.0);",
               "title": "Replace the list with a function"
             }
           ],
@@ -1165,30 +1381,84 @@
           "position": 1,
           "steps": [
             {
+              "answerChoices": [
+                {
+                  "fragment": "fract(p * 3.0) - 0.5",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "fract(p * 3.0)",
+                  "id": "uncentred-cell"
+                },
+                {
+                  "fragment": "floor(p * 3.0) - 0.5",
+                  "id": "cell-id"
+                },
+                {
+                  "fragment": "fract(p) * 3.0 - 0.5",
+                  "id": "scaled-after-fold"
+                }
+              ],
               "brief": "One rounded box sits in the middle. Fold the coordinate so it repeats across the screen instead, with the shape centred inside each cell rather than straddling the boundaries.",
+              "correctChoiceId": "correct",
               "hint": "Subtracting a half after the fold puts the origin in the middle of each cell.",
               "id": "a-grid-that-turns-tile",
               "position": 1,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 q = abs(p) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = /*__SHADERCRAFT_BLANK__*/;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
               "title": "Fold the plane"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "float angle = iTime * 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "float angle = iTime * 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = cell * mat2(c, s, -s, c);",
+                  "id": "row-vector"
+                },
+                {
+                  "fragment": "float angle = iTime * 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, s, c) * cell;",
+                  "id": "shear"
+                },
+                {
+                  "fragment": "float angle = 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;",
+                  "id": "fixed-angle"
+                }
+              ],
               "brief": "Rotate the local coordinate inside each cell so the boxes sit at an angle. Because the fold already centred each cell, they will spin in place rather than swinging around a corner.",
+              "correctChoiceId": "correct",
               "hint": "GLSL fills a matrix column by column.",
               "id": "a-grid-that-turns-rotate",
               "position": 2,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nfloat angle = iTime * 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\n/*__SHADERCRAFT_BLANK__*/\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
               "title": "Turn every cell"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "vec2 scaled = p * 3.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat angle = iTime * 0.6 + (id.x + id.y) * 0.7;",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "vec2 scaled = p * 3.0;\nvec2 id = fract(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat angle = iTime * 0.6 + (id.x + id.y) * 0.7;",
+                  "id": "fractional-id"
+                },
+                {
+                  "fragment": "vec2 scaled = p * 3.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(p) - 0.5;\n\nfloat angle = iTime * 0.6 + (id.x + id.y) * 0.7;",
+                  "id": "lost-scale"
+                },
+                {
+                  "fragment": "vec2 scaled = p * 3.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat angle = iTime * 0.6 + (id.x - id.x) * 0.7;",
+                  "id": "lockstep"
+                }
+              ],
               "brief": "Every box turns in lockstep, because every cell runs the same expression. Recover the cell identity alongside the local position and use it to offset each cell's angle, so a wave travels across the grid.",
+              "correctChoiceId": "correct",
               "hint": "floor and fract of the same scaled coordinate lose nothing between them.",
               "id": "a-grid-that-turns-vary",
               "position": 3,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 scaled = p * 3.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat angle = iTime * 0.6 + (id.x + id.y) * 0.7;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nfloat angle = iTime * 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\n/*__SHADERCRAFT_BLANK__*/\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
               "title": "Give each cell its own phase"
             }
           ],
@@ -1430,33 +1700,87 @@
           "position": 1,
           "steps": [
             {
+              "answerChoices": [
+                {
+                  "fragment": "hash(floor(p * 20.0))",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "hash(p * 20.0)",
+                  "id": "per-pixel"
+                },
+                {
+                  "fragment": "hash(floor(p) * 20.0)",
+                  "id": "large-cells"
+                },
+                {
+                  "fragment": "hash(floor(p * 2.0)) * 20.0",
+                  "id": "scaled-value"
+                }
+              ],
               "brief": "The screen is flat grey. Use the hash to give every cell of a coarse grid its own unrelated value, which should look like television static rather than anything with structure.",
+              "correctChoiceId": "correct",
               "helpers": "float hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}",
               "hint": "floor first, or every pixel gets its own value.",
               "id": "a-weathered-surface-static",
               "position": 1,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = hash(floor(p * 20.0));\n\nfragColor = vec4(vec3(n), 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(vec3(0.5), 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = /*__SHADERCRAFT_BLANK__*/;\n\nfragColor = vec4(vec3(n), 1.0);",
               "title": "Static, one value per cell"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "fbm(p * 3.0)",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "gradientNoise(p * 3.0)",
+                  "id": "single-octave"
+                },
+                {
+                  "fragment": "fbm(floor(p * 3.0))",
+                  "id": "blocky-fbm"
+                },
+                {
+                  "fragment": "fbm(p) * 3.0",
+                  "id": "scaled-output"
+                }
+              ],
               "brief": "Static has no structure because neighbouring cells know nothing about each other. Swap the raw hash for fractal noise so nearby points agree, and the field gains features at several sizes at once.",
+              "correctChoiceId": "correct",
               "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
               "hint": "fbm sums five octaves and normalises the result.",
               "id": "a-weathered-surface-noise",
               "position": 2,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = fbm(p * 3.0);\n\nfragColor = vec4(vec3(n), 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = fract(sin(dot(floor(p * 20.0), vec2(12.9898, 78.233))) * 43758.5453);\n\nfragColor = vec4(vec3(n), 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = /*__SHADERCRAFT_BLANK__*/;\n\nfragColor = vec4(vec3(n), 1.0);",
               "title": "Make it continuous"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "vec2 base = p * 3.0;\nvec2 warp = vec2(fbm(base), fbm(base + vec2(5.2, 1.3)));\n\nfloat n = fbm(base + warp * 1.2);\nfloat wear = smoothstep(0.45, 0.58, n);\n\nvec3 metal = vec3(0.22, 0.24, 0.28);\nvec3 paint = vec3(0.82, 0.66, 0.36);\nvec3 colour = mix(metal, paint, wear);",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "vec2 base = p * 3.0;\nvec2 warp = vec2(fbm(base), fbm(base + vec2(5.2, 1.3)));\n\nfloat n = fbm(base);\nfloat wear = smoothstep(0.45, 0.58, n);\n\nvec3 metal = vec3(0.22, 0.24, 0.28);\nvec3 paint = vec3(0.82, 0.66, 0.36);\nvec3 colour = mix(metal, paint, wear);",
+                  "id": "unwarped"
+                },
+                {
+                  "fragment": "vec2 base = p * 3.0;\nvec2 warp = vec2(fbm(base), fbm(base));\n\nfloat n = fbm(base + warp * 1.2);\nfloat wear = smoothstep(0.45, 0.58, n);\n\nvec3 metal = vec3(0.22, 0.24, 0.28);\nvec3 paint = vec3(0.82, 0.66, 0.36);\nvec3 colour = mix(metal, paint, wear);",
+                  "id": "same-warp-sample"
+                },
+                {
+                  "fragment": "vec2 base = p * 3.0;\nvec2 warp = vec2(fbm(base), fbm(base + vec2(5.2, 1.3)));\n\nfloat n = fbm(base + warp * 1.2);\nfloat wear = 1.0 - smoothstep(0.45, 0.58, n);\n\nvec3 metal = vec3(0.22, 0.24, 0.28);\nvec3 paint = vec3(0.82, 0.66, 0.36);\nvec3 colour = mix(metal, paint, wear);",
+                  "id": "inverted-mask"
+                }
+              ],
               "brief": "Turn the noise into a surface. Threshold it into patches, use those as a mask between two colours, and warp the coordinate with noise first so a few of the patches pull out into long sinuous streaks.",
+              "correctChoiceId": "correct",
               "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}",
               "hint": "Sample the two warp components at different places, or everything drags one way.",
               "id": "a-weathered-surface-worn",
               "position": 3,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 base = p * 3.0;\nvec2 warp = vec2(fbm(base), fbm(base + vec2(5.2, 1.3)));\n\nfloat n = fbm(base + warp * 1.2);\nfloat wear = smoothstep(0.45, 0.58, n);\n\nvec3 metal = vec3(0.22, 0.24, 0.28);\nvec3 paint = vec3(0.82, 0.66, 0.36);\nvec3 colour = mix(metal, paint, wear);\n\nfragColor = vec4(colour, 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = fbm(p * 3.0);\n\nfragColor = vec4(vec3(n), 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(colour, 1.0);",
               "title": "Wear the paint away"
             }
           ],
@@ -1607,31 +1931,85 @@
           "position": 1,
           "steps": [
             {
+              "answerChoices": [
+                {
+                  "fragment": "vec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "vec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.x));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));",
+                  "id": "horizontal-gradient"
+                },
+                {
+                  "fragment": "vec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, smoothstep(0.5, 1.25, length(p)));",
+                  "id": "bright-edges"
+                },
+                {
+                  "fragment": "vec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour += vec3(mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p))));",
+                  "id": "added-vignette"
+                }
+              ],
               "brief": "Build the ground everything else sits on: a vertical gradient from warm at the bottom to deep blue at the top, then a vignette that darkens the picture with distance from the centre, so the frame has a middle rather than reading flat.",
+              "correctChoiceId": "correct",
               "hint": "A vignette is the radial field from Module 3 used as a multiplier.",
               "id": "a-lit-horizon-sky",
               "position": 1,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfragColor = vec4(colour, 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(0.1, 0.12, 0.2, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(colour, 1.0);",
               "title": "Background first"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "float sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "float sun = length(p + vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));",
+                  "id": "wrong-centre"
+                },
+                {
+                  "fragment": "float sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);",
+                  "id": "halo-over-disc"
+                },
+                {
+                  "fragment": "float sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), smoothstep(-fwidth(sun), fwidth(sun), sun));",
+                  "id": "inverted-disc"
+                }
+              ],
               "brief": "Add a sun: a disc centred a little above the middle of the frame and slightly to its left, with a broad halo drawn underneath it so the glow sits behind the crisp edge rather than washing over it.",
+              "correctChoiceId": "correct",
               "hint": "Layer order is what puts the halo behind the disc.",
               "id": "a-lit-horizon-sun",
               "position": 2,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));\n\nfragColor = vec4(colour, 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfragColor = vec4(colour, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(colour, 1.0);",
               "title": "The subject"
             },
             {
+              "answerChoices": [
+                {
+                  "fragment": "float height = -0.3 + (fbm(vec2(p.x * 3.0 + 4.0, 1.7)) - 0.5) * 1.3;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), 1.0 - smoothstep(-fwidth(ground), fwidth(ground), ground));\n\ncolour = mix(colour, vec3(0.95, 0.7, 0.55), (1.0 - smoothstep(0.0, 0.2, abs(ground))) * 0.25);\ncolour += (hash(floor(fragCoord)) - 0.5) * 0.03;",
+                  "id": "correct"
+                },
+                {
+                  "fragment": "float height = -0.3 + (fbm(p * 3.0 + vec2(4.0)) - 0.5) * 1.3;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), 1.0 - smoothstep(-fwidth(ground), fwidth(ground), ground));\n\ncolour = mix(colour, vec3(0.95, 0.7, 0.55), (1.0 - smoothstep(0.0, 0.2, abs(ground))) * 0.25);\ncolour += (hash(floor(fragCoord)) - 0.5) * 0.03;",
+                  "id": "two-dimensional-height"
+                },
+                {
+                  "fragment": "float height = -0.3 + (fbm(vec2(p.x * 3.0 + 4.0, 1.7)) - 0.5) * 1.3;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), smoothstep(-fwidth(ground), fwidth(ground), ground));\n\ncolour = mix(colour, vec3(0.95, 0.7, 0.55), (1.0 - smoothstep(0.0, 0.2, abs(ground))) * 0.25);\ncolour += (hash(floor(fragCoord)) - 0.5) * 0.03;",
+                  "id": "inverted-ground"
+                },
+                {
+                  "fragment": "float height = -0.3 + (fbm(vec2(p.x * 3.0 + 4.0, 1.7)) - 0.5) * 1.3;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), 1.0 - smoothstep(-fwidth(ground), fwidth(ground), ground));\n\ncolour = mix(colour, vec3(0.95, 0.7, 0.55), (1.0 - smoothstep(0.0, 0.2, abs(ground))) * 0.25);\ncolour += (hash(fragCoord) - 0.5) * 0.03;",
+                  "id": "smooth-grain"
+                }
+              ],
               "brief": "Add a noise horizon so the sky has something to end against, then the layers nobody notices: haze where land meets sky, and a little grain to break up the perfectly smooth gradient.",
+              "correctChoiceId": "correct",
               "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}\n\nfloat hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}",
               "hint": "A line through two-dimensional noise travels far less than the field does.",
               "id": "a-lit-horizon-ground",
               "position": 3,
-              "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));\n\nfloat height = -0.3 + (fbm(vec2(p.x * 3.0 + 4.0, 1.7)) - 0.5) * 1.3;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), 1.0 - smoothstep(-fwidth(ground), fwidth(ground), ground));\n\ncolour = mix(colour, vec3(0.95, 0.7, 0.55), (1.0 - smoothstep(0.0, 0.2, abs(ground))) * 0.25);\ncolour += (hash(floor(fragCoord)) - 0.5) * 0.03;\n\nfragColor = vec4(clamp(colour, 0.0, 1.0), 1.0);",
-              "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));\n\nfragColor = vec4(colour, 1.0);",
+              "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(clamp(colour, 0.0, 1.0), 1.0);",
               "title": "Ground it, then finish it"
             }
           ],

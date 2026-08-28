@@ -146,8 +146,26 @@
           "position": 1,
           "title": "Background first",
           "brief": "Build the ground everything else sits on: a vertical gradient from warm at the bottom to deep blue at the top, then a vignette that darkens the picture with distance from the centre, so the frame has a middle rather than reading flat.",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfragColor = vec4(0.1, 0.12, 0.2, 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfragColor = vec4(colour, 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(colour, 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "vec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));"
+            },
+            {
+              "id": "horizontal-gradient",
+              "fragment": "vec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.x));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));"
+            },
+            {
+              "id": "bright-edges",
+              "fragment": "vec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, smoothstep(0.5, 1.25, length(p)));"
+            },
+            {
+              "id": "added-vignette",
+              "fragment": "vec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour += vec3(mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p))));"
+            }
+          ],
+          "correctChoiceId": "correct",
           "hint": "A vignette is the radial field from Module 3 used as a multiplier."
         },
         {
@@ -155,8 +173,26 @@
           "position": 2,
           "title": "The subject",
           "brief": "Add a sun: a disc centred a little above the middle of the frame and slightly to its left, with a broad halo drawn underneath it so the glow sits behind the crisp edge rather than washing over it.",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfragColor = vec4(colour, 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));\n\nfragColor = vec4(colour, 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(colour, 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "float sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));"
+            },
+            {
+              "id": "wrong-centre",
+              "fragment": "float sun = length(p + vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));"
+            },
+            {
+              "id": "halo-over-disc",
+              "fragment": "float sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);"
+            },
+            {
+              "id": "inverted-disc",
+              "fragment": "float sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), smoothstep(-fwidth(sun), fwidth(sun), sun));"
+            }
+          ],
+          "correctChoiceId": "correct",
           "hint": "Layer order is what puts the halo behind the disc."
         },
         {
@@ -164,9 +200,27 @@
           "position": 3,
           "title": "Ground it, then finish it",
           "brief": "Add a noise horizon so the sky has something to end against, then the layers nobody notices: haze where land meets sky, and a little grain to break up the perfectly smooth gradient.",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(clamp(colour, 0.0, 1.0), 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "float height = -0.3 + (fbm(vec2(p.x * 3.0 + 4.0, 1.7)) - 0.5) * 1.3;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), 1.0 - smoothstep(-fwidth(ground), fwidth(ground), ground));\n\ncolour = mix(colour, vec3(0.95, 0.7, 0.55), (1.0 - smoothstep(0.0, 0.2, abs(ground))) * 0.25);\ncolour += (hash(floor(fragCoord)) - 0.5) * 0.03;"
+            },
+            {
+              "id": "two-dimensional-height",
+              "fragment": "float height = -0.3 + (fbm(p * 3.0 + vec2(4.0)) - 0.5) * 1.3;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), 1.0 - smoothstep(-fwidth(ground), fwidth(ground), ground));\n\ncolour = mix(colour, vec3(0.95, 0.7, 0.55), (1.0 - smoothstep(0.0, 0.2, abs(ground))) * 0.25);\ncolour += (hash(floor(fragCoord)) - 0.5) * 0.03;"
+            },
+            {
+              "id": "inverted-ground",
+              "fragment": "float height = -0.3 + (fbm(vec2(p.x * 3.0 + 4.0, 1.7)) - 0.5) * 1.3;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), smoothstep(-fwidth(ground), fwidth(ground), ground));\n\ncolour = mix(colour, vec3(0.95, 0.7, 0.55), (1.0 - smoothstep(0.0, 0.2, abs(ground))) * 0.25);\ncolour += (hash(floor(fragCoord)) - 0.5) * 0.03;"
+            },
+            {
+              "id": "smooth-grain",
+              "fragment": "float height = -0.3 + (fbm(vec2(p.x * 3.0 + 4.0, 1.7)) - 0.5) * 1.3;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), 1.0 - smoothstep(-fwidth(ground), fwidth(ground), ground));\n\ncolour = mix(colour, vec3(0.95, 0.7, 0.55), (1.0 - smoothstep(0.0, 0.2, abs(ground))) * 0.25);\ncolour += (hash(fragCoord) - 0.5) * 0.03;"
+            }
+          ],
+          "correctChoiceId": "correct",
           "helpers": "vec2 hash2(vec2 p) {\n  float n = sin(dot(p, vec2(41.0, 289.0)));\n  return fract(vec2(262144.0, 32768.0) * n) * 2.0 - 1.0;\n}\n\nfloat gradientNoise(vec2 p) {\n  vec2 i = floor(p);\n  vec2 f = fract(p);\n  vec2 w = f * f * (3.0 - 2.0 * f);\n  float a = dot(hash2(i), f);\n  float b = dot(hash2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n  float c = dot(hash2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n  float d = dot(hash2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 0.5 + 0.5;\n}\n\nfloat fbm(vec2 p) {\n  float total = 0.0;\n  float amplitude = 0.5;\n  float weight = 0.0;\n  for (int i = 0; i < 5; i++) {\n    total += gradientNoise(p) * amplitude;\n    weight += amplitude;\n    p = p * 2.0;\n    amplitude = amplitude * 0.5;\n  }\n  return total / weight;\n}\n\nfloat hash(vec2 p) {\n  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);\n}",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));\n\nfragColor = vec4(colour, 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec3 colour = mix(vec3(0.88, 0.5, 0.34), vec3(0.07, 0.11, 0.3), smoothstep(0.0, 0.85, uv.y));\ncolour *= mix(0.55, 1.0, 1.0 - smoothstep(0.5, 1.25, length(p)));\n\nfloat sun = length(p - vec2(-0.18, 0.1)) - 0.15;\ncolour = mix(colour, vec3(1.0, 0.78, 0.45), (1.0 - smoothstep(0.0, 0.7, sun)) * 0.45);\ncolour = mix(colour, vec3(1.0, 0.95, 0.82), 1.0 - smoothstep(-fwidth(sun), fwidth(sun), sun));\n\nfloat height = -0.3 + (fbm(vec2(p.x * 3.0 + 4.0, 1.7)) - 0.5) * 1.3;\nfloat ground = p.y - height;\ncolour = mix(colour, vec3(0.04, 0.04, 0.08), 1.0 - smoothstep(-fwidth(ground), fwidth(ground), ground));\n\ncolour = mix(colour, vec3(0.95, 0.7, 0.55), (1.0 - smoothstep(0.0, 0.2, abs(ground))) * 0.25);\ncolour += (hash(floor(fragCoord)) - 0.5) * 0.03;\n\nfragColor = vec4(clamp(colour, 0.0, 1.0), 1.0);",
           "hint": "A line through two-dimensional noise travels far less than the field does."
         }
       ]

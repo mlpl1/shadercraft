@@ -217,8 +217,26 @@
           "position": 1,
           "title": "Fold the plane",
           "brief": "One rounded box sits in the middle. Fold the coordinate so it repeats across the screen instead, with the shape centred inside each cell rather than straddling the boundaries.",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 q = abs(p) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = /*__SHADERCRAFT_BLANK__*/;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "fract(p * 3.0) - 0.5"
+            },
+            {
+              "id": "uncentred-cell",
+              "fragment": "fract(p * 3.0)"
+            },
+            {
+              "id": "cell-id",
+              "fragment": "floor(p * 3.0) - 0.5"
+            },
+            {
+              "id": "scaled-after-fold",
+              "fragment": "fract(p) * 3.0 - 0.5"
+            }
+          ],
+          "correctChoiceId": "correct",
           "hint": "Subtracting a half after the fold puts the origin in the middle of each cell."
         },
         {
@@ -226,8 +244,26 @@
           "position": 2,
           "title": "Turn every cell",
           "brief": "Rotate the local coordinate inside each cell so the boxes sit at an angle. Because the fold already centred each cell, they will spin in place rather than swinging around a corner.",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nfloat angle = iTime * 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\n/*__SHADERCRAFT_BLANK__*/\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "float angle = iTime * 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;"
+            },
+            {
+              "id": "row-vector",
+              "fragment": "float angle = iTime * 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = cell * mat2(c, s, -s, c);"
+            },
+            {
+              "id": "shear",
+              "fragment": "float angle = iTime * 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, s, c) * cell;"
+            },
+            {
+              "id": "fixed-angle",
+              "fragment": "float angle = 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;"
+            }
+          ],
+          "correctChoiceId": "correct",
           "hint": "GLSL fills a matrix column by column."
         },
         {
@@ -235,8 +271,26 @@
           "position": 3,
           "title": "Give each cell its own phase",
           "brief": "Every box turns in lockstep, because every cell runs the same expression. Recover the cell identity alongside the local position and use it to offset each cell's angle, so a wave travels across the grid.",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 cell = fract(p * 3.0) - 0.5;\n\nfloat angle = iTime * 0.6;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 scaled = p * 3.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat angle = iTime * 0.6 + (id.x + id.y) * 0.7;\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\n/*__SHADERCRAFT_BLANK__*/\nfloat c = cos(angle);\nfloat s = sin(angle);\ncell = mat2(c, s, -s, c) * cell;\n\nvec2 q = abs(cell) - vec2(0.22, 0.14);\nfloat d = length(max(q, 0.0)) - 0.05;\n\nfloat w = fwidth(d);\nfloat fill = 1.0 - smoothstep(-w, w, d);\n\nfragColor = vec4(vec3(fill), 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "vec2 scaled = p * 3.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat angle = iTime * 0.6 + (id.x + id.y) * 0.7;"
+            },
+            {
+              "id": "fractional-id",
+              "fragment": "vec2 scaled = p * 3.0;\nvec2 id = fract(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat angle = iTime * 0.6 + (id.x + id.y) * 0.7;"
+            },
+            {
+              "id": "lost-scale",
+              "fragment": "vec2 scaled = p * 3.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(p) - 0.5;\n\nfloat angle = iTime * 0.6 + (id.x + id.y) * 0.7;"
+            },
+            {
+              "id": "lockstep",
+              "fragment": "vec2 scaled = p * 3.0;\nvec2 id = floor(scaled);\nvec2 cell = fract(scaled) - 0.5;\n\nfloat angle = iTime * 0.6 + (id.x - id.x) * 0.7;"
+            }
+          ],
+          "correctChoiceId": "correct",
           "hint": "floor and fract of the same scaled coordinate lose nothing between them."
         }
       ]

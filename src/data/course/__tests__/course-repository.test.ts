@@ -22,15 +22,12 @@ const bundledCourseWithChoiceTutorials = {
     ...module,
     tutorials: module.tutorials?.map((tutorial) => ({
       ...tutorial,
-      steps: tutorial.steps.map((step) => {
-        const { starterSource: _starterSource, solutionSource: _solutionSource, ...rest } = step;
-        return {
-          ...rest,
-          sourceTemplate: TEST_TUTORIAL_TEMPLATE,
-          answerChoices: TEST_TUTORIAL_CHOICES,
-          correctChoiceId: "answer-35",
-        };
-      }),
+      steps: tutorial.steps.map((step) => ({
+        ...step,
+        sourceTemplate: TEST_TUTORIAL_TEMPLATE,
+        answerChoices: TEST_TUTORIAL_CHOICES,
+        correctChoiceId: "answer-35",
+      })),
     })),
   })),
 };

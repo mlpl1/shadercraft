@@ -221,8 +221,26 @@
           "position": 1,
           "title": "Cut it in two",
           "brief": "A plain horizontal ramp is on screen. Replace it with a hard split at the halfway point, black on the left and white on the right, using the function that has exactly one threshold.",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfragColor = vec4(vec3(uv.x), 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = step(0.5, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = /*__SHADERCRAFT_BLANK__*/;\n\nfragColor = vec4(vec3(band), 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "step(0.5, uv.x)"
+            },
+            {
+              "id": "reversed-arguments",
+              "fragment": "step(uv.x, 0.5)"
+            },
+            {
+              "id": "vertical",
+              "fragment": "step(0.5, uv.y)"
+            },
+            {
+              "id": "inverted",
+              "fragment": "1.0 - step(0.5, uv.x)"
+            }
+          ],
+          "correctChoiceId": "correct",
           "hint": "step takes the threshold first and the value second."
         },
         {
@@ -230,8 +248,26 @@
           "position": 2,
           "title": "Give it two edges",
           "brief": "One threshold makes an edge; two make a band. Build a stripe roughly a fifth of the screen wide by subtracting one soft ramp from another, so the band has a soft edge on each side.",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = step(0.5, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = smoothstep(0.38, 0.42, uv.x) - smoothstep(0.58, 0.62, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = /*__SHADERCRAFT_BLANK__*/;\n\nfragColor = vec4(vec3(band), 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "smoothstep(0.38, 0.42, uv.x) - smoothstep(0.58, 0.62, uv.x)"
+            },
+            {
+              "id": "added-ramps",
+              "fragment": "smoothstep(0.38, 0.42, uv.x) + smoothstep(0.58, 0.62, uv.x)"
+            },
+            {
+              "id": "reversed-subtraction",
+              "fragment": "smoothstep(0.58, 0.62, uv.x) - smoothstep(0.38, 0.42, uv.x)"
+            },
+            {
+              "id": "hard-edges",
+              "fragment": "step(0.38, uv.x) - step(0.62, uv.x)"
+            }
+          ],
+          "correctChoiceId": "correct",
           "hint": "Subtracting a later ramp from an earlier one leaves the gap between them."
         },
         {
@@ -239,8 +275,26 @@
           "position": 3,
           "title": "Set it moving",
           "brief": "Slide the band from side to side by driving its centre from time, keeping its width fixed. Write the centre once and build both thresholds from it rather than animating four numbers.",
-          "starterSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = smoothstep(0.38, 0.42, uv.x) - smoothstep(0.58, 0.62, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
-          "solutionSource": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat centre = 0.5 + sin(iTime) * 0.3;\nfloat band = smoothstep(centre - 0.12, centre - 0.08, uv.x)\n           - smoothstep(centre + 0.08, centre + 0.12, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\n/*__SHADERCRAFT_BLANK__*/\n\nfragColor = vec4(vec3(band), 1.0);",
+          "answerChoices": [
+            {
+              "id": "correct",
+              "fragment": "float centre = 0.5 + sin(iTime) * 0.3;\nfloat band = smoothstep(centre - 0.12, centre - 0.08, uv.x)\n           - smoothstep(centre + 0.08, centre + 0.12, uv.x);"
+            },
+            {
+              "id": "off-centre",
+              "fragment": "float centre = sin(iTime) * 0.3;\nfloat band = smoothstep(centre - 0.12, centre - 0.08, uv.x)\n           - smoothstep(centre + 0.08, centre + 0.12, uv.x);"
+            },
+            {
+              "id": "overshoots",
+              "fragment": "float centre = 0.5 + sin(iTime * 0.3);\nfloat band = smoothstep(centre - 0.12, centre - 0.08, uv.x)\n           - smoothstep(centre + 0.08, centre + 0.12, uv.x);"
+            },
+            {
+              "id": "moving-width",
+              "fragment": "float centre = 0.5;\nfloat width = 0.12 + sin(iTime) * 0.3;\nfloat band = smoothstep(centre - width, centre - 0.08, uv.x)\n           - smoothstep(centre + 0.08, centre + width, uv.x);"
+            }
+          ],
+          "correctChoiceId": "correct",
           "hint": "sin(iTime) runs between minus one and one."
         }
       ]

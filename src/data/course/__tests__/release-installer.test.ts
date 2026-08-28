@@ -26,24 +26,18 @@ const TEST_TUTORIAL_CHOICES = [
   { id: "answer-75", fragment: "0.75" },
 ];
 
-// Task 5 owns the authored asset update. The focused storage suite instead passes the current
-// release through the new schema at this narrow test boundary, keeping its installer assertions
-// executable while never changing the shipped curriculum in this task.
 const bundledCourseWithChoiceTutorialsInput = {
   ...bundledCourse,
   modules: bundledCourse.modules.map((module) => ({
     ...module,
     tutorials: module.tutorials?.map((tutorial) => ({
       ...tutorial,
-      steps: tutorial.steps.map((step) => {
-        const { starterSource: _starterSource, solutionSource: _solutionSource, ...rest } = step;
-        return {
-          ...rest,
-          sourceTemplate: TEST_TUTORIAL_TEMPLATE,
-          answerChoices: TEST_TUTORIAL_CHOICES,
-          correctChoiceId: "answer-35",
-        };
-      }),
+      steps: tutorial.steps.map((step) => ({
+        ...step,
+        sourceTemplate: TEST_TUTORIAL_TEMPLATE,
+        answerChoices: TEST_TUTORIAL_CHOICES,
+        correctChoiceId: "answer-35",
+      })),
     })),
   })),
 };
