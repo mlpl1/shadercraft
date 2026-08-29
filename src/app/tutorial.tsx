@@ -8,6 +8,7 @@ import { TutorialAnswerTile, type TutorialAnswerStatus } from "../components/tut
 import { TutorialFeedback } from "../components/tutorial-feedback";
 import { TutorialProgressRail } from "../components/tutorial-progress-rail";
 import { TutorialSourceTemplate } from "../components/tutorial-source-template";
+import { TutorialTargetPreview } from "../components/tutorial-target-preview";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { useAuth } from "../context/auth-context";
 import { useCourse } from "../context/course-context";
@@ -208,6 +209,8 @@ export default function TutorialScreen() {
             <Text style={styles.brief}>{step.brief}</Text>
           </View>
 
+          <TutorialTargetPreview helpers={step.helpers} source={targetSource} />
+
           <TutorialSourceTemplate
             selectedFragment={confirmedChoice?.fragment}
             state={feedback}
@@ -245,7 +248,6 @@ export default function TutorialScreen() {
             helpers={step.helpers}
             learnerSource={learnerSource}
             state={feedback}
-            targetSource={targetSource}
           />
 
           {stepIndex > 0 ? (

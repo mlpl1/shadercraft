@@ -112,8 +112,9 @@ beforeEach(() => {
 });
 
 async function renderScreen() {
-  await render(<TutorialScreen />);
+  const rendered = await render(<TutorialScreen />);
   await waitFor(() => expect(screen.getByText("Step one")).toBeTruthy());
+  return rendered;
 }
 
 function optionOrder() {
@@ -146,6 +147,17 @@ test("keeps the learner result hidden when an answer is only selected", async ()
   expect(screen.queryByText("Yours")).toBeNull();
 });
 
+test("places the persistent target between the description and code card", async () => {
+  const rendered = await renderScreen();
+  const tree = JSON.stringify(rendered.toJSON());
+  const descriptionIndex = tree.indexOf("Choose the target radius.");
+  const targetIndex = tree.indexOf("tutorial-target-preview");
+  const codeIndex = tree.indexOf("tutorial-source-template");
+
+  expect(descriptionIndex).toBeGreaterThanOrEqual(0);
+  expect(targetIndex).toBeGreaterThan(descriptionIndex);
+  expect(codeIndex).toBeGreaterThan(targetIndex);
+});
 test("shows segmented progress and lettered answer choices", async () => {
   await renderScreen();
 

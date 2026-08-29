@@ -13,6 +13,7 @@ import { TutorialActionDock } from "../tutorial-action-dock";
 import { TutorialAnswerTile } from "../tutorial-answer-tile";
 import { TutorialFeedback } from "../tutorial-feedback";
 import { TutorialProgressRail } from "../tutorial-progress-rail";
+import { TutorialTargetPreview } from "../tutorial-target-preview";
 
 const actionProps = {
   canConfirm: true,
@@ -42,16 +43,16 @@ test("renders a lettered answer tile with explicit selected status", async () =>
   expect(onPress).toHaveBeenCalledTimes(1);
 });
 
-test("shows only the target preview while idle", async () => {
-  await render(<TutorialFeedback helpers={undefined} learnerSource={null} state="idle" targetSource="target" />);
+test("renders the persistent target preview", async () => {
+  await render(<TutorialTargetPreview helpers={undefined} source="target" />);
   expect(screen.getByText("Target")).toBeTruthy();
   expect(screen.getByTestId("sandbox-source").props.children).toBe("target");
   expect(screen.queryByText("Yours")).toBeNull();
 });
 
-test("reveals comparison after confirmation", async () => {
-  await render(<TutorialFeedback helpers={undefined} learnerSource="learner" state="incorrect" targetSource="target" />);
-  expect(screen.getByText("Target")).toBeTruthy();
+test("reveals only the learner preview and feedback after confirmation", async () => {
+  await render(<TutorialFeedback helpers={undefined} learnerSource="learner" state="incorrect" />);
+  expect(screen.queryByText("Target")).toBeNull();
   expect(screen.getByText("Yours")).toBeTruthy();
   expect(screen.getByText("Not quite")).toBeTruthy();
 });
