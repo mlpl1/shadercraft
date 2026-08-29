@@ -123,10 +123,12 @@ function optionOrder() {
     .filter((label): label is string => choices.some((choice) => choice.fragment === label));
 }
 
-test("derives the target preview from the correct choice", async () => {
+test("keeps both shader previews hidden before an answer is confirmed", async () => {
   await renderScreen();
 
-  expect(screen.getAllByTestId("sandbox-source")[0].props.children).toBe(targetSource);
+  expect(screen.queryByTestId("sandbox-source")).toBeNull();
+  expect(screen.queryByText("Target")).toBeNull();
+  expect(screen.queryByText("Yours")).toBeNull();
 });
 
 test("keeps the learner result hidden when an answer is only selected", async () => {
@@ -134,12 +136,22 @@ test("keeps the learner result hidden when an answer is only selected", async ()
 
   await fireEvent.press(screen.getByRole("button", { name: "0.5" }));
 
-  expect(screen.getAllByTestId("sandbox-source")).toHaveLength(1);
+  expect(screen.queryByTestId("sandbox-source")).toBeNull();
   expect(screen.getByLabelText(
     "Source template: float radius = Choose an answer; fragColor = vec4(radius);",
   )).toBeTruthy();
-  expect(screen.getByLabelText("Choose an answer to preview your shader")).toBeTruthy();
-  expect(screen.getAllByTestId("sandbox-source")[0].props.children).toBe(targetSource);
+  expect(screen.queryByText("Target")).toBeNull();
+  expect(screen.queryByText("Yours")).toBeNull();
+});
+
+test("shows segmented progress and lettered answer choices", async () => {
+  await renderScreen();
+
+  expect(screen.getByTestId("tutorial-progress-rail")).toBeTruthy();
+  expect(screen.getByText("A")).toBeTruthy();
+  expect(screen.getByText("B")).toBeTruthy();
+  expect(screen.getByText("C")).toBeTruthy();
+  expect(screen.getByText("D")).toBeTruthy();
 });
 
 test("applies and evaluates a wrong answer only when it is confirmed", async () => {
@@ -149,6 +161,8 @@ test("applies and evaluates a wrong answer only when it is confirmed", async () 
   await fireEvent.press(screen.getByRole("button", { name: "Confirm" }));
 
   expect(screen.getByText("Not quite")).toBeTruthy();
+  expect(screen.getByText("Target")).toBeTruthy();
+  expect(screen.getByText("Yours")).toBeTruthy();
   expect(screen.getAllByTestId("sandbox-source")[1].props.children).toBe(
     "float radius = 0.5;\nfragColor = vec4(radius);",
   );
@@ -202,6 +216,7 @@ test("completes a step after the correct answer", async () => {
   await fireEvent.press(screen.getByRole("button", { name: "Confirm" }));
 
   expect(screen.getByText("Correct")).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Continue/ })).toBeTruthy();
   expect(repository.setCompleted).toHaveBeenCalledWith("profile-a", "pulse-s1", true);
 });
 

@@ -3,9 +3,12 @@ import { StyleSheet, Text, View } from "react-native";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { SHADERCRAFT_BLANK } from "../data/course/tutorial-exercise";
 
+export type TutorialSourceState = "idle" | "incorrect" | "correct" | "skipped";
+
 type TutorialSourceTemplateProps = {
   template: string;
   selectedFragment?: string;
+  state?: TutorialSourceState;
 };
 
 const BLANK_LABEL = "Choose an answer";
@@ -18,6 +21,7 @@ function readableExpression(source: string): string {
 export function TutorialSourceTemplate({
   template,
   selectedFragment,
+  state = "idle",
 }: TutorialSourceTemplateProps) {
   const blankIndex = template.indexOf(SHADERCRAFT_BLANK);
   const prefix = blankIndex >= 0 ? template.slice(0, blankIndex) : template;
@@ -32,9 +36,19 @@ export function TutorialSourceTemplate({
       style={styles.container}
       testID="tutorial-source-template"
     >
+      <Text style={styles.eyebrow}>Complete the code</Text>
       <Text selectable style={styles.code}>
         {prefix}
-        <Text style={selectedFragment ? styles.selectedFragment : styles.blank}>{fragment}</Text>
+        <Text
+          style={[
+            selectedFragment ? styles.selectedFragment : styles.blank,
+            state === "incorrect" && styles.incorrect,
+            state === "correct" && styles.correct,
+            state === "skipped" && styles.revealed,
+          ]}
+        >
+          {fragment}
+        </Text>
         {suffix}
       </Text>
     </View>
@@ -44,23 +58,38 @@ export function TutorialSourceTemplate({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    gap: Spacing.md,
+    padding: Spacing.lg,
+  },
+  eyebrow: {
+    color: Colors.textSubtle,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
   },
   code: {
     color: Colors.text,
     fontFamily: "monospace",
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 24,
   },
   blank: {
-    color: Colors.textMuted,
+    backgroundColor: Colors.surfaceRaised,
+    color: Colors.cyan,
     fontStyle: "italic",
     textDecorationLine: "underline",
   },
   selectedFragment: {
-    color: Colors.accent,
+    backgroundColor: Colors.surfaceRaised,
+    color: Colors.text,
     fontWeight: "800",
     textDecorationLine: "underline",
   },
+  incorrect: { color: Colors.coral },
+  correct: { color: Colors.accent },
+  revealed: { color: Colors.accent },
 });

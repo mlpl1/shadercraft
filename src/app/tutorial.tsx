@@ -3,8 +3,11 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { TutorialActionDock } from "../components/tutorial-action-dock";
+import { TutorialAnswerTile, type TutorialAnswerStatus } from "../components/tutorial-answer-tile";
+import { TutorialFeedback } from "../components/tutorial-feedback";
+import { TutorialProgressRail } from "../components/tutorial-progress-rail";
 import { TutorialSourceTemplate } from "../components/tutorial-source-template";
-import { ShaderSandbox } from "../components/shader-sandbox";
 import { Colors, Radius, Spacing } from "../constants/theme";
 import { useAuth } from "../context/auth-context";
 import { useCourse } from "../context/course-context";
@@ -16,7 +19,6 @@ import {
 } from "../data/course/tutorial-exercise";
 import type { Tutorial, TutorialChoice, TutorialStep } from "../data/course/types";
 
-const PREVIEW_HEIGHT = 150;
 type Feedback = "idle" | "incorrect" | "correct" | "skipped";
 type CompletionState = {
   profileId: string | null;
@@ -24,6 +26,8 @@ type CompletionState = {
   fetchedStepIds: ReadonlySet<string>;
   optimisticStepIds: ReadonlySet<string>;
 };
+
+const CHOICE_MARKERS = ["A", "B", "C", "D"] as const;
 
 function findTutorial(
   modules: ReturnType<typeof useCourse>["modules"],
@@ -57,6 +61,7 @@ export default function TutorialScreen() {
   const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
   const [confirmedChoiceId, setConfirmedChoiceId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>("idle");
+  const [hintVisible, setHintVisible] = useState(false);
   const [completionState, setCompletionState] = useState<CompletionState>({
     profileId: null,
     stepIdsKey: "",
@@ -66,7 +71,6 @@ export default function TutorialScreen() {
   const stepAnswerChoices = step?.answerChoices;
   const stepId = step?.id;
 
-  // Land on the step the list asked for, once, rather than resetting every render.
   useEffect(() => {
     if (!params.stepId || steps.length === 0) return;
     const index = steps.findIndex((candidate) => candidate.id === params.stepId);
@@ -79,9 +83,7 @@ export default function TutorialScreen() {
     void repository.getStates(profileId, stepIds).then((states) => {
       if (cancelled) return;
       const fetchedStepIds = new Set(
-        [...states.entries()]
-          .filter(([, state]) => state.completed)
-          .map(([id]) => id),
+        [...states.entries()].filter(([, state]) => state.completed).map(([id]) => id),
       );
       setCompletionState((current) => ({
         profileId,
@@ -98,21 +100,20 @@ export default function TutorialScreen() {
     };
   }, [repository, profileId, stepIds, stepIdsKey]);
 
-  // Choices are stable while a learner retries, but every new step (and every new screen visit)
-  // gets its own randomized order.
   useEffect(() => {
     if (!stepAnswerChoices) return;
     setShuffledChoices(shuffleTutorialChoices(stepAnswerChoices));
     setSelectedChoiceId(null);
     setConfirmedChoiceId(null);
     setFeedback("idle");
+    setHintVisible(false);
   }, [stepAnswerChoices, stepId]);
 
   if (!tutorial || !step) {
     return (
-      <SafeAreaView edges={["top"]} style={styles.screen}>
+      <SafeAreaView edges={["top", "bottom"]} style={styles.screen}>
         <Text style={styles.missing}>That exercise is not in this release.</Text>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.secondary}>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.secondaryButton}>
           <Text style={styles.secondaryLabel}>Back</Text>
         </Pressable>
       </SafeAreaView>
@@ -146,9 +147,7 @@ export default function TutorialScreen() {
         ).add(step.id),
       };
     });
-    if (repository && profileId) {
-      void repository.setCompleted(profileId, step.id, true);
-    }
+    if (repository && profileId) void repository.setCompleted(profileId, step.id, true);
   };
 
   const checkAnswer = () => {
@@ -170,232 +169,131 @@ export default function TutorialScreen() {
     completeStep();
   };
 
+  const continueForward = () => {
+    if (!terminalFeedback) return;
+    if (stepIndex < steps.length - 1) {
+      setStepIndex((index) => index + 1);
+      return;
+    }
+    router.replace("/tutorials");
+  };
+
+  const answerStatus = (choice: TutorialChoice): TutorialAnswerStatus => {
+    if (feedback === "correct" && choice.id === step.correctChoiceId) return "correct";
+    if (feedback === "skipped" && choice.id === step.correctChoiceId) return "revealed";
+    if (feedback === "incorrect" && choice.id === confirmedChoiceId) return "incorrect";
+    if (!terminalFeedback && choice.id === selectedChoiceId) return "pending";
+    return "idle";
+  };
+
   return (
-    <SafeAreaView edges={["top"]} style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.back()}>
-          <Text style={styles.back}>{"<"} {tutorial.title}</Text>
-        </Pressable>
-
-        <Text style={styles.stepCount}>
-          Step {step.position} of {steps.length}
-        </Text>
-        <View style={styles.titleRow}>
-          <Text style={styles.stepTitle}>{step.title}</Text>
-          {isComplete ? <Text style={styles.completed}>Completed</Text> : null}
-        </View>
-        <Text style={styles.brief}>{step.brief}</Text>
-
-        <View style={styles.previews}>
-          <View style={styles.preview}>
-            <Text style={styles.previewLabel}>Target</Text>
-            <ShaderSandbox
-              height={PREVIEW_HEIGHT}
-              helpers={step.helpers}
-              source={targetSource}
-
-            />
+    <SafeAreaView edges={["top", "bottom"]} style={styles.screen}>
+      <View style={styles.shell}>
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.back()}>
+              <Text style={styles.back}>{"<"} {tutorial.title}</Text>
+            </Pressable>
+            <Text style={styles.stepCount}>Step {step.position} of {steps.length}</Text>
           </View>
-          <View style={styles.preview}>
-            <Text style={styles.previewLabel}>Yours</Text>
-            {learnerSource ? (
-              <ShaderSandbox
-                height={PREVIEW_HEIGHT}
-                helpers={step.helpers}
-                source={learnerSource}
-
-              />
-            ) : (
-              <View accessibilityLabel="Choose an answer to preview your shader" style={styles.emptyPreview}>
-                <Text style={styles.emptyPreviewLabel}>Choose an answer</Text>
-              </View>
-            )}
-          </View>
+          <TutorialProgressRail completed={completedStepIds} current={stepIndex} stepIds={stepIds} />
         </View>
 
-        <TutorialSourceTemplate
-          selectedFragment={confirmedChoice?.fragment}
-          template={step.sourceTemplate}
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.challenge}>
+            <View style={styles.titleRow}>
+              <Text style={styles.stepTitle}>{step.title}</Text>
+              {isComplete ? <Text style={styles.completed}>Completed</Text> : null}
+            </View>
+            <Text style={styles.brief}>{step.brief}</Text>
+          </View>
+
+          <TutorialSourceTemplate
+            selectedFragment={confirmedChoice?.fragment}
+            state={feedback}
+            template={step.sourceTemplate}
+          />
+
+          <View style={styles.answerSection}>
+            <Text style={styles.answerLabel}>Choose one answer</Text>
+            <View style={styles.choices}>
+              {shuffledChoices.map((choice, index) => (
+                <TutorialAnswerTile
+                  disabled={terminalFeedback}
+                  fragment={choice.fragment}
+                  key={choice.id}
+                  marker={CHOICE_MARKERS[index] ?? String(index + 1)}
+                  onPress={() => {
+                    if (terminalFeedback) return;
+                    setSelectedChoiceId(choice.id);
+                  }}
+                  selected={choice.id === selectedChoiceId}
+                  status={answerStatus(choice)}
+                />
+              ))}
+            </View>
+          </View>
+
+          {hintVisible && step.hint ? (
+            <View style={styles.hintCard}>
+              <Text style={styles.hintTitle}>Hint</Text>
+              <Text style={styles.hint}>{step.hint}</Text>
+            </View>
+          ) : null}
+
+          <TutorialFeedback
+            helpers={step.helpers}
+            learnerSource={learnerSource}
+            state={feedback}
+            targetSource={targetSource}
+          />
+
+          {stepIndex > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setStepIndex((index) => Math.max(0, index - 1))}
+              style={styles.previous}
+            >
+              <Text style={styles.secondaryLabel}>Previous step</Text>
+            </Pressable>
+          ) : null}
+        </ScrollView>
+
+        <TutorialActionDock
+          canConfirm={Boolean(selectedChoice)}
+          hasHint={Boolean(step.hint)}
+          onConfirm={checkAnswer}
+          onContinue={continueForward}
+          onHint={() => setHintVisible((visible) => !visible)}
+          onSkip={skipAndReveal}
+          state={feedback}
         />
-
-        <View style={styles.choices}>
-          {shuffledChoices.map((choice) => {
-            const selected = choice.id === selectedChoiceId;
-            const isIncorrect = selected && feedback === "incorrect";
-            const isCorrect = selected && (feedback === "correct" || feedback === "skipped");
-            return (
-              <Pressable
-                accessibilityLabel={choice.fragment}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: terminalFeedback, selected }}
-                disabled={terminalFeedback}
-                key={choice.id}
-                onPress={() => {
-                  if (terminalFeedback) return;
-                  setSelectedChoiceId(choice.id);
-                  setFeedback("idle");
-                }}
-                style={({ pressed }) => [
-                  styles.choice,
-                  selected && styles.choiceSelected,
-                  isIncorrect && styles.choiceIncorrect,
-                  isCorrect && styles.choiceCorrect,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.choiceText}>{choice.fragment}</Text>
-                {selected ? <Text style={styles.choiceStatus}>Selected</Text> : null}
-                {isIncorrect ? <Text style={styles.choiceStatus}>Incorrect answer</Text> : null}
-                {isCorrect ? <Text style={styles.choiceStatus}>Correct answer</Text> : null}
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {feedback === "incorrect" ? <Text style={styles.incorrectFeedback}>Not quite</Text> : null}
-        {feedback === "correct" ? <Text style={styles.correctFeedback}>Correct</Text> : null}
-        {feedback === "skipped" ? <Text style={styles.skippedFeedback}>Skipped</Text> : null}
-
-        <View style={styles.actions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: terminalFeedback || !selectedChoice }}
-            disabled={terminalFeedback || !selectedChoice}
-            onPress={checkAnswer}
-            style={({ pressed }) => [
-              styles.primary,
-              (terminalFeedback || !selectedChoice) && styles.disabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.primaryLabel}>Confirm</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: terminalFeedback }}
-            disabled={terminalFeedback}
-            onPress={skipAndReveal}
-            style={({ pressed }) => [
-              styles.secondary,
-              terminalFeedback && styles.disabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.secondaryLabel}>Skip and reveal answer</Text>
-          </Pressable>
-        </View>
-
-        {step.hint && feedback === "idle" ? <Text style={styles.hint}>Hint: {step.hint}</Text> : null}
-
-        <View style={styles.stepNav}>
-          <Pressable
-            accessibilityRole="button"
-            disabled={stepIndex === 0}
-            onPress={() => setStepIndex((index) => Math.max(0, index - 1))}
-            style={({ pressed }) => [
-              styles.secondary,
-              stepIndex === 0 && styles.disabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.secondaryLabel}>Previous</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            disabled={stepIndex >= steps.length - 1}
-            onPress={() => setStepIndex((index) => Math.min(steps.length - 1, index + 1))}
-            style={({ pressed }) => [
-              styles.secondary,
-              stepIndex >= steps.length - 1 && styles.disabled,
-              pressed && styles.pressed,
-            ]}
-            testID="tutorial-next-step"
-          >
-            <Text style={styles.secondaryLabel}>Next step</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
-  content: {
-    padding: Spacing.lg,
-    gap: Spacing.md,
-    paddingBottom: Spacing.xxxl,
-    width: "100%",
-    maxWidth: 520,
-    alignSelf: "center",
-  },
-  missing: { color: Colors.textMuted, fontSize: 15, padding: Spacing.lg },
-  back: { color: Colors.textMuted, fontSize: 14, fontWeight: "600" },
-  stepCount: {
-    color: Colors.textSubtle,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
-  stepTitle: { color: Colors.text, flex: 1, fontSize: 22, fontWeight: "800" },
-  completed: { color: Colors.accent, fontSize: 12, fontWeight: "800", textTransform: "uppercase" },
-  brief: { color: Colors.textMuted, fontSize: 15, lineHeight: 22 },
-  previews: { flexDirection: "row", gap: Spacing.sm },
-  preview: { flex: 1, gap: 4 },
-  previewLabel: {
-    color: Colors.textSubtle,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-  emptyPreview: {
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    height: PREVIEW_HEIGHT,
-    justifyContent: "center",
-    padding: Spacing.sm,
-  },
-  emptyPreviewLabel: { color: Colors.textMuted, fontSize: 13, fontWeight: "700", textAlign: "center" },
+  screen: { backgroundColor: Colors.background, flex: 1 },
+  shell: { alignSelf: "center", flex: 1, maxWidth: 520, width: "100%" },
+  header: { gap: Spacing.md, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md, paddingTop: Spacing.sm },
+  headerRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  back: { color: Colors.textMuted, fontSize: 14, fontWeight: "700" },
+  stepCount: { color: Colors.textSubtle, fontSize: 11, fontWeight: "800", letterSpacing: 0.7, textTransform: "uppercase" },
+  content: { gap: Spacing.xl, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl, paddingTop: Spacing.sm },
+  challenge: { gap: Spacing.sm },
+  titleRow: { alignItems: "center", flexDirection: "row", gap: Spacing.sm },
+  stepTitle: { color: Colors.text, flex: 1, fontSize: 28, fontWeight: "800", letterSpacing: -0.4 },
+  completed: { color: Colors.accent, fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
+  brief: { color: Colors.textMuted, fontSize: 16, lineHeight: 24 },
+  answerSection: { gap: Spacing.md },
+  answerLabel: { color: Colors.textSubtle, fontSize: 11, fontWeight: "800", letterSpacing: 0.7, textTransform: "uppercase" },
   choices: { gap: Spacing.sm },
-  choice: {
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    gap: 2,
-    padding: Spacing.md,
-  },
-  choiceSelected: { borderColor: Colors.cyan, borderWidth: 2 },
-  choiceIncorrect: { borderColor: Colors.coral },
-  choiceCorrect: { borderColor: Colors.accent },
-  choiceText: { color: Colors.text, fontFamily: "monospace", fontSize: 15, fontWeight: "800" },
-  choiceStatus: { color: Colors.textMuted, fontSize: 12, fontWeight: "700" },
-  actions: { flexDirection: "row", gap: Spacing.sm },
-  stepNav: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.xs },
-  primary: {
-    alignItems: "center",
-    backgroundColor: Colors.accent,
-    borderRadius: Radius.sm,
-    flex: 1,
-    paddingVertical: Spacing.md,
-  },
-  primaryLabel: { color: Colors.background, fontSize: 15, fontWeight: "800" },
-  secondary: {
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.sm,
-    flex: 1,
-    paddingVertical: Spacing.md,
-  },
-  secondaryLabel: { color: Colors.text, fontSize: 15, fontWeight: "700", textAlign: "center" },
-  disabled: { opacity: 0.4 },
-  pressed: { opacity: 0.75 },
-  hint: { color: Colors.textSubtle, fontSize: 14, lineHeight: 20 },
-  incorrectFeedback: { color: Colors.coral, fontSize: 15, fontWeight: "800", textAlign: "center" },
-  correctFeedback: { color: Colors.accent, fontSize: 15, fontWeight: "800", textAlign: "center" },
-  skippedFeedback: { color: Colors.textMuted, fontSize: 15, fontWeight: "800", textAlign: "center" },
+  hintCard: { backgroundColor: Colors.surfaceRaised, borderColor: Colors.border, borderRadius: Radius.md, borderWidth: 1, gap: Spacing.xs, padding: Spacing.md },
+  hintTitle: { color: Colors.cyan, fontSize: 12, fontWeight: "800", textTransform: "uppercase" },
+  hint: { color: Colors.textMuted, fontSize: 14, lineHeight: 20 },
+  previous: { alignItems: "center", minHeight: 44, justifyContent: "center" },
+  missing: { color: Colors.textMuted, fontSize: 15, padding: Spacing.lg },
+  secondaryButton: { alignItems: "center", backgroundColor: Colors.surface, borderRadius: Radius.sm, margin: Spacing.lg, minHeight: 48, justifyContent: "center" },
+  secondaryLabel: { color: Colors.text, fontSize: 14, fontWeight: "700" },
 });
