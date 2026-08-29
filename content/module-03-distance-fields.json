@@ -217,23 +217,23 @@
           "position": 1,
           "title": "Start with a disc",
           "brief": "The screen is empty. Fill a disc of radius 0.3 at the centre, using a signed field and a narrow smoothstep rather than a hard step, so the edge does not stair-step.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) - /*__SHADERCRAFT_BLANK__*/;\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p) /*__SHADERCRAFT_BLANK__*/ 0.3;\nfloat fill = 1.0 - smoothstep(0.0, 0.01, d);\n\nvec3 colour = mix(vec3(0.05, 0.05, 0.08), vec3(0.31, 0.84, 1.0), fill);\n\nfragColor = vec4(colour, 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "0.3"
+              "fragment": "-"
             },
             {
-              "id": "half-radius",
-              "fragment": "0.15"
+              "id": "add-radius",
+              "fragment": "+"
             },
             {
-              "id": "double-radius",
-              "fragment": "0.6"
+              "id": "multiply-radius",
+              "fragment": "*"
             },
             {
-              "id": "full-radius",
-              "fragment": "1.0"
+              "id": "divide-radius",
+              "fragment": "/"
             }
           ],
           "correctChoiceId": "correct",
@@ -279,7 +279,7 @@
             },
             {
               "id": "fixed-width",
-              "fragment": "0.01"
+              "fragment": "abs(d)"
             },
             {
               "id": "zoom-derivative",

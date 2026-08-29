@@ -8,7 +8,7 @@ Replace free-form GLSL editing in tutorial exercises with approachable, Duolingo
 
 - Applies to every authored tutorial step, including the currently bundled exercises.
 - Each step has exactly one blank and exactly four authored answer choices.
-- Choices are code fragments, not complete shader sources. Distractors are hand-authored and should represent likely conceptual or numeric mistakes.
+- Choices are code fragments, not complete shader sources. Distractors are hand-authored and represent likely conceptual mistakes; numeric values remain visible in the template rather than becoming recall questions.
 - Choice order is shuffled once when a step screen opens and remains fixed for that visit. Reopening the step creates a new order.
 - The target preview remains visible. The learner's preview is built from the selected fragment.
 - A correct answer and a skipped answer both mark the step complete. Completion is persisted through the existing `TutorialProgressRepository` and remains local-only.
@@ -86,7 +86,7 @@ The content schema, canonicalization, release installer, SQLite repository mappe
 
 ## Content conversion
 
-Convert each current step by choosing the smallest meaningful code span that addresses its task, replacing that span in the source with the marker, and authoring three plausible distractors. Numeric constants such as `0.25` should be choices in their own right. The correct substituted source must remain the existing target render. Existing briefs should be revised where necessary so they describe selecting a fragment rather than typing code.
+Convert each current step by choosing the smallest meaningful code span that addresses its task, replacing that span in the source with the marker, and authoring three plausible distractors. Keep numeric constants such as `0.25` visible in the template and make the choices test the function, operator, axis, variable, or relationship being taught. The correct substituted source must remain the existing target render. Existing briefs should be revised where necessary so they describe selecting a fragment rather than typing code.
 
 ## Testing
 

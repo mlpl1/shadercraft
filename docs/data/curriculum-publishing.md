@@ -18,7 +18,9 @@ SQL, and a schema change is exactly when they drift — silently, with the publi
 Tutorial steps in newly published releases use `sourceTemplate`, `answerChoices`, and
 `correctChoiceId`. `sourceTemplate` contains the one blank marker; `answerChoices` is the four
 `{ id, fragment }` options; and `correctChoiceId` names the option that produces the reference
-render. The publish RPC rejects an incomplete or malformed choice set. Earlier immutable releases
+render. Answer fragments contain semantic code choices rather than hidden numeric literals; values
+that tune the reference image stay visible in the template. The app-side content build rejects an
+incomplete, malformed, or numeric-recall choice set before publishing. Earlier immutable releases
 retain their historic `starter_source`/`solution_source` data unchanged, but the current RPC never
 writes or returns those fields for a new release.
 

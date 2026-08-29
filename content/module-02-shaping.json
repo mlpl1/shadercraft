@@ -221,23 +221,23 @@
           "position": 1,
           "title": "Cut it in two",
           "brief": "A plain horizontal ramp is on screen. Replace it with a hard split at the halfway point, black on the left and white on the right, using the function that has exactly one threshold.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = step(/*__SHADERCRAFT_BLANK__*/, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = /*__SHADERCRAFT_BLANK__*/(0.5, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "0.5"
+              "fragment": "step"
             },
             {
-              "id": "quarter",
-              "fragment": "0.25"
+              "id": "minimum",
+              "fragment": "min"
             },
             {
-              "id": "three-quarters",
-              "fragment": "0.75"
+              "id": "maximum",
+              "fragment": "max"
             },
             {
-              "id": "far-edge",
-              "fragment": "1.0"
+              "id": "power",
+              "fragment": "pow"
             }
           ],
           "correctChoiceId": "correct",
@@ -248,23 +248,23 @@
           "position": 2,
           "title": "Give it two edges",
           "brief": "One threshold makes an edge; two make a band. Build a stripe roughly a fifth of the screen wide by subtracting one soft ramp from another, so the band has a soft edge on each side.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = /*__SHADERCRAFT_BLANK__*/;\n\nfragColor = vec4(vec3(band), 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\n\nfloat band = smoothstep(0.38, 0.42, uv.x) /*__SHADERCRAFT_BLANK__*/ smoothstep(0.58, 0.62, uv.x);\n\nfragColor = vec4(vec3(band), 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "smoothstep(0.38, 0.42, uv.x) - smoothstep(0.58, 0.62, uv.x)"
+              "fragment": "-"
             },
             {
               "id": "added-ramps",
-              "fragment": "smoothstep(0.38, 0.42, uv.x) + smoothstep(0.58, 0.62, uv.x)"
+              "fragment": "+"
             },
             {
-              "id": "reversed-subtraction",
-              "fragment": "smoothstep(0.58, 0.62, uv.x) - smoothstep(0.38, 0.42, uv.x)"
+              "id": "multiplied-ramps",
+              "fragment": "*"
             },
             {
-              "id": "hard-edges",
-              "fragment": "step(0.38, uv.x) - step(0.62, uv.x)"
+              "id": "divided-ramps",
+              "fragment": "/"
             }
           ],
           "correctChoiceId": "correct",

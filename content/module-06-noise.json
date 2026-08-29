@@ -237,23 +237,23 @@
           "position": 1,
           "title": "Static, one value per cell",
           "brief": "The screen is flat grey. Use the hash to give every cell of a coarse grid its own unrelated value, which should look like television static rather than anything with structure.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = hash(/*__SHADERCRAFT_BLANK__*/);\n\nfragColor = vec4(vec3(n), 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = hash(/*__SHADERCRAFT_BLANK__*/(p * 20.0));\n\nfragColor = vec4(vec3(n), 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "floor(p * 20.0)"
+              "fragment": "floor"
             },
             {
-              "id": "per-pixel",
-              "fragment": "p * 20.0"
+              "id": "next-cell",
+              "fragment": "ceil"
             },
             {
-              "id": "large-cells",
-              "fragment": "floor(p) * 20.0"
+              "id": "within-cell",
+              "fragment": "fract"
             },
             {
-              "id": "scaled-value",
-              "fragment": "floor(p * 2.0) * 10.0"
+              "id": "mirrored-coordinate",
+              "fragment": "abs"
             }
           ],
           "correctChoiceId": "correct",
@@ -265,23 +265,23 @@
           "position": 2,
           "title": "Make it continuous",
           "brief": "Static has no structure because neighbouring cells know nothing about each other. Swap the raw hash for fractal noise so nearby points agree, and the field gains features at several sizes at once.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = /*__SHADERCRAFT_BLANK__*/;\n\nfragColor = vec4(vec3(n), 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat n = /*__SHADERCRAFT_BLANK__*/(p * 3.0);\n\nfragColor = vec4(vec3(n), 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "fbm(p * 3.0)"
+              "fragment": "fbm"
             },
             {
               "id": "single-octave",
-              "fragment": "gradientNoise(p * 3.0)"
+              "fragment": "gradientNoise"
             },
             {
-              "id": "blocky-fbm",
-              "fragment": "fbm(floor(p * 3.0))"
+              "id": "unrelated-values",
+              "fragment": "hash"
             },
             {
-              "id": "scaled-output",
-              "fragment": "fbm(p) * 3.0"
+              "id": "distance-field",
+              "fragment": "length"
             }
           ],
           "correctChoiceId": "correct",
@@ -293,23 +293,23 @@
           "position": 3,
           "title": "Wear the paint away",
           "brief": "Turn the noise into a surface. Threshold it into patches, use those as a mask between two colours, and warp the coordinate with noise first so a few of the patches pull out into long sinuous streaks.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 base = p * 3.0;\nvec2 warp = vec2(fbm(base), fbm(/*__SHADERCRAFT_BLANK__*/));\n\nfloat n = fbm(base + warp * 1.2);\nfloat wear = smoothstep(0.45, 0.58, n);\n\nvec3 metal = vec3(0.22, 0.24, 0.28);\nvec3 paint = vec3(0.82, 0.66, 0.36);\nvec3 colour = mix(metal, paint, wear);\n\nfragColor = vec4(colour, 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nvec2 base = p * 3.0;\nvec2 warp = vec2(fbm(base), fbm(base /*__SHADERCRAFT_BLANK__*/ vec2(5.2, 1.3)));\n\nfloat n = fbm(base + warp * 1.2);\nfloat wear = smoothstep(0.45, 0.58, n);\n\nvec3 metal = vec3(0.22, 0.24, 0.28);\nvec3 paint = vec3(0.82, 0.66, 0.36);\nvec3 colour = mix(metal, paint, wear);\n\nfragColor = vec4(colour, 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "base + vec2(5.2, 1.3)"
+              "fragment": "+"
             },
             {
-              "id": "unwarped",
-              "fragment": "base"
+              "id": "subtract-offset",
+              "fragment": "-"
             },
             {
-              "id": "same-warp-sample",
-              "fragment": "base + vec2(1.3, 5.2)"
+              "id": "multiply-offset",
+              "fragment": "*"
             },
             {
-              "id": "inverted-mask",
-              "fragment": "base - vec2(5.2, 1.3)"
+              "id": "divide-offset",
+              "fragment": "/"
             }
           ],
           "correctChoiceId": "correct",

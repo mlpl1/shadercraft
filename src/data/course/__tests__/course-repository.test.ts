@@ -8,12 +8,13 @@ import { parseCourseRelease } from "../schema";
 import { SqliteCourseRepository } from "../sqlite-course-repository";
 import type { CourseRelease } from "../types";
 
-const TEST_TUTORIAL_TEMPLATE = "float value = /*__SHADERCRAFT_BLANK__*/;\nfragColor = vec4(vec3(value), 1.0);";
+const TEST_TUTORIAL_TEMPLATE =
+  "float horizontal = uv.x;\nfloat vertical = uv.y;\nfloat value = /*__SHADERCRAFT_BLANK__*/;\nfragColor = vec4(vec3(value), 1.0);";
 const TEST_TUTORIAL_CHOICES = [
-  { id: "answer-15", fragment: "0.15" },
-  { id: "answer-35", fragment: "0.35" },
-  { id: "answer-55", fragment: "0.55" },
-  { id: "answer-75", fragment: "0.75" },
+  { id: "answer-horizontal", fragment: "horizontal" },
+  { id: "answer-vertical", fragment: "vertical" },
+  { id: "answer-minimum", fragment: "min(horizontal, vertical)" },
+  { id: "answer-maximum", fragment: "max(horizontal, vertical)" },
 ];
 
 const bundledCourseWithChoiceTutorials = {
@@ -26,7 +27,7 @@ const bundledCourseWithChoiceTutorials = {
         ...step,
         sourceTemplate: TEST_TUTORIAL_TEMPLATE,
         answerChoices: TEST_TUTORIAL_CHOICES,
-        correctChoiceId: "answer-35",
+        correctChoiceId: "answer-horizontal",
       })),
     })),
   })),

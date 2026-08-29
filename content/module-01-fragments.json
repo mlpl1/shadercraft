@@ -232,12 +232,12 @@
               "fragment": "uv.y"
             },
             {
-              "id": "reversed",
-              "fragment": "1.0 - uv.x"
+              "id": "diagonal",
+              "fragment": "length(uv)"
             },
             {
-              "id": "constant",
-              "fragment": "0.5"
+              "id": "smallest-axis",
+              "fragment": "min(uv.x, uv.y)"
             }
           ],
           "correctChoiceId": "correct",
@@ -259,12 +259,12 @@
               "fragment": "uv.x"
             },
             {
-              "id": "flat-green",
-              "fragment": "0.25"
+              "id": "diagonal",
+              "fragment": "length(uv)"
             },
             {
-              "id": "blue-axis",
-              "fragment": "1.0 - uv.y"
+              "id": "largest-axis",
+              "fragment": "max(uv.x, uv.y)"
             }
           ],
           "correctChoiceId": "correct",
@@ -275,23 +275,23 @@
           "position": 3,
           "title": "Distance from the middle",
           "brief": "Centre the coordinate, correct for the aspect ratio, and paint the distance from the middle as a grey — then cut everything past a distance of 0.75 to black with step, so the shape gets a hard edge instead of fading out. Check the silhouette you are left with: it should be a disc exactly as wide as it is tall, reaching three quarters of the way to the top and bottom.",
-          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\nfloat disc = 1.0 - step(/*__SHADERCRAFT_BLANK__*/, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);",
+          "sourceTemplate": "vec2 uv = fragCoord / iResolution.xy;\nvec2 p = uv * 2.0 - 1.0;\np.x *= iResolution.x / iResolution.y;\n\nfloat d = length(p);\nfloat disc = 1.0 /*__SHADERCRAFT_BLANK__*/ step(0.75, d);\n\nfragColor = vec4(vec3(d * disc), 1.0);",
           "answerChoices": [
             {
               "id": "correct",
-              "fragment": "0.75"
+              "fragment": "-"
             },
             {
-              "id": "half",
-              "fragment": "0.5"
+              "id": "add-ramp",
+              "fragment": "+"
             },
             {
-              "id": "full",
-              "fragment": "1.0"
+              "id": "multiply-ramp",
+              "fragment": "*"
             },
             {
-              "id": "quarter",
-              "fragment": "0.25"
+              "id": "divide-ramp",
+              "fragment": "/"
             }
           ],
           "correctChoiceId": "correct",

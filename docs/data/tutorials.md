@@ -36,11 +36,13 @@ There is no separately authored target source or expected image. The app fills `
 with the fragment named by `correctChoiceId`, then compiles that exact source for the reference
 render. Confirming the same fragment therefore produces the same shader by construction.
 
-Keep the blank as narrow as the concept permits. Prefer one expression or literal, including a
-single numeric literal when that value is the decision being taught. Do not package shared
-declarations or result assignments into a multiline answer block; keep that context visible in the
-template. A compound expression is appropriate only when the relationship between its parts is the
-concept. Filling any of the four choices must leave a complete, runnable `mainImage` body.
+Keep the blank as narrow as the concept permits. Choices ask for a function, operator, axis,
+variable, or other semantic operation. Numeric literals belong in the visible template, even when
+they tune the reference image: recalling an authored threshold or radius is not the shader concept
+being assessed. Do not package shared declarations or result assignments into a multiline answer
+block; keep that context visible in the template. A compound expression is appropriate only when
+the relationship between its parts is the concept. Filling any of the four choices must leave a
+complete, runnable `mainImage` body.
 
 ## Author all four choices
 
@@ -76,6 +78,7 @@ device:
 - `sourceTemplate` contains exactly one blank marker.
 - `answerChoices` contains exactly four entries with unique ids, non-blank fragments, and distinct
   rendered sources.
+- Answer fragments contain no numeric literals; authored values stay visible in `sourceTemplate`.
 - `correctChoiceId` resolves to one of those four entries.
 - Every filled source and optional helper obeys the shader sandbox contract.
 - Planned modules do not carry tutorials.

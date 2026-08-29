@@ -4,6 +4,8 @@ import type { CourseModule, CourseRelease, Tutorial } from "./types";
 import { fillTutorialTemplate, SHADERCRAFT_BLANK } from "./tutorial-exercise";
 
 const idPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const glslNumericLiteralPattern =
+  /(^|[^A-Za-z_])(?:0[xX][0-9a-fA-F]+[uU]?|(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?[fFuU]?)(?=$|[^A-Za-z_])/;
 
 const lessonStageSchema = z
   .object({
@@ -266,6 +268,11 @@ function validateTutorials(
         validateUniqueId(choiceIds, choice.id, "tutorial choice");
         if (choice.fragment.trim().length === 0) {
           fail(`Tutorial step ${step.id} choice ${choice.id} fragment must not be blank`);
+        }
+        if (glslNumericLiteralPattern.test(choice.fragment)) {
+          fail(
+            `Tutorial step ${step.id} choice ${choice.id} must not contain numeric literals; provide values in the source template`,
+          );
         }
 
         const source = fillTutorialTemplate(step.sourceTemplate, choice.fragment);

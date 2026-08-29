@@ -216,14 +216,14 @@ describe("tutorials", () => {
     title: `Step ${position}`,
     brief:
       "A brief long enough to clear the twenty-five word floor, which exists so a step cannot ship as a single terse imperative telling the learner to go and do something unexplained.",
-    sourceTemplate: `fragColor = vec4(${SHADERCRAFT_BLANK});`,
+    sourceTemplate: `float axis = uv.x;\nfragColor = vec4(${SHADERCRAFT_BLANK});`,
     answerChoices: [
-      { id: "white", fragment: "1.0" },
-      { id: "black", fragment: "0.0" },
-      { id: "half", fragment: "0.5" },
-      { id: "quarter", fragment: "0.25" },
+      { id: "axis", fragment: "axis" },
+      { id: "horizontal", fragment: "uv.x" },
+      { id: "vertical", fragment: "uv.y" },
+      { id: "vector-component", fragment: "vec2(axis).x" },
     ],
-    correctChoiceId: "white",
+    correctChoiceId: "axis",
     ...overrides,
   });
 
@@ -307,10 +307,10 @@ describe("tutorials", () => {
           steps: [
             step(1, {
               answerChoices: [
-                { id: "white", fragment: "1.0" },
-                { id: "white", fragment: "0.0" },
-                { id: "half", fragment: "0.5" },
-                { id: "quarter", fragment: "0.25" },
+                { id: "axis", fragment: "axis" },
+                { id: "axis", fragment: "uv.x" },
+                { id: "vertical", fragment: "uv.y" },
+                { id: "absolute", fragment: "abs(axis)" },
               ],
             }),
           ],
@@ -326,16 +326,35 @@ describe("tutorials", () => {
           steps: [
             step(1, {
               answerChoices: [
-                { id: "white", fragment: " " },
-                { id: "black", fragment: "0.0" },
-                { id: "half", fragment: "0.5" },
-                { id: "quarter", fragment: "0.25" },
+                { id: "axis", fragment: " " },
+                { id: "horizontal", fragment: "uv.x" },
+                { id: "vertical", fragment: "uv.y" },
+                { id: "absolute", fragment: "abs(axis)" },
               ],
             }),
           ],
         }),
       ]),
     ).toThrow(/fragment must not be blank/i);
+  });
+
+  it("rejects numeric literals in answer fragments", () => {
+    expect(() =>
+      withTutorials([
+        tutorial({
+          steps: [
+            step(1, {
+              answerChoices: [
+                { id: "axis", fragment: "axis" },
+                { id: "horizontal", fragment: "uv.x" },
+                { id: "vertical", fragment: "uv.y" },
+                { id: "quarter", fragment: "0.25" },
+              ],
+            }),
+          ],
+        }),
+      ]),
+    ).toThrow(/numeric literals.*source template/i);
   });
 
   it("rejects an unknown correct choice id", () => {
@@ -351,10 +370,10 @@ describe("tutorials", () => {
           steps: [
             step(1, {
               answerChoices: [
-                { id: "white", fragment: "1.0" },
-                { id: "black", fragment: "gl_FragColor = vec4(0.0);" },
-                { id: "half", fragment: "0.5" },
-                { id: "quarter", fragment: "0.25" },
+                { id: "axis", fragment: "axis" },
+                { id: "forbidden", fragment: "gl_FragColor = vec4(axis);" },
+                { id: "vertical", fragment: "uv.y" },
+                { id: "absolute", fragment: "abs(axis)" },
               ],
             }),
           ],
@@ -370,10 +389,10 @@ describe("tutorials", () => {
           steps: [
             step(1, {
               answerChoices: [
-                { id: "white", fragment: "1.0" },
-                { id: "black", fragment: "1.0" },
-                { id: "half", fragment: "0.5" },
-                { id: "quarter", fragment: "0.25" },
+                { id: "axis", fragment: "axis" },
+                { id: "same-axis", fragment: "axis" },
+                { id: "horizontal", fragment: "uv.x" },
+                { id: "vertical", fragment: "uv.y" },
               ],
             }),
           ],

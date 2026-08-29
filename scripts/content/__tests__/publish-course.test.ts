@@ -281,14 +281,15 @@ test("reports every countable thing the release carries, tutorials included", as
               title: `Step ${position}`,
               brief:
                 "A brief long enough to clear the twenty-five word floor, which exists so a step cannot ship as a single terse imperative telling the learner to go and do something unexplained.",
-              sourceTemplate: "fragColor = vec4(/*__SHADERCRAFT_BLANK__*/);",
+              sourceTemplate:
+                "float axis = uv.x;\nfragColor = vec4(/*__SHADERCRAFT_BLANK__*/);",
               answerChoices: [
-                { id: "white", fragment: "1.0" },
-                { id: "black", fragment: "0.0" },
-                { id: "half", fragment: "0.5" },
-                { id: "quarter", fragment: "0.25" },
+                { id: "axis", fragment: "axis" },
+                { id: "horizontal", fragment: "uv.x" },
+                { id: "vertical", fragment: "uv.y" },
+                { id: "absolute", fragment: "abs(axis)" },
               ],
-              correctChoiceId: "white",
+              correctChoiceId: "axis",
             })),
           },
         ],

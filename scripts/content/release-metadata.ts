@@ -26,4 +26,4 @@ export const MINIMUM_APP_VERSION = "1.0.0";
  * Bumped whenever committed content changes. A device that already installed an id rejects a
  * different checksum under that same id permanently, so the id and the content move together.
  */
-export const BUNDLED_RELEASE_ID = "bundled-2026-08-28-22";
+export const BUNDLED_RELEASE_ID = "bundled-2026-08-29-23";
