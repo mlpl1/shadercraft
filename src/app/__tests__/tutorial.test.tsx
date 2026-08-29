@@ -123,11 +123,12 @@ function optionOrder() {
     .filter((label): label is string => choices.some((choice) => choice.fragment === label));
 }
 
-test("keeps both shader previews hidden before an answer is confirmed", async () => {
+test("shows the target while keeping the learner preview hidden before confirmation", async () => {
   await renderScreen();
 
-  expect(screen.queryByTestId("sandbox-source")).toBeNull();
-  expect(screen.queryByText("Target")).toBeNull();
+  expect(screen.getAllByTestId("sandbox-source")).toHaveLength(1);
+  expect(screen.getByTestId("sandbox-source").props.children).toBe(targetSource);
+  expect(screen.getByText("Target")).toBeTruthy();
   expect(screen.queryByText("Yours")).toBeNull();
 });
 
@@ -136,11 +137,12 @@ test("keeps the learner result hidden when an answer is only selected", async ()
 
   await fireEvent.press(screen.getByRole("button", { name: "0.5" }));
 
-  expect(screen.queryByTestId("sandbox-source")).toBeNull();
+  expect(screen.getAllByTestId("sandbox-source")).toHaveLength(1);
+  expect(screen.getByTestId("sandbox-source").props.children).toBe(targetSource);
   expect(screen.getByLabelText(
     "Source template: float radius = Choose an answer; fragColor = vec4(radius);",
   )).toBeTruthy();
-  expect(screen.queryByText("Target")).toBeNull();
+  expect(screen.getByText("Target")).toBeTruthy();
   expect(screen.queryByText("Yours")).toBeNull();
 });
 

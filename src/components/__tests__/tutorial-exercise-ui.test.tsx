@@ -42,9 +42,11 @@ test("renders a lettered answer tile with explicit selected status", async () =>
   expect(onPress).toHaveBeenCalledTimes(1);
 });
 
-test("hides comparison while idle", async () => {
+test("shows only the target preview while idle", async () => {
   await render(<TutorialFeedback helpers={undefined} learnerSource={null} state="idle" targetSource="target" />);
-  expect(screen.queryByText("Target")).toBeNull();
+  expect(screen.getByText("Target")).toBeTruthy();
+  expect(screen.getByTestId("sandbox-source").props.children).toBe("target");
+  expect(screen.queryByText("Yours")).toBeNull();
 });
 
 test("reveals comparison after confirmation", async () => {

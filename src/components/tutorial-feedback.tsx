@@ -16,7 +16,16 @@ type TutorialFeedbackProps = {
 const PREVIEW_HEIGHT = 116;
 
 export function TutorialFeedback({ state, targetSource, learnerSource, helpers, explanation }: TutorialFeedbackProps) {
-  if (state === "idle" || !learnerSource) return null;
+  if (state === "idle" || !learnerSource) {
+    return (
+      <View style={styles.targetOnly}>
+        <Text style={styles.label}>Target</Text>
+        <View style={styles.previewFrame}>
+          <ShaderSandbox height={PREVIEW_HEIGHT} helpers={helpers} source={targetSource} />
+        </View>
+      </View>
+    );
+  }
   const title = state === "incorrect" ? "Not quite" : state === "skipped" ? "Skipped" : "Correct";
   const message = explanation ?? (
     state === "incorrect"
@@ -47,6 +56,7 @@ export function TutorialFeedback({ state, targetSource, learnerSource, helpers, 
 }
 
 const styles = StyleSheet.create({
+  targetOnly: { gap: Spacing.xs },
   container: { backgroundColor: Colors.surfaceRaised, borderColor: Colors.border, borderRadius: Radius.md, borderWidth: 1, gap: Spacing.md, padding: Spacing.lg },
   headingRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   title: { fontSize: 16, fontWeight: "800" },
