@@ -17,8 +17,17 @@ export type TutorialViewModel = {
   resumeStepId: string;
 };
 
+export type TutorialModuleViewModel = {
+  moduleId: string;
+  moduleTitle: string;
+  modulePosition: number;
+  status: TutorialStatus;
+  tutorials: TutorialViewModel[];
+};
+
 export type TutorialsModel = {
   tutorials: TutorialViewModel[];
+  modules: TutorialModuleViewModel[];
   /** The one Home offers. Null when nothing is unlocked yet. */
   featured: TutorialViewModel | null;
   unlockedCount: number;
@@ -99,11 +108,25 @@ export function buildTutorialsModel(
     }
   }
 
+  const modulesWithTutorials: TutorialModuleViewModel[] = [...modules]
+    .sort((left, right) => left.position - right.position)
+    .map((module) => {
+      const moduleTutorials = tutorials.filter((tutorial) => tutorial.moduleId === module.id);
+      if (moduleTutorials.length === 0) return null;
+      const status = moduleTutorials.every((tutorial) => tutorial.status === "locked")
+        ? "locked"
+        : moduleTutorials.every((tutorial) => tutorial.status === "complete")
+          ? "complete"
+          : "available";
+      return { moduleId: module.id, moduleTitle: module.title, modulePosition: module.position, status, tutorials: moduleTutorials };
+    })
+    .filter((module): module is TutorialModuleViewModel => Boolean(module));
+
   const unlocked = tutorials.filter((tutorial) => tutorial.status !== "locked");
   const featured =
     unlocked.find((tutorial) => tutorial.status !== "complete") ??
     unlocked[unlocked.length - 1] ??
     null;
 
-  return { tutorials, featured, unlockedCount: unlocked.length };
+  return { tutorials, modules: modulesWithTutorials, featured, unlockedCount: unlocked.length };
 }

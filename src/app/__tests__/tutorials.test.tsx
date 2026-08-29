@@ -252,6 +252,26 @@ it("shows how far into an exercise the learner is", async () => {
   await waitFor(() => expect(screen.getByText("1/2")).toBeTruthy());
 });
 
+it("lists each exercise as a direct module row", async () => {
+  await renderScreen(["m1-l1"]);
+
+  await waitFor(() => expect(screen.getByText("Make it pulse")).toBeTruthy());
+
+  expect(screen.getByTestId("tutorial-row-pulse")).toBeTruthy();
+  expect(screen.getByText("Step 1 of 2")).toBeTruthy();
+});
+
+it("opens the exact exercise row instead of only the module resume card", async () => {
+  await renderScreen(["m1-l1"]);
+
+  await waitFor(() => expect(screen.getByTestId("tutorial-row-pulse")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("tutorial-row-pulse"));
+
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: "/tutorial",
+    params: { tutorialId: "pulse", stepId: "pulse-s1" },
+  });
+});
 it("opens an unlocked exercise on the step the learner stopped at", async () => {
   await renderScreen(["m1-l1"], ["pulse-s1"]);
 

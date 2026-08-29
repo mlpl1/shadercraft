@@ -158,6 +158,22 @@ test("places the persistent target between the description and code card", async
   expect(targetIndex).toBeGreaterThan(descriptionIndex);
   expect(codeIndex).toBeGreaterThan(targetIndex);
 });
+test("keeps hint content and previous navigation inside the fixed action dock", async () => {
+  const exerciseModules = structuredClone(modules);
+  exerciseModules[0].tutorials![0].steps[0].hint = "The radius is the distance from the center.";
+  exerciseModules[0].tutorials![0].steps.push({ ...exerciseModules[0].tutorials![0].steps[0], id: "pulse-s2", position: 2, title: "Step two" });
+  mockUseCourse.mockReturnValue({ modules: exerciseModules } as ReturnType<typeof useCourse>);
+
+  mockRouteParams.current = { tutorialId: "pulse", stepId: "pulse-s2" };
+  await render(<TutorialScreen />);
+  await waitFor(() => expect(screen.getByText("Step two")).toBeTruthy());
+  await fireEvent.press(screen.getByRole("button", { name: "Hint" }));
+
+  const dock = screen.getByTestId("tutorial-action-dock");
+  expect(dock).toHaveTextContent(/radius is the distance/);
+  expect(dock).toHaveTextContent(/Previous step/);
+  expect(screen.getByText("Previous step")).toBeTruthy();
+});
 test("shows segmented progress and lettered answer choices", async () => {
   await renderScreen();
 

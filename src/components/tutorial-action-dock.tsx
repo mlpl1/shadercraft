@@ -7,16 +7,21 @@ type TutorialActionDockProps = {
   state: TutorialFeedbackState;
   canConfirm: boolean;
   hasHint: boolean;
+  hint?: string;
+  hasPrevious?: boolean;
+  onPrevious?: () => void;
   onConfirm: () => void;
   onContinue: () => void;
   onHint: () => void;
   onSkip: () => void;
 };
 
-export function TutorialActionDock({ state, canConfirm, hasHint, onConfirm, onContinue, onHint, onSkip }: TutorialActionDockProps) {
+export function TutorialActionDock({ state, canConfirm, hasHint, hint, hasPrevious, onPrevious, onConfirm, onContinue, onHint, onSkip }: TutorialActionDockProps) {
   const terminal = state === "correct" || state === "skipped";
   return (
     <View style={styles.dock} testID="tutorial-action-dock">
+      {hint ? <View style={styles.hintCard}><Text style={styles.hintTitle}>Hint</Text><Text style={styles.hint}>{hint}</Text></View> : null}
+      {hasPrevious ? <Pressable accessibilityRole="button" onPress={onPrevious} style={styles.previous}><Text style={styles.quietLabel}>Previous step</Text></Pressable> : null}
       {!terminal ? (
         <View style={styles.secondaryRow}>
           {hasHint ? <Pressable accessibilityRole="button" onPress={onHint} style={styles.quiet}><Text style={styles.quietLabel}>Hint</Text></Pressable> : null}
@@ -38,6 +43,10 @@ export function TutorialActionDock({ state, canConfirm, hasHint, onConfirm, onCo
 
 const styles = StyleSheet.create({
   dock: { backgroundColor: Colors.background, borderTopColor: Colors.border, borderTopWidth: StyleSheet.hairlineWidth, gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.lg },
+  hintCard: { backgroundColor: Colors.surfaceRaised, borderColor: Colors.border, borderRadius: Radius.md, borderWidth: 1, gap: Spacing.xs, padding: Spacing.md },
+  hintTitle: { color: Colors.cyan, fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
+  hint: { color: Colors.textMuted, fontSize: 13, lineHeight: 18 },
+  previous: { alignItems: "center", minHeight: 44, justifyContent: "center" },
   secondaryRow: { flexDirection: "row", justifyContent: "space-between" },
   quiet: { minHeight: 44, justifyContent: "center", paddingHorizontal: Spacing.sm },
   quietLabel: { color: Colors.textMuted, fontSize: 14, fontWeight: "700" },

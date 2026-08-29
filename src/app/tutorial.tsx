@@ -237,12 +237,6 @@ export default function TutorialScreen() {
             </View>
           </View>
 
-          {hintVisible && step.hint ? (
-            <View style={styles.hintCard}>
-              <Text style={styles.hintTitle}>Hint</Text>
-              <Text style={styles.hint}>{step.hint}</Text>
-            </View>
-          ) : null}
 
           <TutorialFeedback
             helpers={step.helpers}
@@ -250,23 +244,17 @@ export default function TutorialScreen() {
             state={feedback}
           />
 
-          {stepIndex > 0 ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setStepIndex((index) => Math.max(0, index - 1))}
-              style={styles.previous}
-            >
-              <Text style={styles.secondaryLabel}>Previous step</Text>
-            </Pressable>
-          ) : null}
         </ScrollView>
 
         <TutorialActionDock
           canConfirm={Boolean(selectedChoice)}
           hasHint={Boolean(step.hint)}
+          hasPrevious={stepIndex > 0}
+          hint={hintVisible ? step.hint : undefined}
           onConfirm={checkAnswer}
           onContinue={continueForward}
           onHint={() => setHintVisible((visible) => !visible)}
+          onPrevious={() => setStepIndex((index) => Math.max(0, index - 1))}
           onSkip={skipAndReveal}
           state={feedback}
         />
