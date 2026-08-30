@@ -174,6 +174,34 @@ test("keeps hint content and previous navigation inside the fixed action dock", 
   expect(dock).toHaveTextContent(/Previous step/);
   expect(screen.getByText("Previous step")).toBeTruthy();
 });
+test("keeps Previous, Hint, and Skip in the same control row", async () => {
+  const exerciseModules = structuredClone(modules);
+  exerciseModules[0].tutorials![0].steps[0].hint = "The radius is the distance from the center.";
+  exerciseModules[0].tutorials![0].steps.push({ ...exerciseModules[0].tutorials![0].steps[0], id: "pulse-s2", position: 2, title: "Step two" });
+  mockUseCourse.mockReturnValue({ modules: exerciseModules } as ReturnType<typeof useCourse>);
+  mockRouteParams.current = { tutorialId: "pulse", stepId: "pulse-s2" };
+
+  await render(<TutorialScreen />);
+  await waitFor(() => expect(screen.getByText("Step two")).toBeTruthy());
+
+  const previous = screen.getByRole("button", { name: "Previous step" });
+  const hint = screen.getByRole("button", { name: "Hint" });
+  const skip = screen.getByRole("button", { name: "Skip and reveal answer" });
+  expect(previous.parent).toBe(hint.parent);
+  expect(hint.parent).toBe(skip.parent);
+});
+
+test("shows a selected Hint control while the hint is open", async () => {
+  const exerciseModules = structuredClone(modules);
+  exerciseModules[0].tutorials![0].steps[0].hint = "The radius is the distance from the center.";
+  mockUseCourse.mockReturnValue({ modules: exerciseModules } as ReturnType<typeof useCourse>);
+
+  await renderScreen();
+  await fireEvent.press(screen.getByRole("button", { name: "Hint" }));
+
+  const selectedHint = screen.getByRole("button", { name: "Hide hint" });
+  expect(selectedHint.props.accessibilityState).toMatchObject({ selected: true });
+});
 test("shows segmented progress and lettered answer choices", async () => {
   await renderScreen();
 

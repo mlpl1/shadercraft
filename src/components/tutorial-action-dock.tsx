@@ -21,13 +21,11 @@ export function TutorialActionDock({ state, canConfirm, hasHint, hint, hasPrevio
   return (
     <View style={styles.dock} testID="tutorial-action-dock">
       {hint ? <View style={styles.hintCard}><Text style={styles.hintTitle}>Hint</Text><Text style={styles.hint}>{hint}</Text></View> : null}
-      {hasPrevious ? <Pressable accessibilityRole="button" onPress={onPrevious} style={styles.previous}><Text style={styles.quietLabel}>Previous step</Text></Pressable> : null}
-      {!terminal ? (
-        <View style={styles.secondaryRow}>
-          {hasHint ? <Pressable accessibilityRole="button" onPress={onHint} style={styles.quiet}><Text style={styles.quietLabel}>Hint</Text></Pressable> : null}
-          <Pressable accessibilityLabel="Skip and reveal answer" accessibilityRole="button" onPress={onSkip} style={styles.quiet}><Text style={styles.quietLabel}>Skip</Text></Pressable>
-        </View>
-      ) : null}
+      <View style={styles.secondaryRow}>
+        {hasPrevious ? <Pressable accessibilityRole="button" onPress={onPrevious} style={({ pressed }) => [styles.quiet, pressed && styles.quietPressed]}><Text style={styles.quietLabel}>Previous step</Text></Pressable> : null}
+        {!terminal && hasHint ? <Pressable accessibilityRole="button" accessibilityState={{ selected: Boolean(hint) }} onPress={onHint} style={({ pressed }) => [styles.quiet, hint && styles.hintSelected, pressed && styles.quietPressed]}><Text style={[styles.quietLabel, hint && styles.hintSelectedLabel]}>{hint ? "Hide hint" : "Hint"}</Text></Pressable> : null}
+        {!terminal ? <Pressable accessibilityLabel="Skip and reveal answer" accessibilityRole="button" onPress={onSkip} style={({ pressed }) => [styles.quiet, pressed && styles.quietPressed]}><Text style={styles.quietLabel}>Skip</Text></Pressable> : null}
+      </View>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ disabled: !terminal && !canConfirm }}
@@ -46,10 +44,12 @@ const styles = StyleSheet.create({
   hintCard: { backgroundColor: Colors.surfaceRaised, borderColor: Colors.border, borderRadius: Radius.md, borderWidth: 1, gap: Spacing.xs, padding: Spacing.md },
   hintTitle: { color: Colors.cyan, fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
   hint: { color: Colors.textMuted, fontSize: 13, lineHeight: 18 },
-  previous: { alignItems: "center", minHeight: 44, justifyContent: "center" },
-  secondaryRow: { flexDirection: "row", justifyContent: "space-between" },
-  quiet: { minHeight: 44, justifyContent: "center", paddingHorizontal: Spacing.sm },
-  quietLabel: { color: Colors.textMuted, fontSize: 14, fontWeight: "700" },
+  secondaryRow: { flexDirection: "row", gap: Spacing.sm },
+  quiet: { alignItems: "center", backgroundColor: Colors.surface, borderColor: Colors.border, borderRadius: Radius.sm, borderWidth: 1, flex: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: Spacing.sm },
+  quietPressed: { backgroundColor: Colors.surfaceRaised },
+  hintSelected: { backgroundColor: "rgba(80, 213, 255, 0.12)", borderColor: Colors.cyan },
+  hintSelectedLabel: { color: Colors.cyan },
+  quietLabel: { color: Colors.textMuted, fontSize: 13, fontWeight: "800" },
   primary: { alignItems: "center", backgroundColor: Colors.accent, borderRadius: Radius.md, justifyContent: "center", minHeight: 52, paddingHorizontal: Spacing.lg },
   primaryLabel: { color: Colors.background, fontSize: 16, fontWeight: "800" },
   disabled: { opacity: 0.38 },
